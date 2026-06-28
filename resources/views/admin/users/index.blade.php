@@ -1,20 +1,20 @@
 @extends('admin.layouts.app')
 
-@section('title', 'ইউজার লিস্ট - Admin Panel')
+@section('title', 'User Management - Admin Panel')
 
 @section('content')
 <div class="p-6">
     <div class="flex items-center justify-between mb-6">
         <div>
-            <h1 class="text-2xl font-bold text-gray-900">ইউজার ম্যানেজমেন্ট</h1>
-            <p class="text-gray-600 text-sm">সব ইউজার দেখুন এবং ম্যানেজ করুন</p>
+            <h1 class="text-2xl font-bold text-gray-900">User Management</h1>
+            <p class="text-gray-600 text-sm">View and manage all users</p>
         </div>
         @if(Auth::guard('admin')->user()->hasPermission('user_management', 'create'))
         <a href="{{ route('admin.users.create') }}" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center">
             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
             </svg>
-            নতুন ইউজার
+            Add User
         </a>
         @endif
     </div>
@@ -32,12 +32,12 @@
                 <thead class="bg-gray-50 border-b border-gray-200">
                     <tr>
                         <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">#</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">নাম</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">ইমেইল</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">রোল</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">পারমিশন</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">তৈরি</th>
-                        <th class="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">অ্যাকশন</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Email</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Role</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Permissions</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Created</th>
+                        <th class="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Action</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
@@ -53,16 +53,16 @@
                         <td class="px-6 py-4 text-sm text-gray-600">{{ $u->email }}</td>
                         <td class="px-6 py-4">
                             @if($u->role === 'super_admin')
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">সুপার অ্যাডমিন</span>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Super Admin</span>
                             @else
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">অ্যাডমিন</span>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Admin</span>
                             @endif
                         </td>
                         <td class="px-6 py-4">
                             @if($u->role === 'super_admin')
-                                <span class="text-xs text-gray-500">সব অ্যাক্সেস</span>
+                                <span class="text-xs text-gray-500">Full Access</span>
                             @else
-                                <span class="text-xs text-gray-500">{{ $u->permissions->pluck('menu_slug')->unique()->count() }} টি মেনু</span>
+                                <span class="text-xs text-gray-500">{{ $u->permissions->pluck('menu_slug')->unique()->count() }} menus</span>
                             @endif
                         </td>
                         <td class="px-6 py-4 text-sm text-gray-500">{{ $u->created_at->diffForHumans() }}</td>
@@ -76,7 +76,7 @@
                                 </a>
                                 @endif
                                 @if(Auth::guard('admin')->user()->hasPermission('user_management', 'delete') && $u->role !== 'super_admin')
-                                <form action="{{ route('admin.users.destroy', $u) }}" method="POST" onsubmit="return confirm('আপনি কি নিশ্চিত এই ইউজারটি ডিলিট করতে চান?')">
+                                <form action="{{ route('admin.users.destroy', $u) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this user?')">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" class="text-red-600 hover:text-red-900 p-1">
@@ -91,7 +91,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="7" class="px-6 py-12 text-center text-gray-500">কোনো ইউজার পাওয়া যায়নি।</td>
+                        <td colspan="7" class="px-6 py-12 text-center text-gray-500">No users found.</td>
                     </tr>
                     @endforelse
                 </tbody>

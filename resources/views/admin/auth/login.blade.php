@@ -1,22 +1,21 @@
 <!DOCTYPE html>
-<html lang="bn">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Admin লগইন - SocialBoost AI</title>
+    <title>Admin Login - SocialBoost AI</title>
     <meta name="robots" content="noindex, nofollow">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * { font-family: 'Hind Siliguri', sans-serif; }
+        * { font-family: 'Inter', sans-serif; }
         .admin-gradient { background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%); }
     </style>
 </head>
 <body class="admin-gradient min-h-screen flex items-center justify-center px-4">
     <div class="max-w-md w-full">
-        {{-- Logo --}}
         <div class="text-center mb-8">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-white/10 backdrop-blur-sm rounded-2xl mb-4">
                 <svg class="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -27,9 +26,8 @@
             <p class="text-indigo-200 mt-1">SocialBoost AI</p>
         </div>
 
-        {{-- Login Card --}}
         <div class="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-8">
-            <h2 class="text-xl font-bold text-gray-900 text-center mb-6">অ্যাডমিন লগইন</h2>
+            <h2 class="text-xl font-bold text-gray-900 text-center mb-6">Admin Login</h2>
 
             @if ($errors->any())
                 <div class="mb-6 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
@@ -45,7 +43,7 @@
                 @csrf
 
                 <div class="mb-5">
-                    <label for="email" class="block text-sm font-medium text-gray-700 mb-2">ইমেইল</label>
+                    <label for="email" class="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
                     <input type="email"
                            id="email"
                            name="email"
@@ -57,7 +55,7 @@
                 </div>
 
                 <div class="mb-5">
-                    <label for="password" class="block text-sm font-medium text-gray-700 mb-2">পাসওয়ার্ড</label>
+                    <label for="password" class="block text-sm font-medium text-gray-700 mb-2">Password</label>
                     <input type="password"
                            id="password"
                            name="password"
@@ -71,12 +69,12 @@
                            name="remember"
                            id="remember"
                            class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
-                    <label for="remember" class="ml-2 text-sm text-gray-600">মনে রাখুন</label>
+                    <label for="remember" class="ml-2 text-sm text-gray-600">Remember me</label>
                 </div>
 
                 <button type="submit"
                         class="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold hover:bg-indigo-700 transition shadow-lg shadow-indigo-200">
-                    লগইন করুন
+                    Sign In
                 </button>
             </form>
 
@@ -85,7 +83,7 @@
                     <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
                     </svg>
-                    এই পেজটি শুধুমাত্র অ্যাডমিনদের জন্য
+                    This page is for administrators only
                 </p>
             </div>
         </div>

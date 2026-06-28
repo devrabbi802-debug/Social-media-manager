@@ -1,6 +1,6 @@
 @extends('admin.layouts.app')
 
-@section('title', 'ইউজার এডিট - Admin Panel')
+@section('title', 'Edit User - Admin Panel')
 
 @section('content')
 <div class="p-6">
@@ -9,12 +9,12 @@
             <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
             </svg>
-            ইউজার লিস্টে ফিরে যান
+            Back to User List
         </a>
     </div>
 
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h1 class="text-xl font-bold text-gray-900 mb-6">ইউজার এডিট করুন - {{ $user->name }}</h1>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6" x-data="{ role: '{{ old('role', $user->role) }}' }">
+        <h1 class="text-xl font-bold text-gray-900 mb-6">Edit User - {{ $user->name }}</h1>
 
         @if ($errors->any())
             <div class="mb-6 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
@@ -32,51 +32,51 @@
 
             <div class="grid md:grid-cols-2 gap-6 mb-8">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">নাম *</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Name *</label>
                     <input type="text" name="name" value="{{ old('name', $user->name) }}" required
                            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                 </div>
 
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">ইমেইল *</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Email *</label>
                     <input type="email" name="email" value="{{ old('email', $user->email) }}" required
                            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                 </div>
 
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">নতুন পাসওয়ার্ড (খালি রাখলে পুরানো থাকবে)</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">New Password (leave blank to keep current)</label>
                     <input type="password" name="password"
                            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                            placeholder="••••••••">
                 </div>
 
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">পাসওয়ার্ড কনফার্ম</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Confirm Password</label>
                     <input type="password" name="password_confirmation"
                            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                            placeholder="••••••••">
                 </div>
 
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">রোল *</label>
-                    <select name="role" required
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Role *</label>
+                    <select name="role" required x-model="role"
                             class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                        <option value="admin" {{ old('role', $user->role) === 'admin' ? 'selected' : '' }}>অ্যাডমিন</option>
-                        <option value="super_admin" {{ old('role', $user->role) === 'super_admin' ? 'selected' : '' }}>সুপার অ্যাডমিন</option>
+                        <option value="admin">Admin</option>
+                        <option value="super_admin">Super Admin</option>
                     </select>
                 </div>
             </div>
 
-            {{-- Permission Section --}}
-            <div x-data="{ allChecked: false }">
+            {{-- Permission Section - hidden when super_admin --}}
+            <div x-show="role !== 'super_admin'" x-transition x-cloak>
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-lg font-bold text-gray-900">মেনু পারমিশন</h2>
+                    <h2 class="text-lg font-bold text-gray-900">Menu Permissions</h2>
                     <label class="flex items-center space-x-2 cursor-pointer">
-                        <input type="checkbox" x-model="allChecked" @click="
+                        <input type="checkbox" @click="
                             let checkboxes = document.querySelectorAll('.perm-check');
-                            checkboxes.forEach(cb => cb.checked = allChecked ? false : true);
+                            checkboxes.forEach(cb => cb.checked = $event.target.checked);
                         " class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
-                        <span class="text-sm text-gray-600">সব সিলেক্ট করুন</span>
+                        <span class="text-sm text-gray-600">Select All</span>
                     </label>
                 </div>
 
@@ -114,9 +114,15 @@
                 </div>
             </div>
 
+            <div x-show="role === 'super_admin'" x-cloak class="py-6">
+                <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-center">
+                    <p class="text-indigo-700 font-medium">Super Admin has full access to all menus and actions.</p>
+                </div>
+            </div>
+
             <div class="flex items-center justify-end space-x-3 mt-8 pt-6 border-t border-gray-200">
-                <a href="{{ route('admin.users.index') }}" class="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition">বাতিল</a>
-                <button type="submit" class="px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">আপডেট করুন</button>
+                <a href="{{ route('admin.users.index') }}" class="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition">Cancel</a>
+                <button type="submit" class="px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">Update User</button>
             </div>
         </form>
     </div>

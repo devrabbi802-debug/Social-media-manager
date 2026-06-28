@@ -36,7 +36,7 @@ class UserController extends Controller
 
         $this->syncPermissions($admin, $request);
 
-        return redirect()->route('admin.users.index')->with('success', 'ইউজার সফলভাবে তৈরি হয়েছে।');
+        return redirect()->route('admin.users.index')->with('success', 'User created successfully.');
     }
 
     public function edit(Admin $user)
@@ -66,19 +66,19 @@ class UserController extends Controller
         $user->permissions()->delete();
         $this->syncPermissions($user, $request);
 
-        return redirect()->route('admin.users.index')->with('success', 'ইউজার আপডেট হয়েছে।');
+        return redirect()->route('admin.users.index')->with('success', 'User updated successfully.');
     }
 
     public function destroy(Admin $user)
     {
         if ($user->role === 'super_admin') {
-            return back()->with('error', 'সুপার অ্যাডমিন ডিলিট করা যাবে না।');
+            return back()->with('error', 'Super Admin cannot be deleted.');
         }
 
         $user->permissions()->delete();
         $user->delete();
 
-        return redirect()->route('admin.users.index')->with('success', 'ইউজার ডিলিট হয়েছে।');
+        return redirect()->route('admin.users.index')->with('success', 'User deleted successfully.');
     }
 
     private function syncPermissions(Admin $admin, Request $request): void

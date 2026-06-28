@@ -1,21 +1,19 @@
 @extends('admin.layouts.app')
 
-@section('title', 'ড্যাশবোর্ড - Admin Panel')
+@section('title', 'Dashboard - Admin Panel')
 
 @section('content')
 <div class="p-6">
-    {{-- Header --}}
     <div class="mb-8">
-        <h1 class="text-2xl font-bold text-gray-900">ড্যাশবোর্ড</h1>
-        <p class="text-gray-600">স্বাগতম, {{ Auth::guard('admin')->user()->name ?? 'Admin' }}</p>
+        <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <p class="text-gray-600">Welcome back, {{ Auth::guard('admin')->user()->name ?? 'Admin' }}</p>
     </div>
 
-    {{-- Stats --}}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-sm text-gray-500">মোট ব্যবহারকারী</p>
+                    <p class="text-sm text-gray-500">Total Users</p>
                     <p class="text-3xl font-bold text-gray-900 mt-1">{{ \App\Models\User::count() }}</p>
                 </div>
                 <div class="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
@@ -29,7 +27,7 @@
         <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-sm text-gray-500">মোট লিড</p>
+                    <p class="text-sm text-gray-500">Total Leads</p>
                     <p class="text-3xl font-bold text-gray-900 mt-1">--</p>
                 </div>
                 <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
@@ -43,7 +41,7 @@
         <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-sm text-gray-500">মোট অর্ডার</p>
+                    <p class="text-sm text-gray-500">Total Orders</p>
                     <p class="text-3xl font-bold text-gray-900 mt-1">--</p>
                 </div>
                 <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
@@ -57,7 +55,7 @@
         <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-sm text-gray-500">ইনভেন্টরি</p>
+                    <p class="text-sm text-gray-500">Inventory</p>
                     <p class="text-3xl font-bold text-gray-900 mt-1">--</p>
                 </div>
                 <div class="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
@@ -69,38 +67,37 @@
         </div>
     </div>
 
-    {{-- Quick Info --}}
     <div class="grid lg:grid-cols-2 gap-6">
         <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-            <h2 class="text-lg font-bold text-gray-900 mb-4">সিস্টেম তথ্য</h2>
+            <h2 class="text-lg font-bold text-gray-900 mb-4">System Info</h2>
             <div class="space-y-3">
                 <div class="flex justify-between py-2 border-b border-gray-100">
-                    <span class="text-gray-600">Laravel ভার্সন</span>
+                    <span class="text-gray-600">Laravel Version</span>
                     <span class="font-medium text-gray-900">{{ app()->version() }}</span>
                 </div>
                 <div class="flex justify-between py-2 border-b border-gray-100">
-                    <span class="text-gray-600">PHP ভার্সন</span>
+                    <span class="text-gray-600">PHP Version</span>
                     <span class="font-medium text-gray-900">{{ phpversion() }}</span>
                 </div>
                 <div class="flex justify-between py-2">
-                    <span class="text-gray-600">সার্ভার সময়</span>
+                    <span class="text-gray-600">Server Time</span>
                     <span class="font-medium text-gray-900">{{ now()->format('d M Y, h:i A') }}</span>
                 </div>
             </div>
         </div>
 
         <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-            <h2 class="text-lg font-bold text-gray-900 mb-4">দ্রুত কাজ</h2>
+            <h2 class="text-lg font-bold text-gray-900 mb-4">Quick Actions</h2>
             <div class="space-y-3">
-                <a href="#" class="flex items-center p-3 bg-indigo-50 rounded-xl hover:bg-indigo-100 transition">
+                <a href="{{ route('admin.users.index') }}" class="flex items-center p-3 bg-indigo-50 rounded-xl hover:bg-indigo-100 transition">
                     <div class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center mr-3">
                         <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>
                         </svg>
                     </div>
                     <div>
-                        <p class="font-medium text-gray-900">ব্যবহারকারী দেখুন</p>
-                        <p class="text-sm text-gray-500">সব রেজিস্টার্ড ইউজার</p>
+                        <p class="font-medium text-gray-900">View Users</p>
+                        <p class="text-sm text-gray-500">All registered users</p>
                     </div>
                 </a>
 
@@ -111,8 +108,8 @@
                         </svg>
                     </div>
                     <div>
-                        <p class="font-medium text-gray-900">রিপোর্ট দেখুন</p>
-                        <p class="text-sm text-gray-500">অ্যানালিটিক্স ও ডাটা</p>
+                        <p class="font-medium text-gray-900">View Reports</p>
+                        <p class="text-sm text-gray-500">Analytics & Data</p>
                     </div>
                 </a>
 
@@ -124,8 +121,8 @@
                         </svg>
                     </div>
                     <div>
-                        <p class="font-medium text-gray-900">সেটিংস</p>
-                        <p class="text-sm text-gray-500">সিস্টেম কনফিগারেশন</p>
+                        <p class="font-medium text-gray-900">Settings</p>
+                        <p class="text-sm text-gray-500">System Configuration</p>
                     </div>
                 </a>
             </div>

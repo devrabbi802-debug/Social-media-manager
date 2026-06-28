@@ -5,10 +5,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Admin\UserController;
 
-// Admin routes with web middleware (for session, errors, csrf)
 Route::middleware(['web'])->group(function () {
 
-    // Admin Login (guest only)
     Route::middleware('guest:admin')->group(function () {
         Route::get('/rootadmin/login', function () {
             if (Auth::guard('admin')->check()) {
@@ -29,12 +27,11 @@ Route::middleware(['web'])->group(function () {
             }
 
             return back()->withErrors([
-                'email' => 'ইমেইল বা পাসওয়ার্ড ভুল।',
+                'email' => 'Invalid email or password.',
             ])->onlyInput('email');
         })->name('admin.login.submit');
     });
 
-    // Admin Logout
     Route::post('/rootadmin/logout', function (Request $request) {
         Auth::guard('admin')->logout();
         $request->session()->invalidate();
@@ -42,10 +39,8 @@ Route::middleware(['web'])->group(function () {
         return redirect('/rootadmin/login');
     })->name('admin.logout');
 
-    // Admin Protected Routes
     Route::middleware(['admin'])->prefix('rootadmin')->group(function () {
 
-        // Dashboard
         Route::get('/dashboard', function () {
             return view('admin.dashboard');
         })->name('admin.dashboard');
@@ -62,20 +57,12 @@ Route::middleware(['web'])->group(function () {
         Route::put('/users/{user}', [UserController::class, 'update'])->name('admin.users.update');
         Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('admin.users.destroy');
 
-        // Lead Management (placeholder)
-        Route::get('/leads', fn() => view('admin.placeholder', ['title' => 'লিড ম্যানেজমেন্ট']))->name('admin.leads.index');
-
-        // Inventory (placeholder)
-        Route::get('/inventory', fn() => view('admin.placeholder', ['title' => 'ইনভেন্টরি']))->name('admin.inventory.index');
-
-        // WhatsApp (placeholder)
-        Route::get('/whatsapp', fn() => view('admin.placeholder', ['title' => 'হোয়াটসঅ্যাপ ম্যানেজমেন্ট']))->name('admin.whatsapp.index');
-
-        // Facebook (placeholder)
-        Route::get('/facebook', fn() => view('admin.placeholder', ['title' => 'ফেসবুক ম্যানেজমেন্ট']))->name('admin.facebook.index');
-
-        // Settings (placeholder)
-        Route::get('/settings', fn() => view('admin.placeholder', ['title' => 'সেটিংস']))->name('admin.settings.index');
+        // Placeholder routes
+        Route::get('/leads', fn() => view('admin.placeholder', ['title' => 'Lead Management']))->name('admin.leads.index');
+        Route::get('/inventory', fn() => view('admin.placeholder', ['title' => 'Inventory']))->name('admin.inventory.index');
+        Route::get('/whatsapp', fn() => view('admin.placeholder', ['title' => 'WhatsApp']))->name('admin.whatsapp.index');
+        Route::get('/facebook', fn() => view('admin.placeholder', ['title' => 'Facebook']))->name('admin.facebook.index');
+        Route::get('/settings', fn() => view('admin.placeholder', ['title' => 'Settings']))->name('admin.settings.index');
 
     });
 
