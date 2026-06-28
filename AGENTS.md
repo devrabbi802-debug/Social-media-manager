@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Laravel 13.17.0 social media manager application with MySQL (MariaDB), Vite, and Tailwind CSS 4.x.
+Laravel 13.x social media manager + inventory management app. MySQL (MariaDB) backend, Vite + Tailwind CSS 4.x frontend. All UI text is in Bangla.
 
 ## Quick Start
 
@@ -12,12 +12,6 @@ composer setup
 
 # Start all dev services (server, queue, logs, vite)
 composer dev
-
-# Start individual services
-php artisan serve --host=0.0.0.0 --port=8000 &
-php artisan queue:listen --tries=1 --timeout=0 &
-php artisan pail --timeout=0 &
-npm run dev &
 ```
 
 ## Required Services
@@ -25,7 +19,6 @@ npm run dev &
 | Service | Port | Start Command |
 |---------|------|---------------|
 | MariaDB | 3306 | `sudo systemctl start mariadb` |
-| Apache (phpMyAdmin) | 80 | `sudo systemctl start apache2` |
 | Laravel | 8000 | `php artisan serve --host=0.0.0.0 --port=8000 &` |
 | Vite | 5173 | `npm run dev` |
 
@@ -34,43 +27,29 @@ npm run dev &
 - **Connection:** MySQL (MariaDB)
 - **Database name:** `social_media_manager`
 - **User:** `root` (no password)
-- **phpMyAdmin:** http://localhost/phpmyadmin
 
 ```bash
-# Create database
 mysql -u root -e "CREATE DATABASE IF NOT EXISTS social_media_manager;"
-
-# Run migrations
 php artisan migrate
-
-# Reset database
 php artisan migrate:fresh --seed
 ```
 
 ## Testing
 
-Tests use SQLite in-memory database (no MySQL required).
+Tests use SQLite in-memory (no MySQL needed).
 
 ```bash
-# Run all tests
-composer test
-
-# Run specific test suite
+composer test                    # clear config + run all tests
 php artisan test --testsuite=Unit
 php artisan test --testsuite=Feature
-
-# Run single test file
 php artisan test --filter=ExampleTest
 ```
 
-## Code Style & Linting
+## Code Style
 
 ```bash
-# Format code with Pint
-./vendor/bin/pint
-
-# Fix and format
-./vendor/bin/pint --fix
+./vendor/bin/pint        # format
+./vendor/bin/pint --fix  # fix + format
 ```
 
 ## Key Commands
@@ -80,40 +59,34 @@ php artisan test --filter=ExampleTest
 | `composer setup` | Full project setup |
 | `composer dev` | Start all dev services |
 | `composer test` | Clear config + run tests |
-| `php artisan` | List all artisan commands |
-| `npm run build` | Build production assets |
-| `npm run dev` | Start Vite dev server |
-
-## Environment
-
-- `.env` - Local configuration (MySQL configured)
-- `.env.example` - Template file
-- PHP 8.5.4 required
-- Node.js required for frontend assets
+| `npm run build` | Production assets |
+| `npm run dev` | Vite dev server |
 
 ## Architecture
 
 ```
-app/           → Application code (Http, Models, Providers)
-config/        → Configuration files
-database/      → Migrations, factories, seeders
-public/        → Web root (index.php)
-resources/     → Views, CSS, JS
-routes/        → web.php, console.php
-storage/       → Logs, cache, compiled views
-tests/         → Unit and Feature tests
+app/Http/Controllers/   → Route controllers (currently minimal, routes use closures)
+app/Models/             → Eloquent models (User)
+config/                 → Laravel config files
+database/migrations/    → DB schema (users, cache, jobs tables)
+resources/views/        → Blade templates
+resources/views/auth/   → Login, register pages
+resources/views/dashboard/ → Client dashboard
+resources/views/layouts/   → Main layout (app.blade.php)
+routes/web.php          → All web routes (auth logic inline, not in controllers)
+tests/                  → Unit + Feature tests
 ```
 
-## Common Gotchas
+## Gotchas
 
-- Laravel server must run from project root directory
-- MariaDB must be running for application to work (not for tests)
-- Tests automatically use SQLite in-memory - no database setup needed
+- **Auth routes are inline** in `routes/web.php` (POST login/register/logout), not in controllers. If adding auth features, edit `routes/web.php`.
+- **MariaDB must be running** for app to work. Tests don't need it.
 - Vite watches `resources/` and ignores `storage/framework/views/`
 - Run `php artisan config:clear` if config changes aren't taking effect
+- `.env` has MySQL configured with `root` user, no password
 
-# Agent Instructions
+## Agent Instructions
 
 Always reply in Banglish (Bengali written in English letters).
 No matter what language the user writes in, always respond in Banglish.
-Example: "Ei function ta fix korte hobe, karon ekhane error ache.
+Example: "Ei function ta fix korte hobe, karon ekhane error ache."
