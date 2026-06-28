@@ -56,6 +56,7 @@ Route::middleware(['web'])->group(function () {
         Route::get('/users/{user}/edit', [UserController::class, 'edit'])->name('admin.users.edit');
         Route::put('/users/{user}', [UserController::class, 'update'])->name('admin.users.update');
         Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('admin.users.destroy');
+        Route::post('/users/{admin}/login-as', [UserController::class, 'loginAs'])->name('admin.users.login-as');
 
     });
 
