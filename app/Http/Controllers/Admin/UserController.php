@@ -42,7 +42,9 @@ class UserController extends Controller
     public function edit(Admin $user)
     {
         $menuGroups = config('menu.groups');
-        $userPermissions = $user->permissions->pluck('permission', 'menu_slug')->toArray();
+        $userPermissions = $user->permissions->groupBy('menu_slug')
+            ->map(fn($perms) => $perms->pluck('permission')->toArray())
+            ->toArray();
         return view('admin.users.edit', compact('user', 'menuGroups', 'userPermissions'));
     }
 
