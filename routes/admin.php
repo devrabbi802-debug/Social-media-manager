@@ -57,13 +57,6 @@ Route::middleware(['web'])->group(function () {
         Route::put('/users/{user}', [UserController::class, 'update'])->name('admin.users.update');
         Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('admin.users.destroy');
 
-        // Placeholder routes
-        Route::get('/leads', fn() => view('admin.placeholder', ['title' => 'Lead Management']))->name('admin.leads.index');
-        Route::get('/inventory', fn() => view('admin.placeholder', ['title' => 'Inventory']))->name('admin.inventory.index');
-        Route::get('/whatsapp', fn() => view('admin.placeholder', ['title' => 'WhatsApp']))->name('admin.whatsapp.index');
-        Route::get('/facebook', fn() => view('admin.placeholder', ['title' => 'Facebook']))->name('admin.facebook.index');
-        Route::get('/settings', fn() => view('admin.placeholder', ['title' => 'Settings']))->name('admin.settings.index');
-
     });
 
 });
