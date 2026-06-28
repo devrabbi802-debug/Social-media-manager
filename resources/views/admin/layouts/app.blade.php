@@ -1,3 +1,8 @@
+@php
+    $adminUser = Auth::guard('admin')->user();
+    $menuGroups = config('menu.groups');
+@endphp
+
 <!DOCTYPE html>
 <html lang="bn">
 <head>
@@ -19,14 +24,12 @@
 <body class="bg-gray-100" x-data="{ sidebarOpen: true, mobileMenuOpen: false }">
     {{-- Top Bar --}}
     <div class="fixed top-0 left-0 right-0 z-50 bg-indigo-950 text-white h-14 flex items-center px-4 shadow-lg">
-        {{-- Mobile Menu Toggle --}}
         <button @click="mobileMenuOpen = !mobileMenuOpen" class="md:hidden mr-3 text-white/70 hover:text-white">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
             </svg>
         </button>
 
-        {{-- Logo --}}
         <div class="flex items-center space-x-2">
             <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
                 <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -36,12 +39,10 @@
             <span class="text-lg font-bold hidden sm:inline">Admin Panel</span>
         </div>
 
-        {{-- Spacer --}}
         <div class="flex-1"></div>
 
-        {{-- Right Side --}}
         <div class="flex items-center space-x-4">
-            <span class="text-sm text-indigo-200 hidden sm:inline">{{ Auth::guard('admin')->user()->name ?? 'Admin' }}</span>
+            <span class="text-sm text-indigo-200 hidden sm:inline">{{ $adminUser->name ?? 'Admin' }}</span>
             <form method="POST" action="{{ route('admin.logout') }}">
                 @csrf
                 <button type="submit" class="text-sm text-indigo-200 hover:text-white transition flex items-center">
@@ -60,63 +61,31 @@
     {{-- Sidebar --}}
     <aside :class="mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'" class="fixed left-0 top-14 bottom-0 w-64 bg-indigo-950 text-white z-50 transform transition-transform duration-200 overflow-y-auto">
         <nav class="p-4 space-y-1">
-            <a href="{{ route('admin.dashboard') }}" class="flex items-center px-4 py-3 rounded-lg transition {{ request()->routeIs('admin.dashboard') ? 'bg-indigo-600 text-white' : 'text-indigo-200 hover:bg-indigo-800/50 hover:text-white' }}">
-                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-                </svg>
-                ড্যাশবোর্ড
-            </a>
+            @foreach($menuGroups as $group)
+                @php
+                    $visibleItems = collect($group['items'])->filter(function($item) use ($adminUser) {
+                        return $adminUser->hasPermission($item['slug'], 'list');
+                    });
+                @endphp
 
-            <div class="pt-4 pb-2 px-4 text-xs font-semibold text-indigo-400 uppercase tracking-wider">ব্যবহারকারী</div>
+                @if($visibleItems->isEmpty())
+                    @continue
+                @endif
 
-            <a href="#" class="flex items-center px-4 py-3 rounded-lg text-indigo-200 hover:bg-indigo-800/50 hover:text-white transition">
-                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>
-                </svg>
-                ব্যবহারকারী ম্যানেজমেন্ট
-            </a>
+                @if($group['title'])
+                    <div class="pt-4 pb-2 px-4 text-xs font-semibold text-indigo-400 uppercase tracking-wider">{{ $group['title'] }}</div>
+                @endif
 
-            <div class="pt-4 pb-2 px-4 text-xs font-semibold text-indigo-400 uppercase tracking-wider">কন্টেন্ট</div>
-
-            <a href="#" class="flex items-center px-4 py-3 rounded-lg text-indigo-200 hover:bg-indigo-800/50 hover:text-white transition">
-                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-                </svg>
-                লিড ম্যানেজমেন্ট
-            </a>
-
-            <a href="#" class="flex items-center px-4 py-3 rounded-lg text-indigo-200 hover:bg-indigo-800/50 hover:text-white transition">
-                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
-                </svg>
-                ইনভেন্টরি
-            </a>
-
-            <div class="pt-4 pb-2 px-4 text-xs font-semibold text-indigo-400 uppercase tracking-wider">প্ল্যাটফর্ম</div>
-
-            <a href="#" class="flex items-center px-4 py-3 rounded-lg text-indigo-200 hover:bg-indigo-800/50 hover:text-white transition">
-                <svg class="w-5 h-5 mr-3" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.832-1.438A9.955 9.955 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2z"/>
-                </svg>
-                WhatsApp ম্যানেজমেন্ট
-            </a>
-
-            <a href="#" class="flex items-center px-4 py-3 rounded-lg text-indigo-200 hover:bg-indigo-800/50 hover:text-white transition">
-                <svg class="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388,10.954,10.125,11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007,1.792-4.669,4.533-4.669 1.312,0,2.686.235,2.686.235v2.953H15.83c-1.491,0-1.956.925-1.956,1.874v2.25h3.328l-.532,3.47h-2.796v8.385C19.612,23.027,24,18.062,24,12.073z"/>
-                </svg>
-                Facebook ম্যানেজমেন্ট
-            </a>
-
-            <div class="pt-4 pb-2 px-4 text-xs font-semibold text-indigo-400 uppercase tracking-wider">সেটিংস</div>
-
-            <a href="#" class="flex items-center px-4 py-3 rounded-lg text-indigo-200 hover:bg-indigo-800/50 hover:text-white transition">
-                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                </svg>
-                সেটিংস
-            </a>
+                @foreach($visibleItems as $item)
+                    @php
+                        $isActive = request()->routeIs($item['route']);
+                    @endphp
+                    <a href="{{ route($item['route']) }}" class="flex items-center px-4 py-3 rounded-lg transition {{ $isActive ? 'bg-indigo-600 text-white' : 'text-indigo-200 hover:bg-indigo-800/50 hover:text-white' }}">
+                        <svg class="w-5 h-5 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">{!! $item['icon'] !!}</svg>
+                        {{ $item['title'] }}
+                    </a>
+                @endforeach
+            @endforeach
         </nav>
     </aside>
 

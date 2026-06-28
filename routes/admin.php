@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Http\Controllers\Admin\UserController;
 
 // Admin routes with web middleware (for session, errors, csrf)
 Route::middleware(['web'])->group(function () {
@@ -43,6 +44,8 @@ Route::middleware(['web'])->group(function () {
 
     // Admin Protected Routes
     Route::middleware(['admin'])->prefix('rootadmin')->group(function () {
+
+        // Dashboard
         Route::get('/dashboard', function () {
             return view('admin.dashboard');
         })->name('admin.dashboard');
@@ -50,6 +53,30 @@ Route::middleware(['web'])->group(function () {
         Route::get('/', function () {
             return redirect('/rootadmin/dashboard');
         });
+
+        // User Management
+        Route::get('/users', [UserController::class, 'index'])->name('admin.users.index');
+        Route::get('/users/create', [UserController::class, 'create'])->name('admin.users.create');
+        Route::post('/users', [UserController::class, 'store'])->name('admin.users.store');
+        Route::get('/users/{user}/edit', [UserController::class, 'edit'])->name('admin.users.edit');
+        Route::put('/users/{user}', [UserController::class, 'update'])->name('admin.users.update');
+        Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('admin.users.destroy');
+
+        // Lead Management (placeholder)
+        Route::get('/leads', fn() => view('admin.placeholder', ['title' => 'লিড ম্যানেজমেন্ট']))->name('admin.leads.index');
+
+        // Inventory (placeholder)
+        Route::get('/inventory', fn() => view('admin.placeholder', ['title' => 'ইনভেন্টরি']))->name('admin.inventory.index');
+
+        // WhatsApp (placeholder)
+        Route::get('/whatsapp', fn() => view('admin.placeholder', ['title' => 'হোয়াটসঅ্যাপ ম্যানেজমেন্ট']))->name('admin.whatsapp.index');
+
+        // Facebook (placeholder)
+        Route::get('/facebook', fn() => view('admin.placeholder', ['title' => 'ফেসবুক ম্যানেজমেন্ট']))->name('admin.facebook.index');
+
+        // Settings (placeholder)
+        Route::get('/settings', fn() => view('admin.placeholder', ['title' => 'সেটিংস']))->name('admin.settings.index');
+
     });
 
 });

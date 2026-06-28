@@ -29,4 +29,53 @@ class Admin extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public function permissions()
+    {
+        return $this->hasMany(AdminUserPermission::class);
+    }
+
+    public function hasPermission(string $menuSlug, string $permission): bool
+    {
+        if ($this->role === 'super_admin') {
+            return true;
+        }
+
+        return $this->permissions()
+            ->where('menu_slug', $menuSlug)
+            ->where('permission', $permission)
+            ->exists();
+    }
+
+    public function getAllPermissions(): array
+    {
+        if ($this->role === 'super_admin') {
+            $menu = app(\App\Services\Menu::class);
+            $all = [];
+            foreach (config('menu.groups') ?? [] as $group) {
+                foreach ($group['items'] as $item) {
+                    foreach ($item['permissions'] as $perm) {
+                        $all[] = $item['slug'] . '.' . $perm;
+                    }
+                }
+            }
+            return $all;
+        }
+
+        return $this->permissions->pluck('permission', 'menu_slug')
+            ->flatMap(fn($perms, $slug) => collect($perms)->map(fn($p) => $slug . '.' . $p))
+            ->toArray();
+    }
+
+    public function getPermissionsBySlug(string $menuSlug): array
+    {
+        if ($this->role === 'super_admin') {
+            return ['list', 'create', 'edit', 'delete', 'view'];
+        }
+
+        return $this->permissions()
+            ->where('menu_slug', $menuSlug)
+            ->pluck('permission')
+            ->toArray();
+    }
 }
