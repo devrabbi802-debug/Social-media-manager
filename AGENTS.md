@@ -7,17 +7,51 @@ SocialBoost AI — Laravel 13 social media & inventory management platform. Beng
 ## Quick Commands
 
 ```bash
-composer setup        # Full project setup (install, key, migrate, npm, build)
-composer dev          # Concurrent: artisan serve, queue:listen, pail, vite
-composer test         # Clear config cache + artisan test
+./start.sh              # PC on korle ei ekta command (Docker + DNS + Apache)
+composer setup          # Full project setup (install, key, migrate, npm, build)
+composer test           # Clear config cache + artisan test
 php artisan test --filter=TestName   # Run single test
-npx vite build        # Build frontend assets
+npx vite build          # Build frontend assets
 
 # Multi-Tenancy
 php artisan tenants:migrate        # Migrate all tenant databases
 php artisan tenants:seed           # Seed all tenant databases
 php artisan tenants:run migrate    # Run migration for specific tenant
 ```
+
+## Local Development Setup
+
+### PC On Korle (Startup)
+
+```bash
+./start.sh
+```
+
+Ei script sob kore dibe:
+- Docker containers start (app, mysql, phpmyadmin, node)
+- DNS fix (`/etc/resolv.conf` — systemd-resolved override fix)
+- Apache start
+
+### First Time Setup (Ekbar)
+
+```bash
+chmod +x setup-domain.sh && sudo ./setup-domain.sh
+```
+
+Ei script one-time setup kore:
+- `smm.test` → `/etc/hosts` e add
+- dnsmasq install + configure (`*.smm.test → 127.0.0.1`)
+- Apache wildcard VirtualHost create (`*.smm.test → proxy to Laravel`)
+- Docker containers start
+
+### Customer Register Korle
+
+**Kono extra command lagbe na.** Sob automatic:
+- Tenant database create hobe
+- Domain record create hobe (`{subdomain}.smm.test`)
+- DNS automatically resolve korbe (dnsmasq wildcard)
+- User tenant DB te create hobe
+- Redirect hobe tenant dashboard e
 
 ## Architecture
 
@@ -26,10 +60,10 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 - **Package**: `stancl/tenancy` v3.10.0 with subdomain identification
 - **Landlord DB**: `social_media_manager` — stores `tenants`, `domains`, `admins`, `admin_user_permissions`, `cache`, `jobs`
 - **Tenant DB**: `{subdomain}_socialboost` (e.g., `acme_socialboost`, `beta_socialboost`) — stores `users`, `sessions`, `password_reset_tokens`
-- **Registration flow**: Customer registers → `Tenant::create()` → Database auto-created → User created in tenant DB → Redirects to `{subdomain}.socialboost.com`
+- **Registration flow**: Customer registers → `Tenant::create()` → Database auto-created → User created in tenant DB → Redirects to `{subdomain}.smm.test`
 - **Admin panel**: Stays on landlord database, can manage all tenants via `/rootadmin/tenants`
 - **Tenant identification**: Subdomain-based via `InitializeTenancyByDomain` middleware
-- **Central domains** (not tenant): `127.0.0.1`, `localhost`, `socialboost.com`, `www.socialboost.com`
+- **Central domains** (not tenant): `127.0.0.1`, `localhost`, `smm.test`, `socialboost.com`, `www.socialboost.com`
 - **ID generator**: UUID (Stancl default) — tenant IDs can be subdomain names (e.g., `acme`)
 - **Custom tenant attributes** stored in `data` JSON column: `name`, `email`, `phone`, `company`, `plan`, `status`, `trial_ends_at`
 
@@ -53,7 +87,7 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 
 ## Database
 
-### Landlord Database (`social_media_manager`)
+### Landlord Database (`socialboost`)
 - `tenants` — id, data (JSON: name, email, phone, company, plan, status, trial_ends_at), timestamps
 - `domains` — id, domain, tenant_id (FK)
 - `admins` — id, name, email, password, role
@@ -109,7 +143,9 @@ docker exec laravel-app php artisan <command>  # Run artisan inside container
 - `.npmrc` has `ignore-scripts=true` — postinstall scripts skipped
 - `APP_LOCALE=en` in `.env` — Bengali is hardcoded in view templates, not set via locale config
 - **Tenancy**: User model does NOT use `BelongsToTenant` trait (database-per-tenant approach makes it unnecessary)
-- **Tenancy**: Tenant custom attributes (name, email, etc.) are stored in `data` JSON column, accessed via `$tenant->name`
+- **Tenancy**: Tenant custom attributes (name, email, etc.) are stored in `data` JSON column, accessed via `$tenant->name` — query with `where('data->status', 'active')` not `where('status', 'active')`
+- **Tenancy**: `users` table only exists in tenant databases, NOT in landlord DB — never query `User::count()` etc. from central routes
+- **Tenancy**: Registration validation does NOT use `unique:users,email` (users are per-tenant, not central)
 - **Tenancy**: Tests may fail if SQLite PDO driver is missing (pre-existing issue)
 
 # Agent Instructions

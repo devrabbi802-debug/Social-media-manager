@@ -27,8 +27,8 @@
         <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-sm text-gray-500">Total Users</p>
-                    <p class="text-3xl font-bold text-gray-900 mt-1">{{ \App\Models\User::count() }}</p>
+                    <p class="text-sm text-gray-500">Admin Users</p>
+                    <p class="text-3xl font-bold text-gray-900 mt-1">{{ \App\Models\Admin::count() }}</p>
                 </div>
                 <div class="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
                     <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -42,7 +42,7 @@
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-sm text-gray-500">Active Tenants</p>
-                    <p class="text-3xl font-bold text-gray-900 mt-1">{{ \App\Models\Tenant::where('status', 'active')->count() }}</p>
+                    <p class="text-3xl font-bold text-gray-900 mt-1">{{ \App\Models\Tenant::where('data->status', 'active')->count() }}</p>
                 </div>
                 <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
                     <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -56,7 +56,7 @@
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-sm text-gray-500">Trial Tenants</p>
-                    <p class="text-3xl font-bold text-gray-900 mt-1">{{ \App\Models\Tenant::where('status', 'trial')->count() }}</p>
+                    <p class="text-3xl font-bold text-gray-900 mt-1">{{ \App\Models\Tenant::where('data->status', 'trial')->count() }}</p>
                 </div>
                 <div class="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
                     <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
