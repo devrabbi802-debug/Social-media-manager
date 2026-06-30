@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Models\Tenant;
 
 // Landing Page
 Route::get('/', function () {
@@ -58,21 +59,47 @@ Route::get('/register', function () {
 Route::post('/register', function (Request $request) {
     $validated = $request->validate([
         'name' => 'required|string|max:255',
-        'email' => 'required|string|email|max:255|unique:users',
+        'email' => 'required|string|email|max:255|unique:users,email',
         'phone' => 'required|string|max:20',
         'company' => 'nullable|string|max:255',
+        'subdomain' => 'required|string|min:3|max:50|regex:/^[a-z0-9-]+$/|unique:tenants,id',
         'password' => 'required|string|min:8|confirmed',
     ]);
 
-    $user = \App\Models\User::create([
-        'name' => $validated['name'],
+    // Tenant create koro
+    $tenant = Tenant::create([
+        'id' => $validated['subdomain'],
+        'name' => $validated['company'] ?? $validated['name'],
         'email' => $validated['email'],
-        'password' => \Illuminate\Support\Facades\Hash::make($validated['password']),
+        'phone' => $validated['phone'],
+        'company' => $validated['company'],
+        'plan' => 'trial',
+        'status' => 'active',
+        'trial_ends_at' => now()->addDays(14),
     ]);
 
-    Auth::login($user);
+    // Domain create koro
+    $tenant->domains()->create([
+        'domain' => $validated['subdomain'] . '.' . config('app.domain'),
+    ]);
 
-    return redirect('/dashboard');
+    // Tenant database e user create koro
+    $tenant->run(function () use ($validated) {
+        $user = \App\Models\User::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'phone' => $validated['phone'],
+            'company' => $validated['company'],
+            'password' => \Illuminate\Support\Facades\Hash::make($validated['password']),
+        ]);
+
+        Auth::login($user);
+    });
+
+    // Tenant subdomain e redirect koro
+    return redirect()->to(
+        'http://' . $validated['subdomain'] . '.' . config('app.domain') . '/dashboard'
+    );
 });
 
 // Logout

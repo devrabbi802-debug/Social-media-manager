@@ -89,6 +89,24 @@
                 </div>
 
                 <div class="mb-6">
+                    <label for="subdomain" class="block text-sm font-medium text-gray-700 mb-2">সাবডোমেইন</label>
+                    <div class="flex">
+                        <input type="text" 
+                               id="subdomain" 
+                               name="subdomain" 
+                               value="{{ old('subdomain') }}"
+                               required
+                               class="w-full px-4 py-3 border border-gray-300 rounded-l-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition @error('subdomain') border-red-500 @enderror"
+                               placeholder="আপনার সাবডোমেইন">
+                        <span class="px-4 py-3 bg-gray-100 border border-l-0 border-gray-300 rounded-r-xl text-gray-600">.{{ config('app.domain') }}</span>
+                    </div>
+                    <p class="mt-1 text-sm text-gray-500">শুধুমাত্র ছোট অক্ষর, সংখ্যা এবং হাইফেন ব্যবহার করুন</p>
+                    @error('subdomain')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div class="mb-6">
                     <label for="password" class="block text-sm font-medium text-gray-700 mb-2">পাসওয়ার্ড</label>
                     <input type="password" 
                            id="password" 

@@ -2,7 +2,7 @@
 
 ## Project
 
-SocialBoost AI — Laravel 13 social media & inventory management platform. Bengali UI (all user-facing text is in Bengali), PostgreSQL in production, SQLite in-memory for tests.
+SocialBoost AI — Laravel 13 social media & inventory management platform. Bengali UI (all user-facing text is in Bengali), PostgreSQL in production, SQLite in-memory for tests. **Multi-tenant architecture** using `stancl/tenancy` v3.10.0 (database-per-tenant).
 
 ## Quick Commands
 
@@ -12,9 +12,28 @@ composer dev          # Concurrent: artisan serve, queue:listen, pail, vite
 composer test         # Clear config cache + artisan test
 php artisan test --filter=TestName   # Run single test
 npx vite build        # Build frontend assets
+
+# Multi-Tenancy
+php artisan tenants:migrate        # Migrate all tenant databases
+php artisan tenants:seed           # Seed all tenant databases
+php artisan tenants:run migrate    # Run migration for specific tenant
 ```
 
 ## Architecture
+
+### Multi-Tenancy (Database-per-Tenant)
+
+- **Package**: `stancl/tenancy` v3.10.0 with subdomain identification
+- **Landlord DB**: `social_media_manager` — stores `tenants`, `domains`, `admins`, `admin_user_permissions`, `cache`, `jobs`
+- **Tenant DB**: `{subdomain}_socialboost` (e.g., `acme_socialboost`, `beta_socialboost`) — stores `users`, `sessions`, `password_reset_tokens`
+- **Registration flow**: Customer registers → `Tenant::create()` → Database auto-created → User created in tenant DB → Redirects to `{subdomain}.socialboost.com`
+- **Admin panel**: Stays on landlord database, can manage all tenants via `/rootadmin/tenants`
+- **Tenant identification**: Subdomain-based via `InitializeTenancyByDomain` middleware
+- **Central domains** (not tenant): `127.0.0.1`, `localhost`, `socialboost.com`, `www.socialboost.com`
+- **ID generator**: UUID (Stancl default) — tenant IDs can be subdomain names (e.g., `acme`)
+- **Custom tenant attributes** stored in `data` JSON column: `name`, `email`, `phone`, `company`, `plan`, `status`, `trial_ends_at`
+
+### Auth System
 
 - **Dual auth**: `web` guard (User model) for public/dashboard, `admin` guard (Admin model) for /rootadmin/*
 - **Admin routes loaded separately**: `routes/admin.php` is loaded via `then:` callback in `bootstrap/app.php` — not through the standard `withRouting()` parameter. The `admin` middleware alias is registered there too.
@@ -25,16 +44,30 @@ npx vite build        # Build frontend assets
 
 - Public views: `resources/views/` (welcome, features, pricing, about, contact, auth)
 - Dashboard views: `resources/views/dashboard/` (only `index.blade.php` exists — routes reference `dashboard.settings`, `dashboard.leads`, etc. but those views are missing)
-- Admin views: `resources/views/admin/` (auth, dashboard, users CRUD)
+- Admin views: `resources/views/admin/` (auth, dashboard, users CRUD, **tenants CRUD**)
+- Tenant views: `resources/views/admin/tenants/` (index, create, edit — Tailwind styled)
 - Layouts: `resources/views/layouts/app.blade.php` (public), `resources/views/admin/layouts/app.blade.php` (admin)
-- Menu config: `config/menu.php` — add menu groups here for admin sidebar
+- Menu config: `config/menu.php` — add menu groups here for admin sidebar (includes `tenant_management` group)
 - Auth config: `config/auth.php` — defines `web` (User) and `admin` (Admin) guards
+- Tenancy config: `config/tenancy.php` — central domains, DB suffix (`_socialboost`), tenant model, bootstrappers
 
 ## Database
 
+### Landlord Database (`social_media_manager`)
+- `tenants` — id, data (JSON: name, email, phone, company, plan, status, trial_ends_at), timestamps
+- `domains` — id, domain, tenant_id (FK)
+- `admins` — id, name, email, password, role
+- `admin_user_permissions` — id, admin_id (FK), menu_slug, permission
+- `cache`, `cache_locks`, `jobs`, `job_batches`, `failed_jobs`
+
+### Tenant Database (`{subdomain}_socialboost`)
+- `users` — id, name, email, phone, company, password, timestamps
+- `sessions` — id, user_id, ip_address, user_agent, payload
+- `password_reset_tokens` — email, token, created_at
+
 - Production: PostgreSQL (`pgsql` driver, host: `postgres`)
 - Tests: SQLite in-memory (configured in `phpunit.xml`)
-- Key tables: `users`, `admins`, `admin_user_permissions`, `cache`, `jobs`
+- **Users table is NOT in landlord DB** — only in tenant databases
 
 ## Docker
 
@@ -51,6 +84,7 @@ docker compose up     # Starts app (PHP 8.4), node (Node 20), postgres (16-alpin
 - Vite entry: `resources/css/app.css`, `resources/js/app.js` (app.js is empty — no JS bundled via Vite yet)
 - Public layouts load Tailwind via CDN (`cdn.tailwindcss.com`) + Alpine.js — **not** via Vite
 - Bengali font: Hind Siliguri (Google Fonts in public layouts), Instrument Sans (Vite fonts plugin)
+- Admin panel & tenant views use Tailwind via CDN
 
 ## Testing
 
@@ -66,6 +100,9 @@ docker compose up     # Starts app (PHP 8.4), node (Node 20), postgres (16-alpin
 - `storage/framework/views/` is excluded from Vite watch but NOT gitignored
 - `.npmrc` has `ignore-scripts=true` — postinstall scripts skipped
 - `APP_LOCALE=en` in `.env` — Bengali is hardcoded in view templates, not set via locale config
+- **Tenancy**: User model does NOT use `BelongsToTenant` trait (database-per-tenant approach makes it unnecessary)
+- **Tenancy**: Tenant custom attributes (name, email, etc.) are stored in `data` JSON column, accessed via `$tenant->name`
+- **Tenancy**: Tests may fail if SQLite PDO driver is missing (pre-existing issue)
 
 # Agent Instructions
 

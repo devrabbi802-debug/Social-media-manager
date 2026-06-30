@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\TenantController;
 
 Route::middleware(['web'])->group(function () {
 
@@ -57,6 +58,14 @@ Route::middleware(['web'])->group(function () {
         Route::put('/users/{user}', [UserController::class, 'update'])->name('admin.users.update');
         Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('admin.users.destroy');
         Route::post('/users/{admin}/login-as', [UserController::class, 'loginAs'])->name('admin.users.login-as');
+
+        // Tenant Management
+        Route::get('/tenants', [TenantController::class, 'index'])->name('admin.tenants.index');
+        Route::get('/tenants/create', [TenantController::class, 'create'])->name('admin.tenants.create');
+        Route::post('/tenants', [TenantController::class, 'store'])->name('admin.tenants.store');
+        Route::get('/tenants/{tenant}/edit', [TenantController::class, 'edit'])->name('admin.tenants.edit');
+        Route::put('/tenants/{tenant}', [TenantController::class, 'update'])->name('admin.tenants.update');
+        Route::delete('/tenants/{tenant}', [TenantController::class, 'destroy'])->name('admin.tenants.destroy');
 
     });
 
