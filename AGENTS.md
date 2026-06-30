@@ -66,3 +66,9 @@ docker compose up     # Starts app (PHP 8.4), node (Node 20), postgres (16-alpin
 - `storage/framework/views/` is excluded from Vite watch but NOT gitignored
 - `.npmrc` has `ignore-scripts=true` — postinstall scripts skipped
 - `APP_LOCALE=en` in `.env` — Bengali is hardcoded in view templates, not set via locale config
+
+# Agent Instructions
+
+Always reply in Banglish (Bengali written in English letters).
+No matter what language the user writes in, always respond in Banglish.
+Example: "Ei function ta fix korte hobe, karon ekhane error ache.
