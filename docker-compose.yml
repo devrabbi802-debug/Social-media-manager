@@ -6,20 +6,39 @@ services:
     container_name: laravel-app
     restart: unless-stopped
     working_dir: /var/www
+    depends_on:
+      mysql:
+        condition: service_healthy
     volumes:
       - .:/var/www
     ports:
       - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
     environment:
-      - DB_CONNECTION=pgsql
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_DATABASE=social_media_manager
-      - DB_USERNAME=postgres
+      - DB_CONNECTION=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=socialboost
+      - DB_USERNAME=root
       - DB_PASSWORD=secret
+    networks:
+      - laravel-net
+
+  mysql:
+    image: mysql:8.0
+    container_name: laravel-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_DATABASE: socialboost
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - laravel-net
 
@@ -35,28 +54,24 @@ services:
     networks:
       - laravel-net
 
-  postgres:
-    image: postgres:16-alpine
-    container_name: laravel-postgres
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: laravel-phpmyadmin
     restart: unless-stopped
-    environment:
-      POSTGRES_DB: social_media_manager
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: secret
+    depends_on:
+      mysql:
+        condition: service_healthy
     ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      - "8080:80"
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: secret
     networks:
       - laravel-net
 
 volumes:
-  postgres_data:
+  mysql-data:
 
 networks:
   laravel-net:

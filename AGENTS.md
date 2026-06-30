@@ -2,7 +2,7 @@
 
 ## Project
 
-SocialBoost AI — Laravel 13 social media & inventory management platform. Bengali UI (all user-facing text is in Bengali), PostgreSQL in production, SQLite in-memory for tests. **Multi-tenant architecture** using `stancl/tenancy` v3.10.0 (database-per-tenant).
+SocialBoost AI — Laravel 13 social media & inventory management platform. Bengali UI (all user-facing text is in Bengali), MySQL in production, SQLite in-memory for tests. **Multi-tenant architecture** using `stancl/tenancy` v3.10.0 (database-per-tenant).
 
 ## Quick Commands
 
@@ -65,18 +65,26 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 - `sessions` — id, user_id, ip_address, user_agent, payload
 - `password_reset_tokens` — email, token, created_at
 
-- Production: PostgreSQL (`pgsql` driver, host: `postgres`)
+- Production: MySQL (`mysql` driver, host: `127.0.0.1`)
 - Tests: SQLite in-memory (configured in `phpunit.xml`)
 - **Users table is NOT in landlord DB** — only in tenant databases
 
 ## Docker
 
 ```bash
-docker compose up     # Starts app (PHP 8.4), node (Node 20), postgres (16-alpine)
+docker compose up -d --build  # Build and start all containers
+docker compose down           # Stop all containers
+docker compose logs -f        # Follow logs
+docker compose ps             # Check container status
+docker exec laravel-app php artisan <command>  # Run artisan inside container
 ```
 
-- App on port 8000, Vite dev server on port 5173, Postgres on 5432
-- Entrypoint conditionally runs `composer install --no-dev`, `npm install`, `key:generate`, `migrate`
+- **Custom domain**: `http://smm.test:8000/` (add `127.0.0.1 smm.test` to `/etc/hosts`)
+- App on port **8000**, Vite dev server on port **5173**
+- **MySQL 8.0** runs inside Docker (service name: `mysql`, host port: `3307` to avoid conflict with local MySQL on `3306`)
+- `.env` uses `DB_HOST=mysql` (Docker service name), `DB_DATABASE=socialboost`, `DB_PASSWORD=secret`
+- Entrypoint waits for MySQL health check, then runs `composer install --no-dev`, `npm install`, `key:generate`, `migrate`
+- Landlord DB includes `sessions` table (needed for `database` session driver on public/central routes)
 
 ## Frontend
 
