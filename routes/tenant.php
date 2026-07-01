@@ -88,5 +88,9 @@ Route::middleware([
         Route::get('/inventory/add', function () {
             return view('dashboard.inventory-add');
         })->name('inventory.add');
+        
+        Route::get('/integration', function () {
+            return view('dashboard.integration');
+        })->name('integration');
     });
 });

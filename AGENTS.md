@@ -4,6 +4,8 @@
 
 SocialBoost AI — Laravel 13 social media & inventory management platform. Bengali UI (all user-facing text is in Bengali), MySQL in production, SQLite in-memory for tests. **Multi-tenant architecture** using `stancl/tenancy` v3.10.0 (database-per-tenant).
 
+**Local Dev URL**: `http://smm.test/`
+
 ## Quick Commands
 
 ```bash
