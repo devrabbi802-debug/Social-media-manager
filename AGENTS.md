@@ -153,3 +153,13 @@ docker exec laravel-app php artisan <command>  # Run artisan inside container
 Always reply in Banglish (Bengali written in English letters).
 No matter what language the user writes in, always respond in Banglish.
 Example: "Ei function ta fix korte hobe, karon ekhane error ache.
+
+Always follow best practices for coding architecture. This includes:
+- SOLID principles
+- DRY (Don't Repeat Yourself)
+- KISS (Keep It Simple, Stupid)
+- YAGNI (You Aren't Gonna Need It)
+- Proper separation of concerns
+- Use design patterns where appropriate (Repository, Service, Observer, etc.)
+- Write clean, maintainable, and testable code
+- Follow Laravel conventions and conventions of the frameworks/libraries used
