@@ -60,14 +60,15 @@ Ei script one-time setup kore:
 ### Multi-Tenancy (Database-per-Tenant)
 
 - **Package**: `stancl/tenancy` v3.10.0 with subdomain identification
-- **Landlord DB**: `social_media_manager` — stores `tenants`, `domains`, `admins`, `admin_user_permissions`, `cache`, `jobs`
-- **Tenant DB**: `{subdomain}_socialboost` (e.g., `acme_socialboost`, `beta_socialboost`) — stores `users`, `sessions`, `password_reset_tokens`
+- **Landlord DB**: `socialboost` — stores `tenants`, `domains`, `admins`, `admin_user_permissions`, `cache`, `jobs`
+- **Tenant DB**: `{subdomain}_socialboost` (e.g., `acme_socialboost`, `beta_socialboost`) — stores `users`, `sessions`, `password_reset_tokens`, `facebook_settings`
 - **Registration flow**: Customer registers → `Tenant::create()` → Database auto-created → User created in tenant DB → Redirects to `{subdomain}.smm.test`
 - **Admin panel**: Stays on landlord database, can manage all tenants via `/rootadmin/tenants`
 - **Tenant identification**: Subdomain-based via `InitializeTenancyByDomain` middleware
 - **Central domains** (not tenant): `127.0.0.1`, `localhost`, `smm.test`, `socialboost.com`, `www.socialboost.com`
 - **ID generator**: UUID (Stancl default) — tenant IDs can be subdomain names (e.g., `acme`)
 - **Custom tenant attributes** stored in `data` JSON column: `name`, `email`, `phone`, `company`, `plan`, `status`, `trial_ends_at`
+- **Tenant routes** loaded via `routes/tenant.php` through Stancl's `TenantRouteServiceProvider`
 
 ### Auth System
 
@@ -79,13 +80,15 @@ Ei script one-time setup kore:
 ## Key Paths
 
 - Public views: `resources/views/` (welcome, features, pricing, about, contact, auth)
-- Dashboard views: `resources/views/dashboard/` (only `index.blade.php` exists — routes reference `dashboard.settings`, `dashboard.leads`, etc. but those views are missing)
-- Admin views: `resources/views/admin/` (auth, dashboard, users CRUD, **tenants CRUD**)
+- Dashboard views: `resources/views/dashboard/` (only `index.blade.php`, `integration.blade.php`, `facebook-settings.blade.php` exist — routes reference `dashboard.settings`, `dashboard.leads`, `dashboard.reports`, `dashboard.whatsapp`, `dashboard.inventory`, `dashboard.inventory-add` but those views are missing)
+- Admin views: `resources/views/admin/` (auth, dashboard, users CRUD, tenants CRUD)
 - Tenant views: `resources/views/admin/tenants/` (index, create, edit — Tailwind styled)
 - Layouts: `resources/views/layouts/app.blade.php` (public), `resources/views/admin/layouts/app.blade.php` (admin)
 - Menu config: `config/menu.php` — add menu groups here for admin sidebar (includes `tenant_management` group)
 - Auth config: `config/auth.php` — defines `web` (User) and `admin` (Admin) guards
 - Tenancy config: `config/tenancy.php` — central domains, DB suffix (`_socialboost`), tenant model, bootstrappers
+- Central migrations: `database/migrations/` — landlord DB tables (tenants, domains, admins, admin_user_permissions, cache, jobs, sessions)
+- Tenant migrations: `database/migrations/tenant/` — per-tenant tables (users, password_reset_tokens, sessions, facebook_settings)
 
 ## Database
 
@@ -100,10 +103,12 @@ Ei script one-time setup kore:
 - `users` — id, name, email, phone, company, password, timestamps
 - `sessions` — id, user_id, ip_address, user_agent, payload
 - `password_reset_tokens` — email, token, created_at
+- `facebook_settings` — id, user_id (FK), app_id, app_secret, verify_token, page_id, page_access_token, timestamps
 
 - Production: MySQL (`mysql` driver, host: `127.0.0.1`)
 - Tests: SQLite in-memory (configured in `phpunit.xml`)
 - **Users table is NOT in landlord DB** — only in tenant databases
+- **.env.example** defaults to PostgreSQL — actual `.env` uses MySQL
 
 ## Docker
 
@@ -149,12 +154,13 @@ docker exec laravel-app php artisan <command>  # Run artisan inside container
 - **Tenancy**: `users` table only exists in tenant databases, NOT in landlord DB — never query `User::count()` etc. from central routes
 - **Tenancy**: Registration validation does NOT use `unique:users,email` (users are per-tenant, not central)
 - **Tenancy**: Tests may fail if SQLite PDO driver is missing (pre-existing issue)
+- **.env.example** defaults to PostgreSQL — actual `.env` uses MySQL
 
 # Agent Instructions
 
 Always reply in Banglish (Bengali written in English letters).
 No matter what language the user writes in, always respond in Banglish.
-Example: "Ei function ta fix korte hobe, karon ekhane error ache.
+Example: "Ei function ta fix korte hobe, karon ekhane error ache."
 
 Always follow best practices for coding architecture. This includes:
 - SOLID principles
