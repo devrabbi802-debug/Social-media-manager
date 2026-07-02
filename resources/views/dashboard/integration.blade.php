@@ -74,7 +74,7 @@
                 </div>
                 <div class="flex space-x-3">
                     <a href="{{ url('/facebook/post') }}" class="flex-1 text-center bg-blue-600 text-white px-4 py-2 rounded-xl font-medium hover:bg-blue-700 transition">মেসেজ দেখুন</a>
-                    <button class="px-4 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition">সেটিংস</button>
+                    <a href="{{ route('facebook.settings') }}" class="px-4 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition">সেটিংস</a>
                 </div>
             </div>
 

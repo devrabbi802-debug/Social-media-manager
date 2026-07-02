@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
 use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
+use App\Http\Controllers\FacebookSettingController;
 
 /*
 |--------------------------------------------------------------------------
@@ -92,5 +93,9 @@ Route::middleware([
         Route::get('/integration', function () {
             return view('dashboard.integration');
         })->name('integration');
+
+        Route::get('/facebook/settings', [FacebookSettingController::class, 'index'])->name('facebook.settings');
+        Route::post('/facebook/settings', [FacebookSettingController::class, 'store'])->name('facebook.settings.store');
+        Route::delete('/facebook/settings', [FacebookSettingController::class, 'destroy'])->name('facebook.settings.destroy');
     });
 });
