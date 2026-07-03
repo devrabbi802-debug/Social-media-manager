@@ -5,6 +5,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Tenant;
 use App\Http\Controllers\FacebookSettingController;
+use App\Http\Controllers\FacebookWebhookController;
 
 // Landing Page
 Route::get('/', function () {
@@ -30,6 +31,10 @@ Route::get('/about', function () {
 Route::get('/contact', function () {
     return view('contact');
 });
+
+// Facebook Webhook (central — no tenant middleware, Facebook calls this via tunnel URL)
+Route::get('/webhook/facebook', [FacebookWebhookController::class, 'verify']);
+Route::post('/webhook/facebook', [FacebookWebhookController::class, 'handle']);
 
 // Auth Routes - Login
 Route::get('/login', function () {

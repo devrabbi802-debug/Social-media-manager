@@ -199,6 +199,21 @@
             <div class="space-y-6">
                 {{-- Instructions --}}
                 <div class="bg-white rounded-2xl p-6 shadow-sm">
+                    <h3 class="text-lg font-bold text-gray-900 mb-4">Webhook সেটআপ</h3>
+                    <div class="space-y-4">
+                        <div class="bg-gray-50 rounded-xl p-4">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Callback URL</p>
+                            <code class="text-sm text-blue-600 break-all">{{ url('/webhook/facebook') }}</code>
+                        </div>
+                        <div class="bg-gray-50 rounded-xl p-4">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Verify Token</p>
+                            <code class="text-sm text-blue-600">{{ $facebookSetting->verify_token ?? 'socialboost_verify_token_2026' }}</code>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Instructions --}}
+                <div class="bg-white rounded-2xl p-6 shadow-sm">
                     <h3 class="text-lg font-bold text-gray-900 mb-4">কিভাবে পাবেন?</h3>
                     <div class="space-y-4">
                         <div class="flex items-start">
@@ -229,7 +244,19 @@
                             <div class="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center mr-3 mt-0.5">
                                 <span class="text-xs font-bold text-blue-600">৫</span>
                             </div>
-                            <p class="text-sm text-gray-600">Webhooks সেটআপ করার সময় Verify Token দিন</p>
+                            <p class="text-sm text-gray-600">Products > Webhooks এ "Verify Token" ফিল্ডে উপরের টোকেন দিন</p>
+                        </div>
+                        <div class="flex items-start">
+                            <div class="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center mr-3 mt-0.5">
+                                <span class="text-xs font-bold text-blue-600">৬</span>
+                            </div>
+                            <p class="text-sm text-gray-600">Callback URL ফিল্ডে উপরের URL দিন এবং Verify ক্লিক করুন</p>
+                        </div>
+                        <div class="flex items-start">
+                            <div class="w-6 h-6 bg-yellow-100 rounded-full flex items-center justify-center mr-3 mt-0.5">
+                                <span class="text-xs font-bold text-yellow-600">!</span>
+                            </div>
+                            <p class="text-sm text-gray-600">Localhost এ থাকলে ngrok বা Cloudflare Tunnel লাগবে। নিচে দেখুন।</p>
                         </div>
                     </div>
                 </div>
@@ -248,6 +275,23 @@
                         </form>
                     </div>
                 @endif
+
+                {{-- Local Dev Instructions --}}
+                <div class="bg-white rounded-2xl p-6 shadow-sm border border-yellow-200">
+                    <h3 class="text-lg font-bold text-yellow-600 mb-2">Localhost এ Webhook Test</h3>
+                    <p class="text-sm text-gray-600 mb-3">Facebook localhost এ পুরতে পারে না। একটা tunnel লাগবে:</p>
+                    <div class="space-y-3">
+                        <div class="bg-gray-50 rounded-xl p-3">
+                            <p class="text-xs font-semibold text-gray-700 mb-1">Option 1: ngrok</p>
+                            <code class="text-xs text-gray-600 block">ngrok http {{ request()->getHost() }}</code>
+                        </div>
+                        <div class="bg-gray-50 rounded-xl p-3">
+                            <p class="text-xs font-semibold text-gray-700 mb-1">Option 2: Cloudflare Tunnel</p>
+                            <code class="text-xs text-gray-600 block">cloudflared tunnel --url http://{{ request()->getHost() }}</code>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-3">Tunnel URL কপি করে Facebook Dashboard এ Callback URL হিসেবে দিন।</p>
+                </div>
             </div>
         </div>
     </div>

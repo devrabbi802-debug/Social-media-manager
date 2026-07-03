@@ -30,3 +30,28 @@ echo ""
 echo "========================================="
 echo "  DONE! Visit: http://smm.test"
 echo "========================================="
+
+# Ngrok tunnel start (Facebook webhook er jonno)
+if [ -f "$HOME/ngrok" ]; then
+    # Purano ngrok bondho koro
+    pkill -f "ngrok http" 2>/dev/null || true
+    sleep 1
+
+    # Ngrok start koro
+    nohup "$HOME/ngrok" http 8000 > /tmp/ngrok.log 2>&1 &
+    sleep 4
+
+    NGROK_URL=$(wget -qO- http://127.0.0.1:4040/api/tunnels 2>/dev/null | grep -o '"public_url":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+    if [ -n "$NGROK_URL" ]; then
+        echo ""
+        echo "========================================="
+        echo "  NGROK TUNNEL ACTIVE"
+        echo "  Webhook URL: ${NGROK_URL}/webhook/facebook"
+        echo "========================================="
+    else
+        echo "[WARN] Ngrok start hoyni — manually chalao: ~/ngrok http 8000"
+    fi
+else
+    echo "[WARN] Ngrok install nai. Install: snap install ngrok"
+fi
