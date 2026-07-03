@@ -41,7 +41,7 @@ class SendAiReplyJob implements ShouldQueue
 
     public function middleware(): array
     {
-        return [new WithoutOverlapping('facebook_reply_' . $this->tenantId . '_' . $this->senderId)];
+        return [new WithoutOverlapping('facebook_reply_'.$this->tenantId.'_'.$this->senderId)];
     }
 
     public function failed(\Throwable $exception): void
@@ -71,16 +71,19 @@ class SendAiReplyJob implements ShouldQueue
                 return;
             }
 
-            $aiSetting = AiSetting::where('user_id', $facebookSetting->user_id)->first();
+            $aiKeys = AiSetting::where('user_id', $facebookSetting->user_id)
+                ->active()
+                ->byPriority()
+                ->get();
 
-            if (! $aiSetting) {
+            if ($aiKeys->isEmpty()) {
                 return;
             }
 
             $this->sendTypingIndicator(true);
 
-            $aiService = new AiChatService($aiSetting->api_key, $systemPrompt);
-            $reply = $aiService->chat($this->messageText);
+            $aiService = new AiChatService($systemPrompt);
+            $reply = $aiService->chatWithRotation($this->messageText, $aiKeys);
 
             $this->sendTypingIndicator(false);
 
@@ -95,6 +98,7 @@ class SendAiReplyJob implements ShouldQueue
                 'sender_id' => $this->senderId,
                 'message' => $this->messageText,
                 'reply' => $reply,
+                'keys_available' => $aiKeys->count(),
             ]);
         });
     }
@@ -127,7 +131,7 @@ class SendAiReplyJob implements ShouldQueue
         ]);
 
         if ($response->failed()) {
-            throw new \Exception('Facebook send message failed: ' . $response->body());
+            throw new \Exception('Facebook send message failed: '.$response->body());
         }
     }
 

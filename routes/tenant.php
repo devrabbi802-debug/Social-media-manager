@@ -99,7 +99,10 @@ Route::middleware([
         // AI Setup
         Route::get('/ai-setup', [AiSettingController::class, 'index'])->name('ai.setup');
         Route::post('/ai-setup', [AiSettingController::class, 'store'])->name('ai.setup.store');
-        Route::get('/ai-setup/test', [AiSettingController::class, 'test'])->name('ai.setup.test');
+        Route::delete('/ai-setup/{aiSetting}', [AiSettingController::class, 'destroy'])->name('ai.setup.destroy');
+        Route::post('/ai-setup/{aiSetting}/toggle', [AiSettingController::class, 'toggle'])->name('ai.setup.toggle');
+        Route::put('/ai-setup/{aiSetting}/priority', [AiSettingController::class, 'updatePriority'])->name('ai.setup.priority');
+        Route::get('/ai-setup/{aiSetting}/test', [AiSettingController::class, 'test'])->name('ai.setup.test');
 
         Route::get('/facebook/settings', [FacebookSettingController::class, 'index'])->name('facebook.settings');
         Route::post('/facebook/settings', [FacebookSettingController::class, 'store'])->name('facebook.settings.store');

@@ -7,20 +7,53 @@ use Illuminate\Support\Facades\Log;
 
 class AiChatService
 {
-    private string $apiKey;
     private string $systemPrompt;
 
-    public function __construct(string $apiKey, ?string $systemPrompt = null)
+    public function __construct(?string $systemPrompt = null)
     {
-        $this->apiKey = $apiKey;
         $this->systemPrompt = $systemPrompt ?? $this->defaultPrompt();
     }
 
-    public function chat(string $message): ?string
+    public function chatWithRotation(string $message, $keys): ?string
+    {
+        $lastException = null;
+
+        foreach ($keys as $key) {
+            try {
+                $result = $this->chat($message, $key->api_key);
+
+                if ($result !== null) {
+                    return $result;
+                }
+
+                Log::warning('AI key returned null, trying next key', [
+                    'key_label' => $key->label,
+                    'key_id' => $key->id,
+                ]);
+            } catch (\Exception $e) {
+                $lastException = $e;
+
+                Log::warning('AI key failed, trying next key', [
+                    'key_label' => $key->label,
+                    'key_id' => $key->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        Log::error('All AI keys exhausted or failed', [
+            'keys_tried' => count($keys),
+            'last_error' => $lastException?->getMessage(),
+        ]);
+
+        return null;
+    }
+
+    public function chat(string $message, string $apiKey): ?string
     {
         try {
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->apiKey,
+                'Authorization' => 'Bearer '.$apiKey,
                 'Content-Type' => 'application/json',
             ])->timeout(15)->post('https://api.groq.com/openai/v1/chat/completions', [
                 'model' => config('services.groq.model', 'llama-3.3-70b-versatile'),
@@ -31,9 +64,6 @@ class AiChatService
             ]);
 
             if ($response->status() === 429) {
-                Log::warning('Groq API rate limited (429)', [
-                    'message' => $message,
-                ]);
                 throw new \Exception('AI API rate limited (429)');
             }
 
@@ -42,10 +72,12 @@ class AiChatService
                     'status' => $response->status(),
                     'body' => $response->body(),
                 ]);
+
                 return null;
             }
 
             $body = $response->json();
+
             return $body['choices'][0]['message']['content'] ?? null;
         } catch (\Exception $e) {
             if (str_contains($e->getMessage(), '429')) {
@@ -54,14 +86,15 @@ class AiChatService
             Log::error('Groq API exception', [
                 'message' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
 
     public function defaultPrompt(): string
     {
-        return <<<PROMPT
-        তুমি একজন পেশাদার সেলস ম্যানেজার এবং কাস্টামার সাপোর্ট এজেন্ট।
+        return <<<'PROMPT'
+        তুমি একজন পেশাদার সেলস ম্যানেজার এবং কাস্টমার সাপোর্ট এজেন্ট।
         তোমার কাজ হলো কাস্টমারদের Facebook Messenger এ সাহায্য করা।
 
         নিয়মাবলী:
@@ -79,14 +112,12 @@ class AiChatService
     public static function testConnection(string $apiKey): array
     {
         try {
-            $service = new self($apiKey);
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $apiKey,
+                'Authorization' => 'Bearer '.$apiKey,
                 'Content-Type' => 'application/json',
             ])->timeout(10)->post('https://api.groq.com/openai/v1/chat/completions', [
                 'model' => config('services.groq.model', 'llama-3.3-70b-versatile'),
                 'messages' => [
-                    ['role' => 'system', 'content' => $service->defaultPrompt()],
                     ['role' => 'user', 'content' => 'Hello, just testing connection. Reply with one word.'],
                 ],
             ]);
@@ -100,15 +131,15 @@ class AiChatService
             }
 
             if ($response->failed()) {
-                return ['success' => false, 'message' => 'API error: ' . $response->status()];
+                return ['success' => false, 'message' => 'API error: '.$response->status()];
             }
 
             $body = $response->json();
             $reply = $body['choices'][0]['message']['content'] ?? null;
 
-            return ['success' => true, 'message' => 'Connected! AI replied: ' . substr($reply, 0, 50)];
+            return ['success' => true, 'message' => 'Connected! AI replied: '.substr($reply, 0, 50)];
         } catch (\Exception $e) {
-            return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
+            return ['success' => false, 'message' => 'Error: '.$e->getMessage()];
         }
     }
 }
