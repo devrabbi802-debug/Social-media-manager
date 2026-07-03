@@ -77,8 +77,12 @@ class SendAiReplyJob implements ShouldQueue
                 return;
             }
 
+            $this->sendTypingIndicator(true);
+
             $aiService = new AiChatService($aiSetting->api_key, $systemPrompt);
             $reply = $aiService->chat($this->messageText);
+
+            $this->sendTypingIndicator(false);
 
             if (! $reply) {
                 return;
@@ -125,5 +129,16 @@ class SendAiReplyJob implements ShouldQueue
         if ($response->failed()) {
             throw new \Exception('Facebook send message failed: ' . $response->body());
         }
+    }
+
+    private function sendTypingIndicator(bool $on): void
+    {
+        Http::withHeaders([
+            'Content-Type' => 'application/json',
+        ])->post('https://graph.facebook.com/v21.0/me/messages', [
+            'access_token' => $this->pageAccessToken,
+            'recipient' => ['id' => $this->senderId],
+            'sender_action' => $on ? 'typing_on' : 'typing_off',
+        ]);
     }
 }

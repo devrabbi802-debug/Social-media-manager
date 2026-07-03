@@ -2,18 +2,19 @@
 
 ## Project
 
-SocialBoost AI — Laravel 13 social media & inventory management platform. Bengali UI (all user-facing text is in Bengali), MySQL in production, SQLite in-memory for tests. **Multi-tenant architecture** using `stancl/tenancy` v3.10.0 (database-per-tenant).
+SocialBoost AI — Laravel 13 multi-tenant SaaS for social media management. Bengali UI, MySQL in production, SQLite in-memory for tests. `stancl/tenancy` v3.10 (database-per-tenant, subdomain-based).
 
 **Local Dev URL**: `http://smm.test/`
 
 ## Quick Commands
 
 ```bash
-./start.sh              # PC on korle ei ekta command (Docker + DNS + Apache)
-composer setup          # Full project setup (install, key, migrate, npm, build)
-composer test           # Clear config cache + artisan test
-php artisan test --filter=TestName   # Run single test
-npx vite build          # Build frontend assets
+./start.sh              # PC on korle — Docker + DNS fix + Apache + Ngrok tunnel
+composer setup          # install, key, migrate, npm install, build
+composer dev             # artisan serve + queue:listen + pail + npm run dev (4 processes)
+composer test            # config:clear + artisan test
+php artisan test --filter=TestName
+npx vite build
 
 # Multi-Tenancy
 php artisan tenants:migrate        # Migrate all tenant databases
@@ -21,163 +22,116 @@ php artisan tenants:seed           # Seed all tenant databases
 php artisan tenants:run migrate    # Run migration for specific tenant
 ```
 
-## Local Development Setup
-
-### PC On Korle (Startup)
-
-```bash
-./start.sh
-```
-
-Ei script sob kore dibe:
-- Docker containers start (app, mysql, phpmyadmin, node)
-- DNS fix (`/etc/resolv.conf` — systemd-resolved override fix)
-- Apache start
-- Ngrok tunnel start (Facebook webhook er jonno) — URL output e dekhabe
-
-### First Time Setup (Ekbar)
-
-```bash
-chmod +x setup-domain.sh && sudo ./setup-domain.sh
-```
-
-Ei script one-time setup kore:
-- `smm.test` → `/etc/hosts` e add
-- dnsmasq install + configure (`*.smm.test → 127.0.0.1`)
-- Apache wildcard VirtualHost create (`*.smm.test → proxy to Laravel`)
-- Docker containers start
-
-### Customer Register Korle
-
-**Kono extra command lagbe na.** Sob automatic:
-- Tenant database create hobe
-- Domain record create hobe (`{subdomain}.smm.test`)
-- DNS automatically resolve korbe (dnsmasq wildcard)
-- User tenant DB te create hobe
-- Redirect hobe tenant dashboard e
-
 ## Architecture
 
 ### Multi-Tenancy (Database-per-Tenant)
 
-- **Package**: `stancl/tenancy` v3.10.0 with subdomain identification
-- **Landlord DB**: `socialboost` — stores `tenants`, `domains`, `admins`, `admin_user_permissions`, `cache`, `jobs`
-- **Tenant DB**: `{subdomain}_socialboost` (e.g., `acme_socialboost`, `beta_socialboost`) — stores `users`, `sessions`, `password_reset_tokens`, `facebook_settings`
-- **Registration flow**: Customer registers → `Tenant::create()` → Database auto-created → User created in tenant DB → Redirects to `{subdomain}.smm.test`
-- **Admin panel**: Stays on landlord database, can manage all tenants via `/rootadmin/tenants`
-- **Tenant identification**: Subdomain-based via `InitializeTenancyByDomain` middleware
+- **Landlord DB** (`socialboost`): `tenants`, `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `cache`, `jobs`, `sessions`
+- **Tenant DB** (`{subdomain}_socialboost`): `users`, `sessions`, `password_reset_tokens`, `facebook_settings`, `ai_settings`
+- **Users table does NOT exist in landlord DB** — never `User::count()` from central routes
+- **Registration**: `Tenant::create()` → auto DB + migrate → user in tenant DB → redirect to `{subdomain}.smm.test`
+- **Tenant custom attributes** in `data` JSON column — query: `where('data->status', 'active')`, NOT `where('status', 'active')`
 - **Central domains** (not tenant): `127.0.0.1`, `localhost`, `smm.test`, `socialboost.com`, `www.socialboost.com`
-- **ID generator**: UUID (Stancl default) — tenant IDs can be subdomain names (e.g., `acme`)
-- **Custom tenant attributes** stored in `data` JSON column: `name`, `email`, `phone`, `company`, `plan`, `status`, `trial_ends_at`
-- **Tenant routes** loaded via `routes/tenant.php` through Stancl's `TenantRouteServiceProvider`
 
 ### Auth System
 
-- **Dual auth**: `web` guard (User model) for public/dashboard, `admin` guard (Admin model) for /rootadmin/*
-- **Admin routes loaded separately**: `routes/admin.php` is loaded via `then:` callback in `bootstrap/app.php` — not through the standard `withRouting()` parameter. The `admin` middleware alias is registered there too.
-- **Admin permissions**: Role-based (`super_admin` bypasses all checks). Permissions defined in `config/menu.php`, stored in `admin_user_permissions` table
-- **Model attribute styles differ**: `User` model uses Laravel 11+ `#[Fillable]`/`#[Hidden]` PHP attributes. `Admin` model uses traditional `$fillable`/`$hidden` arrays.
+- **Dual auth**: `web` guard (User, tenant DB) + `admin` guard (Admin, landlord DB)
+- **Admin permissions**: `super_admin` bypasses all. Defined in `config/menu.php`, stored in `admin_user_permissions`
+- **Admin routes loaded via** `then:` callback in `bootstrap/app.php`, NOT through `withRouting()`
+- **`admin` middleware alias** registered in `bootstrap/app.php`
 
-### Facebook Integration (Webhook + OAuth)
+### AI Integration
 
-- **Two controllers**: `FacebookWebhookController` (receives events) and `FacebookOAuthController` (customer connects page)
-- **Webhook route** is in `routes/web.php` (central, NOT tenant routes) — Facebook calls via tunnel URL, not tenant subdomain
-- **CSRF exemption**: `webhook/*` excluded from CSRF verification in `bootstrap/app.php`
-- **OAuth flow**: Customer clicks "Connect with Facebook" → Facebook OAuth → auto fetches page_id + page_access_token → saves to `facebook_settings` table
-- **OAuth redirect URI is dynamic**: Built with `url('/facebook/callback')` — works for any tenant subdomain
-- **Multi-tenant webhook**: `FacebookWebhookController` searches ALL tenants to find matching `page_id` or `verify_token`, then runs handler in that tenant's context via `$tenant->run()`
-- **Verify token**: `socialboost_verify_token_2026` — stored in `facebook_settings.verify_token`
-- **App credentials**: Stored in `.env` (`FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`) — shared across all tenants
-- **Facebook App ID**: `703674879507719` (same for all tenants)
-- **Facebook permissions needed**: `pages_show_list`, `pages_messaging`, `pages_read_engagement`
-- **Ngrok** used for local dev tunneling — `./start.sh` auto-starts ngrok tunnel
-- **Ngrok URL**: Check current URL via `wget -qO- http://127.0.0.1:4040/api/tunnels`
-- **Facebook Developer Dashboard** needs Valid OAuth Redirect URIs: `https://<ngrok-url>/facebook/callback`
+- **Groq API** (Llama 3.3 70B) for auto-reply on Facebook Messenger
+- **`AiSystemPrompt`** — landlord-level table (`ai_system_prompts`), global default prompt with `{company_name}` placeholder
+- **`AiSetting`** — tenant-level table (`ai_settings`), per-user `api_key` and optional `system_prompt`
+- **`AiChatService`** (`app/Services/`) — Groq API wrapper, 15s timeout, handles 429 rate limiting
+- **`SendAiReplyJob`** — queued on `facebook` queue, 3 tries, 45s backoff, `WithoutOverlapping` per tenant+sender. Sends typing indicators during AI processing
+- **Queue**: Redis, queue name `facebook`, Horizon supervisor (1-10 processes, 256MB memory)
+
+### Facebook Integration
+
+- **Webhook route** in `routes/web.php` (central, NOT tenant) — Facebook calls via ngrok tunnel URL
+- **CSRF exemption**: `webhook/*` excluded in `bootstrap/app.php`
+- **OAuth flow**: redirect → callback → auto-fetch page_id + page_access_token → save to `facebook_settings`
+- **Verify token**: `socialboost_verify_token_2026` (hardcoded in `FacebookOAuthController`)
+- **Multi-tenant webhook**: `FacebookWebhookController` iterates ALL tenants to find matching `page_id` (O(n), won't scale well)
+- **Ngrok URL check**: `wget -qO- http://127.0.0.1:4040/api/tunnels`
+- **Facebook App ID**: `703674879507719`, permissions: `pages_show_list`, `pages_messaging`, `pages_read_engagement`
+
+### Docker
+
+```bash
+docker compose up -d --build
+docker compose down
+docker compose logs -f
+docker exec laravel-app php artisan <command>
+```
+
+- **6 services**: app, mysql (port 3307), node (port 5173), redis, phpmyadmin (port 8080), worker
+- **Worker container**: Supervisor → `php artisan horizon` (not direct — see `docker/supervisord.conf`)
+- **Entrypoint** (`docker-entrypoint.sh`): waits for MySQL → composer install → npm install → key:generate → migrate → serve
+- `.env` uses `DB_HOST=mysql` (Docker service name), `.env.example` defaults to PostgreSQL
+
+### Frontend
+
+- Tailwind CSS v4 via `@tailwindcss/vite` plugin (no `tailwind.config.js` — config via CSS)
+- **Public layouts**: Tailwind via CDN + Alpine.js (not Vite)
+- **Dashboard/Admin**: Tailwind via CDN
+- Bengali font: Hind Siliguri (Google Fonts), Instrument Sans (Vite fonts plugin)
+- `app.js` is empty — no JS bundled via Vite yet
 
 ## Key Paths
 
-- Public views: `resources/views/` (welcome, features, pricing, about, contact, auth)
-- Dashboard views: `resources/views/dashboard/` (only `index.blade.php`, `integration.blade.php`, `facebook-settings.blade.php`, `facebook-select-page.blade.php` exist — routes reference `dashboard.settings`, `dashboard.leads`, `dashboard.reports`, `dashboard.whatsapp`, `dashboard.inventory`, `dashboard.inventory-add` but those views are missing)
-- Admin views: `resources/views/admin/` (auth, dashboard, users CRUD, tenants CRUD)
-- Tenant views: `resources/views/admin/tenants/` (index, create, edit — Tailwind styled)
-- Layouts: `resources/views/layouts/app.blade.php` (public), `resources/views/admin/layouts/app.blade.php` (admin)
-- Menu config: `config/menu.php` — add menu groups here for admin sidebar (includes `tenant_management` group)
-- Auth config: `config/auth.php` — defines `web` (User) and `admin` (Admin) guards
-- Tenancy config: `config/tenancy.php` — central domains, DB suffix (`_socialboost`), tenant model, bootstrappers
-- Central migrations: `database/migrations/` — landlord DB tables (tenants, domains, admins, admin_user_permissions, cache, jobs, sessions)
-- Tenant migrations: `database/migrations/tenant/` — per-tenant tables (users, password_reset_tokens, sessions, facebook_settings)
+- **Public views**: `resources/views/` (welcome, features, pricing, about, contact, auth)
+- **Dashboard views**: `resources/views/dashboard/` — only `index`, `integration`, `facebook-settings`, `facebook-select-page`, `ai-setup` exist
+- **Admin views**: `resources/views/admin/` (auth, dashboard, users CRUD, tenants CRUD, ai-system-prompt)
+- **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/admin/layouts/app.blade.php` (admin)
+- **Menu config**: `config/menu.php` — add admin sidebar menu groups here
+- **Tenancy config**: `config/tenancy.php` — central domains, DB suffix, tenant model
+- **Services config**: `config/services.php` — Facebook OAuth + Groq model
+- **Landlord migrations**: `database/migrations/`
+- **Tenant migrations**: `database/migrations/tenant/`
+
+## Missing Views (routes exist, views don't)
+
+These views are referenced in `routes/web.php` and `routes/tenant.php` but **do not exist on disk**:
+`dashboard.settings`, `dashboard.leads`, `dashboard.reports`, `dashboard.whatsapp`, `dashboard.inventory`, `dashboard.inventory-add`, `dashboard.facebook`
+
+Visiting these routes throws `ViewNotFoundException`.
 
 ## Database
 
-### Landlord Database (`socialboost`)
-- `tenants` — id, data (JSON: name, email, phone, company, plan, status, trial_ends_at), timestamps
-- `domains` — id, domain, tenant_id (FK)
-- `admins` — id, name, email, password, role
-- `admin_user_permissions` — id, admin_id (FK), menu_slug, permission
-- `cache`, `cache_locks`, `jobs`, `job_batches`, `failed_jobs`
+### Tenant DB extra tables
+- `ai_settings` — id, user_id (FK), api_key (hidden), system_prompt (nullable)
 
-### Tenant Database (`{subdomain}_socialboost`)
-- `users` — id, name, email, phone, company, password, timestamps
-- `sessions` — id, user_id, ip_address, user_agent, payload
-- `password_reset_tokens` — email, token, created_at
-- `facebook_settings` — id, user_id (FK), app_id, app_secret, verify_token, page_id, page_access_token, timestamps
-
-- Production: MySQL (`mysql` driver, host: `127.0.0.1`)
-- Tests: SQLite in-memory (configured in `phpunit.xml`)
-- **Users table is NOT in landlord DB** — only in tenant databases
-- **.env.example** defaults to PostgreSQL — actual `.env` uses MySQL
-
-## Docker
-
-```bash
-docker compose up -d --build  # Build and start all containers
-docker compose down           # Stop all containers
-docker compose logs -f        # Follow logs
-docker compose ps             # Check container status
-docker exec laravel-app php artisan <command>  # Run artisan inside container
-```
-
-- **Custom domain**: `http://smm.test:8000/` (add `127.0.0.1 smm.test` to `/etc/hosts`)
-- App on port **8000**, Vite dev server on port **5173**
-- **MySQL 8.0** runs inside Docker (service name: `mysql`, host port: `3307` to avoid conflict with local MySQL on `3306`)
-- `.env` uses `DB_HOST=mysql` (Docker service name), `DB_DATABASE=socialboost`, `DB_PASSWORD=secret`
-- Entrypoint waits for MySQL health check, then runs `composer install --no-dev`, `npm install`, `key:generate`, `migrate`
-- Landlord DB includes `sessions` table (needed for `database` session driver on public/central routes)
-
-## Frontend
-
-- Tailwind CSS v4 via `@tailwindcss/vite` plugin
-- Vite entry: `resources/css/app.css`, `resources/js/app.js` (app.js is empty — no JS bundled via Vite yet)
-- Public layouts load Tailwind via CDN (`cdn.tailwindcss.com`) + Alpine.js — **not** via Vite
-- Bengali font: Hind Siliguri (Google Fonts in public layouts), Instrument Sans (Vite fonts plugin)
-- Admin panel & tenant views use Tailwind via CDN
+### Seeder
+- `AdminSeeder` creates `admin@socialboost.com` / `Admin@123456`, role `super_admin` (idempotent via `updateOrCreate`)
 
 ## Testing
 
-- PHPUnit 12 with `tests/Unit/` and `tests/Feature/` suites
-- Tests use SQLite in-memory, sync queue, array cache/session/mail, Pulse/Telescope/Nightwatch disabled
-- `composer test` clears config cache before running (important for env overrides)
+- PHPUnit 12, SQLite in-memory, sync queue, array cache/session/mail
+- Pulse/Telescope/Nightwatch disabled in tests
+- `composer test` clears config cache first (important for env overrides)
+- No real tests yet — only placeholder `ExampleTest`
 
 ## Gotchas
 
-- `app.js` is empty — no JS bundled via Vite yet
-- No `pint.json` — Laravel Pint uses defaults
-- No CI workflows configured
-- `storage/framework/views/` is excluded from Vite watch but NOT gitignored
-- `.npmrc` has `ignore-scripts=true` — postinstall scripts skipped
-- `APP_LOCALE=en` in `.env` — Bengali is hardcoded in view templates, not set via locale config
-- **Tenancy**: User model does NOT use `BelongsToTenant` trait (database-per-tenant approach makes it unnecessary)
-- **Tenancy**: Tenant custom attributes (name, email, etc.) are stored in `data` JSON column, accessed via `$tenant->name` — query with `where('data->status', 'active')` not `where('status', 'active')`
-- **Tenancy**: `users` table only exists in tenant databases, NOT in landlord DB — never query `User::count()` etc. from central routes
-- **Tenancy**: Registration validation does NOT use `unique:users,email` (users are per-tenant, not central)
-- **Tenancy**: Tests may fail if SQLite PDO driver is missing (pre-existing issue)
-- **.env.example** defaults to PostgreSQL — actual `.env` uses MySQL
-- **Facebook OAuth**: HTTP not allowed by Facebook — use ngrok HTTPS URL for OAuth flow
-- **Facebook OAuth redirect URI**: Dynamic via `url('/facebook/callback')` — works for any tenant subdomain
-- **Facebook Webhook**: Route in `routes/web.php` (central), NOT `routes/tenant.php` — Facebook can't reach tenant subdomains via tunnel
-- **Facebook test users**: In Development mode, only testers/admins can trigger webhook events
-- **Ngrok**: Free tier URL is static once claimed — `./start.sh` auto-starts ngrok
-- **Facebook App**: Production requires App Review for `pages_messaging` permission
+- **`app.js` is empty** — no JS bundled via Vite yet
+- **`.env.example` defaults to PostgreSQL** — actual `.env` uses MySQL
+- **`APP_LOCALE=en`** — Bengali is hardcoded in Blade templates, not via locale config
+- **`.npmrc`**: `ignore-scripts=true` — postinstall scripts skipped
+- **`storage/framework/views/`** excluded from Vite watch but NOT gitignored
+- **No `pint.json`** — Laravel Pint uses defaults
+- **No CI workflows** configured
+- **No `tailwind.config.js`** — Tailwind v4 uses CSS-based config
+- **User model** uses Laravel 11+ `#[Fillable]`/`#[Hidden]` PHP attributes. **Admin model** uses traditional `$fillable`/`$hidden` arrays — style differs between the two
+- **`Admin::getAllPermissions()`** references `\App\Services\Menu::class` which **does not exist** — will error if called by non-super_admin
+- **Registration validation** does NOT use `unique:users,email` (users are per-tenant)
+- **Facebook OAuth**: HTTP not allowed — use ngrok HTTPS URL
+- **Facebook test users**: Dev mode only testers/admins trigger webhooks
+- **Horizon**: runs inside Docker worker container via Supervisor, not directly
+- **Redis**: queue + cache driver in `.env` (`QUEUE_CONNECTION=redis`, `CACHE_STORE=redis`)
 
 # Agent Instructions
 
@@ -185,12 +139,5 @@ Always reply in Banglish (Bengali written in English letters).
 No matter what language the user writes in, always respond in Banglish.
 Example: "Ei function ta fix korte hobe, karon ekhane error ache."
 
-Always follow best practices for coding architecture. This includes:
-- SOLID principles
-- DRY (Don't Repeat Yourself)
-- KISS (Keep It Simple, Stupid)
-- YAGNI (You Aren't Gonna Need It)
-- Proper separation of concerns
-- Use design patterns where appropriate (Repository, Service, Observer, etc.)
-- Write clean, maintainable, and testable code
-- Follow Laravel conventions and conventions of the frameworks/libraries used
+Always follow best practices for coding architecture (SOLID, DRY, KISS, YAGNI).
+Follow Laravel conventions and the conventions of the frameworks/libraries used.
