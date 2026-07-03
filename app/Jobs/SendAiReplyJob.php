@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\AiSetting;
+use App\Models\AiSystemPrompt;
 use App\Models\FacebookSetting;
 use App\Models\Tenant;
 use App\Services\AiChatService;
@@ -12,6 +13,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -60,7 +62,9 @@ class SendAiReplyJob implements ShouldQueue
             return;
         }
 
-        $tenant->run(function () use ($tenant) {
+        $systemPrompt = $this->buildSystemPrompt($tenant);
+
+        $tenant->run(function () use ($tenant, $systemPrompt) {
             $facebookSetting = FacebookSetting::where('page_access_token', $this->pageAccessToken)->first();
 
             if (! $facebookSetting) {
@@ -73,7 +77,7 @@ class SendAiReplyJob implements ShouldQueue
                 return;
             }
 
-            $aiService = new AiChatService($aiSetting->api_key);
+            $aiService = new AiChatService($aiSetting->api_key, $systemPrompt);
             $reply = $aiService->chat($this->messageText);
 
             if (! $reply) {
@@ -89,6 +93,23 @@ class SendAiReplyJob implements ShouldQueue
                 'reply' => $reply,
             ]);
         });
+    }
+
+    private function buildSystemPrompt(Tenant $tenant): string
+    {
+        $row = DB::connection('mysql')->table('ai_system_prompts')->first();
+
+        if (! $row) {
+            return (new AiSystemPrompt)->defaultPrompt();
+        }
+
+        $prompt = $row->prompt_text ?? (new AiSystemPrompt)->defaultPrompt();
+
+        return str_replace(
+            ['{company_name}', '{owner_name}'],
+            [$tenant->name ?? 'এই কোম্পানি', $tenant->data['owner_name'] ?? ''],
+            $prompt
+        );
     }
 
     private function sendFacebookMessage(string $text): void

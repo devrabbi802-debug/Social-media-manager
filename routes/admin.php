@@ -5,6 +5,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\TenantController;
+use App\Http\Controllers\Admin\AiSystemPromptController;
 
 Route::middleware(['web'])->group(function () {
 
@@ -66,6 +67,10 @@ Route::middleware(['web'])->group(function () {
         Route::get('/tenants/{tenant}/edit', [TenantController::class, 'edit'])->name('admin.tenants.edit');
         Route::put('/tenants/{tenant}', [TenantController::class, 'update'])->name('admin.tenants.update');
         Route::delete('/tenants/{tenant}', [TenantController::class, 'destroy'])->name('admin.tenants.destroy');
+
+        // AI System Prompt
+        Route::get('/ai-system-prompt', [AiSystemPromptController::class, 'index'])->name('admin.ai-prompt.index');
+        Route::put('/ai-system-prompt', [AiSystemPromptController::class, 'update'])->name('admin.ai-prompt.update');
 
     });
 

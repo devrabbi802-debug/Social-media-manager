@@ -65,7 +65,7 @@
                                 <span class="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">Suspended</span>
                             @endif
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ $tenant->trial_ends_at ? $tenant->trial_ends_at->format('d M Y') : '-' }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ $tenant->trial_ends_at ? \Carbon\Carbon::parse($tenant->trial_ends_at)->format('d M Y') : '-' }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <div class="flex items-center space-x-2">
                                 <a href="{{ route('admin.tenants.edit', $tenant) }}" class="text-indigo-600 hover:text-indigo-900 p-1 rounded hover:bg-indigo-50">
