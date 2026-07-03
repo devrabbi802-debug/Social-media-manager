@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AiSetting;
+use App\Services\GeminiApiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -11,30 +12,45 @@ class AiSettingController extends Controller
 {
     public function index()
     {
-        $aiSettings = AiSetting::where('user_id', Auth::id())
-            ->orderBy('priority', 'desc')
+        $messageKeys = AiSetting::where('user_id', Auth::id())
+            ->byType('message')
+            ->byPriority()
             ->get();
 
-        return view('dashboard.ai-setup', compact('aiSettings'));
+        $imageKeys = AiSetting::where('user_id', Auth::id())
+            ->byType('image')
+            ->byPriority()
+            ->get();
+
+        $activeTab = request('tab', 'message');
+
+        return view('dashboard.ai-setup', compact('messageKeys', 'imageKeys', 'activeTab'));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
             'api_key' => 'required|string|max:500',
+            'type' => 'required|in:message,image',
         ]);
 
-        $maxPriority = AiSetting::where('user_id', Auth::id())->max('priority') ?? 0;
+        $maxPriority = AiSetting::where('user_id', Auth::id())
+            ->where('type', $validated['type'])
+            ->max('priority') ?? 0;
 
         AiSetting::create([
             'user_id' => Auth::id(),
             'api_key' => $validated['api_key'],
+            'type' => $validated['type'],
             'is_active' => true,
             'priority' => $maxPriority + 1,
         ]);
 
-        return redirect()->route('ai.setup')
-            ->with('success', 'AI API Key সফলভাবে যোগ করা হয়েছে!');
+        $tab = $validated['type'];
+        $typeName = $tab === 'message' ? 'Message AI' : 'Image AI';
+
+        return redirect()->route('ai.setup', ['tab' => $tab])
+            ->with('success', "{$typeName} Key সফলভাবে যোগ করা হয়েছে!");
     }
 
     public function destroy(AiSetting $aiSetting)
@@ -43,9 +59,10 @@ class AiSettingController extends Controller
             abort(403);
         }
 
+        $tab = $aiSetting->type;
         $aiSetting->delete();
 
-        return redirect()->route('ai.setup')
+        return redirect()->route('ai.setup', ['tab' => $tab])
             ->with('success', 'API Key মুছে ফেলা হয়েছে।');
     }
 
@@ -57,26 +74,11 @@ class AiSettingController extends Controller
 
         $aiSetting->update(['is_active' => ! $aiSetting->is_active]);
 
+        $tab = $aiSetting->type;
         $status = $aiSetting->is_active ? 'সক্রিয়' : 'নিষ্ক্রিয়';
 
-        return redirect()->route('ai.setup')
+        return redirect()->route('ai.setup', ['tab' => $tab])
             ->with('success', "API Key {$status} করা হয়েছে।");
-    }
-
-    public function updatePriority(Request $request, AiSetting $aiSetting)
-    {
-        if ($aiSetting->user_id !== Auth::id()) {
-            abort(403);
-        }
-
-        $validated = $request->validate([
-            'priority' => 'required|integer|min:0',
-        ]);
-
-        $aiSetting->update(['priority' => $validated['priority']]);
-
-        return redirect()->route('ai.setup')
-            ->with('success', 'Key এর অগ্রাধিকার আপডেট করা হয়েছে।');
     }
 
     public function test(AiSetting $aiSetting)
@@ -85,9 +87,25 @@ class AiSettingController extends Controller
             abort(403);
         }
 
+        $tab = $aiSetting->type;
+
+        if ($tab === 'image') {
+            $result = GeminiApiService::testConnection($aiSetting->api_key);
+        } else {
+            $result = $this->testGroqKey($aiSetting->api_key);
+        }
+
+        $status = $result['success'] ? 'success' : 'error';
+
+        return redirect()->route('ai.setup', ['tab' => $tab])
+            ->with($status, $result['message']);
+    }
+
+    private function testGroqKey(string $apiKey): array
+    {
         try {
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer '.$aiSetting->api_key,
+                'Authorization' => 'Bearer '.$apiKey,
                 'Content-Type' => 'application/json',
             ])->timeout(15)->post('https://api.groq.com/openai/v1/chat/completions', [
                 'model' => config('services.groq.model', 'llama-3.3-70b-versatile'),
@@ -96,13 +114,24 @@ class AiSettingController extends Controller
                 ],
             ]);
 
-            if ($response->successful()) {
-                return back()->with('success', 'API Key সফলভাবে কাজ করছে!');
+            if ($response->status() === 401) {
+                return ['success' => false, 'message' => 'API key invalid'];
             }
 
-            return back()->with('error', 'AI API ত্রুটি: '.$response->body());
+            if ($response->status() === 429) {
+                return ['success' => true, 'message' => 'Connected! (Rate limited but key is valid)'];
+            }
+
+            if ($response->failed()) {
+                return ['success' => false, 'message' => 'API error: '.$response->status()];
+            }
+
+            $body = $response->json();
+            $reply = $body['choices'][0]['message']['content'] ?? null;
+
+            return ['success' => true, 'message' => 'Connected! AI replied: '.substr($reply ?? '', 0, 50)];
         } catch (\Exception $e) {
-            return back()->with('error', 'সংযোগ ব্যর্থ: '.$e->getMessage());
+            return ['success' => false, 'message' => 'Error: '.$e->getMessage()];
         }
     }
 }

@@ -10,7 +10,7 @@ class AiSetting extends Model
     protected $fillable = [
         'user_id',
         'api_key',
-        'label',
+        'type',
         'is_active',
         'priority',
     ];
@@ -40,5 +40,10 @@ class AiSetting extends Model
     public function scopeByPriority($query)
     {
         return $query->orderBy('priority', 'desc');
+    }
+
+    public function scopeByType($query, string $type)
+    {
+        return $query->where('type', $type);
     }
 }

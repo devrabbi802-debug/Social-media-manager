@@ -25,6 +25,7 @@ class FacebookWebhookController extends Controller
 
         if (! $tenant) {
             Log::warning('Facebook webhook verify failed: invalid token', ['token' => $token]);
+
             return response('Invalid verify token', 403);
         }
 
@@ -52,6 +53,7 @@ class FacebookWebhookController extends Controller
 
             if (! $tenant) {
                 Log::warning('Facebook webhook: no tenant for page', ['page_id' => $pageId]);
+
                 continue;
             }
 
@@ -68,7 +70,7 @@ class FacebookWebhookController extends Controller
     private function findTenantByVerifyToken(string $token): ?Tenant
     {
         return Tenant::all()->first(function (Tenant $tenant) use ($token) {
-            return $tenant->run(function () use ($token, $tenant) {
+            return $tenant->run(function () use ($token) {
                 return FacebookSetting::where('verify_token', $token)->exists();
             });
         });
@@ -97,8 +99,17 @@ class FacebookWebhookController extends Controller
         }
 
         $text = $message['text'] ?? null;
+        $attachments = $message['attachments'] ?? [];
+        $imageUrl = null;
 
-        if (! $text) {
+        foreach ($attachments as $attachment) {
+            if (($attachment['type'] ?? '') === 'image' && isset($attachment['payload']['url'])) {
+                $imageUrl = $attachment['payload']['url'];
+                break;
+            }
+        }
+
+        if (! $text && ! $imageUrl) {
             return;
         }
 
@@ -106,6 +117,7 @@ class FacebookWebhookController extends Controller
             'tenant_id' => $tenant->id,
             'sender_id' => $senderId,
             'text' => $text,
+            'has_image' => $imageUrl !== null,
         ]);
 
         $recipientId = $event['recipient']['id'] ?? null;
@@ -114,6 +126,7 @@ class FacebookWebhookController extends Controller
 
         if (! $facebookSetting) {
             Log::warning('No Facebook setting found for tenant', ['tenant_id' => $tenant->id]);
+
             return;
         }
 
@@ -121,13 +134,15 @@ class FacebookWebhookController extends Controller
             SendAiReplyJob::dispatch(
                 tenantId: $tenant->id,
                 senderId: $senderId,
-                messageText: $text,
+                messageText: $text ?? '',
                 pageAccessToken: $facebookSetting->page_access_token,
+                imageUrl: $imageUrl,
             );
 
             Log::info('AI reply job dispatched', [
                 'tenant_id' => $tenant->id,
                 'sender_id' => $senderId,
+                'has_image' => $imageUrl !== null,
             ]);
         } catch (\Throwable $e) {
             Log::error('Failed to dispatch AI reply job', [

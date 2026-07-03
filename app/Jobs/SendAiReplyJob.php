@@ -7,6 +7,7 @@ use App\Models\AiSystemPrompt;
 use App\Models\FacebookSetting;
 use App\Models\Tenant;
 use App\Services\AiChatService;
+use App\Services\GeminiApiService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -35,6 +36,7 @@ class SendAiReplyJob implements ShouldQueue
         public string $senderId,
         public string $messageText,
         public string $pageAccessToken,
+        public ?string $imageUrl = null,
     ) {
         $this->onQueue('facebook');
     }
@@ -71,19 +73,11 @@ class SendAiReplyJob implements ShouldQueue
                 return;
             }
 
-            $aiKeys = AiSetting::where('user_id', $facebookSetting->user_id)
-                ->active()
-                ->byPriority()
-                ->get();
-
-            if ($aiKeys->isEmpty()) {
-                return;
-            }
-
             $this->sendTypingIndicator(true);
 
-            $aiService = new AiChatService($systemPrompt);
-            $reply = $aiService->chatWithRotation($this->messageText, $aiKeys);
+            $reply = $this->imageUrl
+                ? $this->handleImageMessage($facebookSetting, $systemPrompt)
+                : $this->handleTextMessage($facebookSetting, $systemPrompt);
 
             $this->sendTypingIndicator(false);
 
@@ -97,10 +91,126 @@ class SendAiReplyJob implements ShouldQueue
                 'tenant_id' => $tenant->id,
                 'sender_id' => $this->senderId,
                 'message' => $this->messageText,
+                'has_image' => $this->imageUrl !== null,
                 'reply' => $reply,
-                'keys_available' => $aiKeys->count(),
             ]);
         });
+    }
+
+    private function handleTextMessage(FacebookSetting $facebookSetting, string $systemPrompt): ?string
+    {
+        $aiKeys = AiSetting::where('user_id', $facebookSetting->user_id)
+            ->active()
+            ->byType('message')
+            ->byPriority()
+            ->get();
+
+        if ($aiKeys->isEmpty()) {
+            return null;
+        }
+
+        $aiService = new AiChatService($systemPrompt);
+
+        return $aiService->chatWithRotation($this->messageText, $aiKeys);
+    }
+
+    private function handleImageMessage(FacebookSetting $facebookSetting, string $systemPrompt): ?string
+    {
+        $imageKeys = AiSetting::where('user_id', $facebookSetting->user_id)
+            ->active()
+            ->byType('image')
+            ->byPriority()
+            ->get();
+
+        if ($imageKeys->isEmpty()) {
+            Log::warning('No image AI keys available', [
+                'user_id' => $facebookSetting->user_id,
+            ]);
+
+            return null;
+        }
+
+        $imageData = $this->downloadImage($this->imageUrl);
+
+        if (! $imageData) {
+            return null;
+        }
+
+        $imageDescription = null;
+
+        foreach ($imageKeys as $key) {
+            try {
+                $geminiService = new GeminiApiService($key->api_key);
+                $imageDescription = $geminiService->analyzeImage(
+                    $imageData,
+                    'এই ইমেজটি বিস্তারিত ভাবে বর্ণনা করো। ইমেজে কি আছে, কী দেখতে পাচ্ছো — প্রোডাক্ট হলে কোন প্রোডাক্ট, রঙ কি, সাইজ কত, কোন ব্র্যান্ড। সব কিছু বিস্তারিত লেখো।',
+                );
+
+                if ($imageDescription !== null) {
+                    Log::info('Gemini image analysis done', [
+                        'key_id' => $key->id,
+                        'description_length' => strlen($imageDescription),
+                    ]);
+
+                    break;
+                }
+            } catch (\Exception $e) {
+                Log::warning('Image AI key failed', [
+                    'key_id' => $key->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        if (! $imageDescription) {
+            return null;
+        }
+
+        $groqKeys = AiSetting::where('user_id', $facebookSetting->user_id)
+            ->active()
+            ->byType('message')
+            ->byPriority()
+            ->get();
+
+        if ($groqKeys->isEmpty()) {
+            Log::warning('No message AI keys available for image reply', [
+                'user_id' => $facebookSetting->user_id,
+            ]);
+
+            return null;
+        }
+
+        $userMessage = $this->messageText
+            ? "কাস্টমারের বার্তা: {$this->messageText}"
+            : 'কাস্টমার শুধু একটি ইমেজ পাঠিয়েছে।';
+
+        $combinedMessage = "{$userMessage}\n\nইমেজ বিশ্লেষণ:\n{$imageDescription}";
+
+        $aiService = new AiChatService($systemPrompt);
+
+        return $aiService->chatWithRotation($combinedMessage, $groqKeys);
+    }
+
+    private function downloadImage(?string $url): ?string
+    {
+        try {
+            $response = Http::timeout(30)->get($url);
+
+            if ($response->failed()) {
+                Log::error('Failed to download image', ['url' => $url]);
+
+                return null;
+            }
+
+            return base64_encode($response->body());
+        } catch (\Exception $e) {
+            Log::error('Image download exception', [
+                'url' => $url,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     private function buildSystemPrompt(Tenant $tenant): string
