@@ -33,6 +33,7 @@ Ei script sob kore dibe:
 - Docker containers start (app, mysql, phpmyadmin, node)
 - DNS fix (`/etc/resolv.conf` — systemd-resolved override fix)
 - Apache start
+- Ngrok tunnel start (Facebook webhook er jonno) — URL output e dekhabe
 
 ### First Time Setup (Ekbar)
 
@@ -77,10 +78,26 @@ Ei script one-time setup kore:
 - **Admin permissions**: Role-based (`super_admin` bypasses all checks). Permissions defined in `config/menu.php`, stored in `admin_user_permissions` table
 - **Model attribute styles differ**: `User` model uses Laravel 11+ `#[Fillable]`/`#[Hidden]` PHP attributes. `Admin` model uses traditional `$fillable`/`$hidden` arrays.
 
+### Facebook Integration (Webhook + OAuth)
+
+- **Two controllers**: `FacebookWebhookController` (receives events) and `FacebookOAuthController` (customer connects page)
+- **Webhook route** is in `routes/web.php` (central, NOT tenant routes) — Facebook calls via tunnel URL, not tenant subdomain
+- **CSRF exemption**: `webhook/*` excluded from CSRF verification in `bootstrap/app.php`
+- **OAuth flow**: Customer clicks "Connect with Facebook" → Facebook OAuth → auto fetches page_id + page_access_token → saves to `facebook_settings` table
+- **OAuth redirect URI is dynamic**: Built with `url('/facebook/callback')` — works for any tenant subdomain
+- **Multi-tenant webhook**: `FacebookWebhookController` searches ALL tenants to find matching `page_id` or `verify_token`, then runs handler in that tenant's context via `$tenant->run()`
+- **Verify token**: `socialboost_verify_token_2026` — stored in `facebook_settings.verify_token`
+- **App credentials**: Stored in `.env` (`FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`) — shared across all tenants
+- **Facebook App ID**: `703674879507719` (same for all tenants)
+- **Facebook permissions needed**: `pages_show_list`, `pages_messaging`, `pages_read_engagement`
+- **Ngrok** used for local dev tunneling — `./start.sh` auto-starts ngrok tunnel
+- **Ngrok URL**: Check current URL via `wget -qO- http://127.0.0.1:4040/api/tunnels`
+- **Facebook Developer Dashboard** needs Valid OAuth Redirect URIs: `https://<ngrok-url>/facebook/callback`
+
 ## Key Paths
 
 - Public views: `resources/views/` (welcome, features, pricing, about, contact, auth)
-- Dashboard views: `resources/views/dashboard/` (only `index.blade.php`, `integration.blade.php`, `facebook-settings.blade.php` exist — routes reference `dashboard.settings`, `dashboard.leads`, `dashboard.reports`, `dashboard.whatsapp`, `dashboard.inventory`, `dashboard.inventory-add` but those views are missing)
+- Dashboard views: `resources/views/dashboard/` (only `index.blade.php`, `integration.blade.php`, `facebook-settings.blade.php`, `facebook-select-page.blade.php` exist — routes reference `dashboard.settings`, `dashboard.leads`, `dashboard.reports`, `dashboard.whatsapp`, `dashboard.inventory`, `dashboard.inventory-add` but those views are missing)
 - Admin views: `resources/views/admin/` (auth, dashboard, users CRUD, tenants CRUD)
 - Tenant views: `resources/views/admin/tenants/` (index, create, edit — Tailwind styled)
 - Layouts: `resources/views/layouts/app.blade.php` (public), `resources/views/admin/layouts/app.blade.php` (admin)
@@ -155,6 +172,12 @@ docker exec laravel-app php artisan <command>  # Run artisan inside container
 - **Tenancy**: Registration validation does NOT use `unique:users,email` (users are per-tenant, not central)
 - **Tenancy**: Tests may fail if SQLite PDO driver is missing (pre-existing issue)
 - **.env.example** defaults to PostgreSQL — actual `.env` uses MySQL
+- **Facebook OAuth**: HTTP not allowed by Facebook — use ngrok HTTPS URL for OAuth flow
+- **Facebook OAuth redirect URI**: Dynamic via `url('/facebook/callback')` — works for any tenant subdomain
+- **Facebook Webhook**: Route in `routes/web.php` (central), NOT `routes/tenant.php` — Facebook can't reach tenant subdomains via tunnel
+- **Facebook test users**: In Development mode, only testers/admins can trigger webhook events
+- **Ngrok**: Free tier URL is static once claimed — `./start.sh` auto-starts ngrok
+- **Facebook App**: Production requires App Review for `pages_messaging` permission
 
 # Agent Instructions
 

@@ -60,139 +60,70 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {{-- Main Form --}}
             <div class="lg:col-span-2">
-                <form action="{{ route('facebook.settings.store') }}" method="POST">
-                    @csrf
+                @if($facebookSetting)
+                    {{-- Connected State --}}
                     <div class="bg-white rounded-2xl p-6 shadow-sm">
                         <div class="flex items-center mb-6">
-                            <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mr-4">
-                                <svg class="w-7 h-7 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388,10.954,10.125,11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007,1.792-4.669,4.533-4.669 1.312,0,2.686.235,2.686.235v2.953H15.83c-1.491,0-1.956.925-1.956,1.874v2.25h3.328l-.532,3.47h-2.796v8.385C19.612,23.027,24,18.062,24,12.073z"/>
+                            <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mr-4">
+                                <svg class="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                                 </svg>
                             </div>
                             <div>
-                                <h2 class="text-lg font-bold text-gray-900">ফেসবুক অ্যাপ কনফিগারেশন</h2>
-                                <p class="text-sm text-gray-500">আপনার Facebook Developer অ্যাকাউন্ট থেকে তথ্য দিন</p>
+                                <h2 class="text-lg font-bold text-gray-900">ফেসবুক সংযুক্ত আছে</h2>
+                                <p class="text-sm text-gray-500">আপনার Facebook Page সফলভাবে সংযুক্ত হয়েছে</p>
                             </div>
                         </div>
 
-                        {{-- App ID --}}
-                        <div class="mb-5">
-                            <label for="app_id" class="block text-sm font-semibold text-gray-700 mb-2">
-                                App ID <span class="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="text"
-                                id="app_id"
-                                name="app_id"
-                                value="{{ old('app_id', $facebookSetting->app_id ?? '') }}"
-                                class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition @error('app_id') border-red-500 @enderror"
-                                placeholder="যেমন: 123456789012345"
-                            >
-                            <p class="mt-1 text-xs text-gray-500">Facebook Developer Dashboard থেকে পাবেন</p>
-                            @error('app_id')
-                                <p class="mt-1 text-xs text-red-500">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        {{-- App Secret --}}
-                        <div class="mb-5">
-                            <label for="app_secret" class="block text-sm font-semibold text-gray-700 mb-2">
-                                App Secret <span class="text-red-500">*</span>
-                            </label>
-                            <div class="relative">
-                                <input
-                                    type="password"
-                                    id="app_secret"
-                                    name="app_secret"
-                                    value="{{ old('app_secret', $facebookSetting->app_secret ?? '') }}"
-                                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition pr-12 @error('app_secret') border-red-500 @enderror"
-                                    placeholder="আপনার App Secret দিন"
-                                >
-                                <button type="button" onclick="togglePassword('app_secret')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                    </svg>
-                                </button>
+                        <div class="bg-gray-50 rounded-xl p-4 mb-6">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p class="text-xs font-semibold text-gray-500 uppercase">Page ID</p>
+                                    <p class="text-sm text-gray-900 mt-1">{{ $facebookSetting->page_id }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-semibold text-gray-500 uppercase">App ID</p>
+                                    <p class="text-sm text-gray-900 mt-1">{{ $facebookSetting->app_id }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-semibold text-gray-500 uppercase">Verify Token</p>
+                                    <p class="text-sm text-gray-900 mt-1 font-mono">{{ $facebookSetting->verify_token }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-semibold text-gray-500 uppercase">Status</p>
+                                    <p class="text-sm text-green-600 mt-1 font-medium">সংযুক্ত</p>
+                                </div>
                             </div>
-                            <p class="mt-1 text-xs text-gray-500">Long-lived token এবং verification-এর জন্য প্রয়োজন</p>
-                            @error('app_secret')
-                                <p class="mt-1 text-xs text-red-500">{{ $message }}</p>
-                            @enderror
                         </div>
 
-                        {{-- Verify Token --}}
-                        <div class="mb-5">
-                            <label for="verify_token" class="block text-sm font-semibold text-gray-700 mb-2">
-                                Verify Token
-                            </label>
-                            <input
-                                type="text"
-                                id="verify_token"
-                                name="verify_token"
-                                value="{{ old('verify_token', $facebookSetting->verify_token ?? 'socialboost_verify_token_2026') }}"
-                                readonly
-                                class="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-500 cursor-not-allowed"
-                            >
-                            <p class="mt-1 text-xs text-gray-500">Webhook verify করার জন্য ব্যবহৃত হয়। এটা সিস্টেম জেনারেটেড।</p>
-                        </div>
-
-                        {{-- Page ID --}}
-                        <div class="mb-5">
-                            <label for="page_id" class="block text-sm font-semibold text-gray-700 mb-2">
-                                Page ID <span class="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="text"
-                                id="page_id"
-                                name="page_id"
-                                value="{{ old('page_id', $facebookSetting->page_id ?? '') }}"
-                                class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition @error('page_id') border-red-500 @enderror"
-                                placeholder="যেমন: 123456789012345"
-                            >
-                            <p class="mt-1 text-xs text-gray-500">Webhook থেকে আসা event কোন page-এর তা identify করার জন্য</p>
-                            @error('page_id')
-                                <p class="mt-1 text-xs text-red-500">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        {{-- Page Access Token --}}
-                        <div class="mb-6">
-                            <label for="page_access_token" class="block text-sm font-semibold text-gray-700 mb-2">
-                                Page Access Token <span class="text-red-500">*</span>
-                            </label>
-                            <div class="relative">
-                                <textarea
-                                    id="page_access_token"
-                                    name="page_access_token"
-                                    rows="3"
-                                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition pr-12 @error('page_access_token') border-red-500 @enderror"
-                                    placeholder="আপনার Page Access Token পেস্ট করুন"
-                                >{{ old('page_access_token', $facebookSetting->page_access_token ?? '') }}</textarea>
-                                <button type="button" onclick="toggleTextarea('page_access_token')" class="absolute right-3 top-3 text-gray-400 hover:text-gray-600">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                    </svg>
-                                </button>
-                            </div>
-                            <p class="mt-1 text-xs text-gray-500">Message read/send করার জন্য প্রয়োজন</p>
-                            @error('page_access_token')
-                                <p class="mt-1 text-xs text-red-500">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        {{-- Submit Buttons --}}
-                        <div class="flex items-center justify-between">
-                            <button type="submit" class="bg-blue-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-blue-700 transition flex items-center">
-                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                                </svg>
-                                সংরক্ষণ করুন
-                            </button>
-                        </div>
+                        <a href="{{ route('facebook.redirect') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition">
+                            <svg class="w-5 h-5 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388,10.954,10.125,11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007,1.792-4.669,4.533-4.669 1.312,0,2.686.235,2.686.235v2.953H15.83c-1.491,0-1.956.925-1.956,1.874v2.25h3.328l-.532,3.47h-2.796v8.385C19.612,23.027,24,18.062,24,12.073z"/>
+                            </svg>
+                            Page পরিবর্তন করুন
+                        </a>
                     </div>
-                </form>
+                @else
+                    {{-- Not Connected State --}}
+                    <div class="bg-white rounded-2xl p-8 shadow-sm text-center">
+                        <div class="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                            <svg class="w-10 h-10 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388,10.954,10.125,11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007,1.792-4.669,4.533-4.669 1.312,0,2.686.235,2.686.235v2.953H15.83c-1.491,0-1.956.925-1.956,1.874v2.25h3.328l-.532,3.47h-2.796v8.385C19.612,23.027,24,18.062,24,12.073z"/>
+                            </svg>
+                        </div>
+                        <h2 class="text-xl font-bold text-gray-900 mb-2">Facebook Page সংযুক্ত করুন</h2>
+                        <p class="text-gray-500 mb-6">একটি ক্লিকে আপনার Facebook Page সংযুক্ত হয়ে যাবে</p>
+
+                        <a href="{{ route('facebook.redirect') }}" class="inline-flex items-center px-8 py-4 bg-blue-600 text-white rounded-xl font-bold text-lg hover:bg-blue-700 transition shadow-lg shadow-blue-200">
+                            <svg class="w-6 h-6 mr-3" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388,10.954,10.125,11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007,1.792-4.669,4.533-4.669 1.312,0,2.686.235,2.686.235v2.953H15.83c-1.491,0-1.956.925-1.956,1.874v2.25h3.328l-.532,3.47h-2.796v8.385C19.612,23.027,24,18.062,24,12.073z"/>
+                            </svg>
+                            Facebook দিয়ে সংযুক্ত করুন
+                        </a>
+
+                        <p class="text-xs text-gray-400 mt-4">Facebook Login ব্যবহার করে নিরাপদভাবে সংযুক্ত হবে। আপনার পাসওয়ার্ড আমাদের কাছে সংরক্ষিত হবে না।</p>
+                    </div>
+                @endif
             </div>
 
             {{-- Sidebar --}}

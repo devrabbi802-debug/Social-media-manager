@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Route;
 use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
 use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
 use App\Http\Controllers\FacebookSettingController;
+use App\Http\Controllers\FacebookOAuthController;
 
 /*
 |--------------------------------------------------------------------------
@@ -97,5 +98,11 @@ Route::middleware([
         Route::get('/facebook/settings', [FacebookSettingController::class, 'index'])->name('facebook.settings');
         Route::post('/facebook/settings', [FacebookSettingController::class, 'store'])->name('facebook.settings.store');
         Route::delete('/facebook/settings', [FacebookSettingController::class, 'destroy'])->name('facebook.settings.destroy');
+
+        // Facebook OAuth
+        Route::get('/facebook/connect', [FacebookOAuthController::class, 'redirect'])->name('facebook.redirect');
+        Route::get('/facebook/callback', [FacebookOAuthController::class, 'callback'])->name('facebook.callback');
+        Route::get('/facebook/select-page', [FacebookOAuthController::class, 'selectPage'])->name('facebook.select.page');
+        Route::post('/facebook/connect-page', [FacebookOAuthController::class, 'connectSelectedPage'])->name('facebook.connect.page');
     });
 });
