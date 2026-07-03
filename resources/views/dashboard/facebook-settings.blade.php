@@ -47,6 +47,9 @@
                 <a href="{{ route('facebook.settings') }}" class="whitespace-nowrap py-4 px-1 border-b-2 border-purple-600 text-purple-600 font-medium text-sm transition">
                     ফেসবুক সেটিংস
                 </a>
+                <a href="{{ route('ai.setup') }}" class="whitespace-nowrap py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium text-sm transition">
+                    AI সেটআপ
+                </a>
             </nav>
         </div>
 

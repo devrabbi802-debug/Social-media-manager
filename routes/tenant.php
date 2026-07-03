@@ -7,6 +7,7 @@ use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
 use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
 use App\Http\Controllers\FacebookSettingController;
 use App\Http\Controllers\FacebookOAuthController;
+use App\Http\Controllers\AiSettingController;
 
 /*
 |--------------------------------------------------------------------------
@@ -94,6 +95,11 @@ Route::middleware([
         Route::get('/integration', function () {
             return view('dashboard.integration');
         })->name('integration');
+
+        // AI Setup
+        Route::get('/ai-setup', [AiSettingController::class, 'index'])->name('ai.setup');
+        Route::post('/ai-setup', [AiSettingController::class, 'store'])->name('ai.setup.store');
+        Route::get('/ai-setup/test', [AiSettingController::class, 'test'])->name('ai.setup.test');
 
         Route::get('/facebook/settings', [FacebookSettingController::class, 'index'])->name('facebook.settings');
         Route::post('/facebook/settings', [FacebookSettingController::class, 'store'])->name('facebook.settings.store');
