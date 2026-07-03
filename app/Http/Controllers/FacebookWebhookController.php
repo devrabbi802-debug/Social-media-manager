@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\SendAiReplyJob;
+use App\Models\FacebookSetting;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -67,7 +69,7 @@ class FacebookWebhookController extends Controller
     {
         return Tenant::all()->first(function (Tenant $tenant) use ($token) {
             return $tenant->run(function () use ($token, $tenant) {
-                return \App\Models\FacebookSetting::where('verify_token', $token)->exists();
+                return FacebookSetting::where('verify_token', $token)->exists();
             });
         });
     }
@@ -80,7 +82,7 @@ class FacebookWebhookController extends Controller
 
         return Tenant::all()->first(function (Tenant $tenant) use ($pageId) {
             return $tenant->run(function () use ($pageId) {
-                return \App\Models\FacebookSetting::where('page_id', $pageId)->exists();
+                return FacebookSetting::where('page_id', $pageId)->exists();
             });
         });
     }
@@ -90,16 +92,48 @@ class FacebookWebhookController extends Controller
         $senderId = $event['sender']['id'] ?? null;
         $message = $event['message'] ?? null;
 
-        if ($message && $senderId) {
-            $text = $message['text'] ?? null;
+        if (! $message || ! $senderId) {
+            return;
+        }
 
-            Log::info('Facebook message received', [
+        $text = $message['text'] ?? null;
+
+        if (! $text) {
+            return;
+        }
+
+        Log::info('Facebook message received', [
+            'tenant_id' => $tenant->id,
+            'sender_id' => $senderId,
+            'text' => $text,
+        ]);
+
+        $recipientId = $event['recipient']['id'] ?? null;
+        $facebookSetting = FacebookSetting::where('page_id', $recipientId)->first()
+            ?? FacebookSetting::first();
+
+        if (! $facebookSetting) {
+            Log::warning('No Facebook setting found for tenant', ['tenant_id' => $tenant->id]);
+            return;
+        }
+
+        try {
+            SendAiReplyJob::dispatch(
+                tenantId: $tenant->id,
+                senderId: $senderId,
+                messageText: $text,
+                pageAccessToken: $facebookSetting->page_access_token,
+            );
+
+            Log::info('AI reply job dispatched', [
                 'tenant_id' => $tenant->id,
                 'sender_id' => $senderId,
-                'text' => $text,
             ]);
-
-            // TODO: Process message — AI reply, store lead, etc.
+        } catch (\Throwable $e) {
+            Log::error('Failed to dispatch AI reply job', [
+                'tenant_id' => $tenant->id,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 }

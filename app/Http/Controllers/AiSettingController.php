@@ -43,12 +43,11 @@ class AiSettingController extends Controller
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $aiSetting->api_key,
                 'Content-Type' => 'application/json',
-            ])->timeout(30)->post('https://api.kilo.ai/api/gateway/chat/completions', [
-                'model' => config('services.kilo.model', 'kilo-auto/free'),
+            ])->timeout(15)->post('https://api.groq.com/openai/v1/chat/completions', [
+                'model' => config('services.groq.model', 'llama-3.3-70b-versatile'),
                 'messages' => [
                     ['role' => 'user', 'content' => 'Hello, just testing connection. Reply with one word.'],
                 ],
-                'stream' => false,
             ]);
 
             if ($response->successful()) {

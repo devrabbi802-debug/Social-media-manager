@@ -85,7 +85,7 @@
                         </div>
                         <div>
                             <h2 class="text-lg font-bold text-gray-900">AI সেক্রেট কী</h2>
-                            <p class="text-sm text-gray-500">Kilo AI API Key দিন</p>
+                            <p class="text-sm text-gray-500">Groq API Key দিন</p>
                         </div>
                     </div>
 
@@ -99,10 +99,10 @@
                                 name="api_key"
                                 value="{{ old('api_key', $aiSetting ? $aiSetting->api_key : '') }}"
                                 class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition font-mono text-sm"
-                                placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                                placeholder="gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                                 required
                             >
-                            <p class="mt-2 text-xs text-gray-500">Kilo AI থেকে প্রাপ্ত API Key দিন। এটি শুধুমাত্র আপনার অ্যাকাউন্টে সংরক্ষিত হবে।</p>
+                            <p class="mt-2 text-xs text-gray-500">Groq থেকে প্রাপ্ত API Key দিন। এটি শুধুমাত্র আপনার অ্যাকাউন্টে সংরক্ষিত হবে।</p>
                         </div>
 
                         <div class="flex items-center space-x-4">
@@ -151,7 +151,7 @@
                             <div class="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center mr-3 mt-0.5">
                                 <span class="text-xs font-bold text-purple-600">১</span>
                             </div>
-                            <p class="text-sm text-gray-600">Kilo AI ওয়েবসাইটে যান (<a href="https://kilo.ai" target="_blank" class="text-purple-600 hover:underline">kilo.ai</a>)</p>
+                            <p class="text-sm text-gray-600">Groq ওয়েবসাইটে যান (<a href="https://console.groq.com" target="_blank" class="text-purple-600 hover:underline">console.groq.com</a>)</p>
                         </div>
                         <div class="flex items-start">
                             <div class="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center mr-3 mt-0.5">

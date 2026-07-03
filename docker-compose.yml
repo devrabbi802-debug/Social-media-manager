@@ -55,6 +55,15 @@ services:
     networks:
       - laravel-net
 
+  redis:
+    image: redis:7-alpine
+    container_name: laravel-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - laravel-net
+
   phpmyadmin:
     image: phpmyadmin:latest
     container_name: laravel-phpmyadmin
@@ -68,6 +77,35 @@ services:
       PMA_HOST: mysql
       PMA_PORT: 3306
       MYSQL_ROOT_PASSWORD: secret
+    networks:
+      - laravel-net
+
+  worker:
+    image: socialmediamanager-app:latest
+    container_name: laravel-worker
+    restart: unless-stopped
+    working_dir: /var/www
+    depends_on:
+      - redis
+    volumes:
+      - .:/var/www
+    environment:
+      - DB_CONNECTION=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=socialboost
+      - DB_USERNAME=root
+      - DB_PASSWORD=secret
+      - QUEUE_CONNECTION=redis
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=null
+      - REDIS_PORT=6379
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - APP_KEY=base64:/8PieXOXBmNOsbD8OLArU9AhXik1dXecMl4qoS2Dmbo=
+      - APP_URL=http://smm.test
+      - APP_DOMAIN=smm.test
+    entrypoint: ["bash", "/var/www/docker/worker-entrypoint.sh"]
     networks:
       - laravel-net
 
