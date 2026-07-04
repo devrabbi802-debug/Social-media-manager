@@ -8,6 +8,7 @@ use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
 use App\Http\Controllers\FacebookSettingController;
 use App\Http\Controllers\FacebookOAuthController;
 use App\Http\Controllers\AiSettingController;
+use App\Http\Controllers\ConversationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -107,6 +108,10 @@ Route::middleware([
         Route::get('/facebook/settings', [FacebookSettingController::class, 'index'])->name('facebook.settings');
         Route::post('/facebook/settings', [FacebookSettingController::class, 'store'])->name('facebook.settings.store');
         Route::delete('/facebook/settings', [FacebookSettingController::class, 'destroy'])->name('facebook.settings.destroy');
+
+        // Conversations
+        Route::get('/conversations', [ConversationController::class, 'index'])->name('conversations');
+        Route::get('/conversations/{conversation}', [ConversationController::class, 'show'])->name('conversations.show');
 
         // Facebook OAuth
         Route::get('/facebook/connect', [FacebookOAuthController::class, 'redirect'])->name('facebook.redirect');

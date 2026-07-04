@@ -4,7 +4,9 @@ namespace App\Jobs;
 
 use App\Models\AiSetting;
 use App\Models\AiSystemPrompt;
+use App\Models\Conversation;
 use App\Models\FacebookSetting;
+use App\Models\Message;
 use App\Models\Tenant;
 use App\Services\AiChatService;
 use App\Services\GeminiApiService;
@@ -22,9 +24,11 @@ class SendAiReplyJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 3;
+    public int $tries = 5;
 
-    public int $backoff = 45;
+    public int $backoff = 30;
+
+    public int $timeout = 1800;
 
     public function retryUntil(): \DateTimeInterface
     {
@@ -36,14 +40,14 @@ class SendAiReplyJob implements ShouldQueue
         public string $senderId,
         public string $messageText,
         public string $pageAccessToken,
-        public ?string $imageUrl = null,
+        public ?array $imageUrls = null,
     ) {
         $this->onQueue('facebook');
     }
 
     public function middleware(): array
     {
-        return [new WithoutOverlapping('facebook_reply_'.$this->tenantId.'_'.$this->senderId)];
+        return [new WithoutOverlapping('ai-reply-' . $this->tenantId . '-' . $this->senderId)];
     }
 
     public function failed(\Throwable $exception): void
@@ -75,29 +79,76 @@ class SendAiReplyJob implements ShouldQueue
 
             $this->sendTypingIndicator(true);
 
-            $reply = $this->imageUrl
+            $hasImages = ! empty($this->imageUrls);
+
+            $result = $hasImages
                 ? $this->handleImageMessage($facebookSetting, $systemPrompt)
                 : $this->handleTextMessage($facebookSetting, $systemPrompt);
 
             $this->sendTypingIndicator(false);
 
-            if (! $reply) {
+            if (! $result) {
                 return;
             }
 
+            $reply = $result['reply'];
+            $imageAnalysis = $result['image_analysis'] ?? null;
+
             $this->sendFacebookMessage($reply);
+
+            try {
+                $conversation = Conversation::where('sender_id', $this->senderId)->first();
+
+            if ($conversation) {
+                $messageType = $hasImages ? 'ai_reply' : 'text';
+                $extra = [];
+
+                if ($imageAnalysis) {
+                    $extra['image_analysis'] = $imageAnalysis;
+                }
+
+                if ($hasImages) {
+                    $extra['original_image_urls'] = $this->imageUrls;
+                }
+
+                Message::create([
+                    'conversation_id' => $conversation->id,
+                    'direction' => 'outgoing',
+                    'type' => $messageType,
+                    'content' => $reply,
+                    'image_analysis' => $extra !== [] ? $extra : null,
+                ]);
+
+                $conversation->update(['last_message_at' => now()]);
+
+                Log::info('AI reply saved to conversation', [
+                    'conversation_id' => $conversation->id,
+                    'sender_id' => $this->senderId,
+                ]);
+            } else {
+                Log::warning('Conversation not found for outgoing message', [
+                    'sender_id' => $this->senderId,
+                ]);
+            }
+            } catch (\Throwable $e) {
+                Log::error('Failed to save AI reply to conversation', [
+                    'sender_id' => $this->senderId,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+            }
 
             Log::info('AI reply sent via Facebook', [
                 'tenant_id' => $tenant->id,
                 'sender_id' => $this->senderId,
                 'message' => $this->messageText,
-                'has_image' => $this->imageUrl !== null,
+                'image_count' => count($this->imageUrls ?? []),
                 'reply' => $reply,
             ]);
         });
     }
 
-    private function handleTextMessage(FacebookSetting $facebookSetting, string $systemPrompt): ?string
+    private function handleTextMessage(FacebookSetting $facebookSetting, string $systemPrompt): ?array
     {
         $aiKeys = AiSetting::where('user_id', $facebookSetting->user_id)
             ->active()
@@ -109,12 +160,16 @@ class SendAiReplyJob implements ShouldQueue
             return null;
         }
 
+        $history = $this->getConversationHistory();
+
         $aiService = new AiChatService($systemPrompt);
 
-        return $aiService->chatWithRotation($this->messageText, $aiKeys);
+        $reply = $aiService->chatWithHistory($this->messageText, $aiKeys, $history);
+
+        return $reply ? ['reply' => $reply] : null;
     }
 
-    private function handleImageMessage(FacebookSetting $facebookSetting, string $systemPrompt): ?string
+    private function handleImageMessage(FacebookSetting $facebookSetting, string $systemPrompt): ?array
     {
         $imageKeys = AiSetting::where('user_id', $facebookSetting->user_id)
             ->active()
@@ -127,42 +182,6 @@ class SendAiReplyJob implements ShouldQueue
                 'user_id' => $facebookSetting->user_id,
             ]);
 
-            return null;
-        }
-
-        $imageData = $this->downloadImage($this->imageUrl);
-
-        if (! $imageData) {
-            return null;
-        }
-
-        $imageDescription = null;
-
-        foreach ($imageKeys as $key) {
-            try {
-                $geminiService = new GeminiApiService($key->api_key);
-                $imageDescription = $geminiService->analyzeImage(
-                    $imageData,
-                    'এই ইমেজটি বিস্তারিত ভাবে বর্ণনা করো। ইমেজে কি আছে, কী দেখতে পাচ্ছো — প্রোডাক্ট হলে কোন প্রোডাক্ট, রঙ কি, সাইজ কত, কোন ব্র্যান্ড। সব কিছু বিস্তারিত লেখো।',
-                );
-
-                if ($imageDescription !== null) {
-                    Log::info('Gemini image analysis done', [
-                        'key_id' => $key->id,
-                        'description_length' => strlen($imageDescription),
-                    ]);
-
-                    break;
-                }
-            } catch (\Exception $e) {
-                Log::warning('Image AI key failed', [
-                    'key_id' => $key->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
-
-        if (! $imageDescription) {
             return null;
         }
 
@@ -180,15 +199,125 @@ class SendAiReplyJob implements ShouldQueue
             return null;
         }
 
+        $allDescriptions = [];
+        $geminiCallCount = 0;
+
+        foreach ($this->imageUrls as $index => $imageUrl) {
+            if ($geminiCallCount > 0) {
+                sleep(3);
+            }
+
+            $imageData = $this->downloadImage($imageUrl);
+
+            if (! $imageData) {
+                continue;
+            }
+
+            $imageDescription = null;
+
+            foreach ($imageKeys as $key) {
+                $maxRetries = 3;
+                for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+                    try {
+                        $geminiService = new GeminiApiService($key->api_key);
+                        $imageDescription = $geminiService->analyzeImage(
+                            $imageData,
+                            'তুমি একটি প্রোডাক্ট ইমেজ বিশ্লেষণ করছো। নিচের নিয়মগুলো কঠোরভাবে মেনে চলো: ১) ইমেজের উপর থাকা ads, banner, watermark, text overlay, price tag, discount sticker, বা যেকোনো UI element সম্পর্কে কিছু লিখবে না। ২) শুধুমাত্র মূল প্রোডাক্টটি বর্ণনা করো — প্রোডাক্টের ধরন, রঙ, ডিজাইন, ম্যাটেরিয়াল, আনুমানিক সাইজ। ৩) প্রোডাক্ট ছাড়া অন্য কিছু (মানুষ, গাড়ি, রুম, প্রকৃতি) দেখতে পারলে তা বর্ণনা করো। ৪) ১৫০ শব্দের বেশি না লিখে সংক্ষেপে লেখো।',
+                        );
+
+                        $geminiCallCount++;
+
+                        if ($imageDescription !== null) {
+                            if (mb_strlen($imageDescription) > 800) {
+                                $imageDescription = mb_substr($imageDescription, 0, 800) . '...';
+                            }
+
+                            Log::info('Gemini image analysis done', [
+                                'key_id' => $key->id,
+                                'image_index' => $index,
+                                'description_length' => strlen($imageDescription),
+                            ]);
+
+                            break 2;
+                        }
+                    } catch (\Exception $e) {
+                        if (str_contains($e->getMessage(), '429') && $attempt < $maxRetries) {
+                            $wait = $attempt * 5;
+                            Log::warning('Gemini 429, retrying after delay', [
+                                'image_index' => $index,
+                                'attempt' => $attempt,
+                                'wait_seconds' => $wait,
+                            ]);
+                            sleep($wait);
+                            continue;
+                        }
+
+                        Log::warning('Image AI key failed', [
+                            'key_id' => $key->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                        break;
+                    }
+                }
+            }
+
+            if ($imageDescription) {
+                $imageNum = count($allDescriptions) + 1;
+                $allDescriptions[] = "ছবি {$imageNum}: {$imageDescription}";
+            }
+        }
+
+        if (empty($allDescriptions)) {
+            $fallbackReply = count($this->imageUrls) > 1
+                ? "আমি ".count($this->imageUrls)."টি ছবি পেয়েছি। দুঃখিত, ছবি বিশ্লেষণ করতে সাময়িক সমস্যা হচ্ছে। আপনি কি কী জানতে চান সেটা লিখে পাঠাতে পারেন?"
+                : "আমি আপনার ছবিটি পেয়েছি। দুঃখিত, ছবি বিশ্লেষণ করতে সাময়িক সমস্যা হচ্ছে। আপনি কি কী জানতে চান সেটা লিখে পাঠাতে পারেন?";
+
+            return ['reply' => $fallbackReply];
+        }
+
+        $combinedDescriptions = implode("\n\n", $allDescriptions);
+
+        $imageCount = count($allDescriptions);
+        $imageWord = $imageCount > 1 ? "{$imageCount}টি ইমেজ" : 'একটি ইমেজ';
+
         $userMessage = $this->messageText
             ? "কাস্টমারের বার্তা: {$this->messageText}"
-            : 'কাস্টমার শুধু একটি ইমেজ পাঠিয়েছে।';
+            : "কাস্টমার {$imageWord} পাঠিয়েছে।";
 
-        $combinedMessage = "{$userMessage}\n\nইমেজ বিশ্লেষণ:\n{$imageDescription}";
+        $combinedMessage = "{$userMessage}\n\nইমেজ বিশ্লেষণ:\n{$combinedDescriptions}";
+
+        $history = $this->getConversationHistory();
 
         $aiService = new AiChatService($systemPrompt);
 
-        return $aiService->chatWithRotation($combinedMessage, $groqKeys);
+        $reply = $aiService->chatWithHistory($combinedMessage, $groqKeys, $history);
+
+        return $reply ? [
+            'reply' => $reply,
+            'image_analysis' => [
+                'descriptions' => $allDescriptions,
+                'image_urls' => $this->imageUrls,
+                'image_count' => $imageCount,
+            ],
+        ] : null;
+    }
+
+    private function getConversationHistory(): array
+    {
+        $conversation = Conversation::where('sender_id', $this->senderId)->first();
+
+        if (! $conversation) {
+            return [];
+        }
+
+        return Message::where('conversation_id', $conversation->id)
+            ->orderBy('created_at')
+            ->get()
+            ->map(fn (Message $msg) => [
+                'role' => $msg->direction === 'outgoing' ? 'assistant' : 'user',
+                'content' => $msg->content,
+            ])
+            ->toArray();
     }
 
     private function downloadImage(?string $url): ?string

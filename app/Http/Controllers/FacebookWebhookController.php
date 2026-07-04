@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\SendAiReplyJob;
+use App\Models\Conversation;
 use App\Models\FacebookSetting;
+use App\Models\Message;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class FacebookWebhookController extends Controller
@@ -98,18 +101,31 @@ class FacebookWebhookController extends Controller
             return;
         }
 
-        $text = $message['text'] ?? null;
-        $attachments = $message['attachments'] ?? [];
-        $imageUrl = null;
+        $mid = $message['mid'] ?? null;
 
-        foreach ($attachments as $attachment) {
-            if (($attachment['type'] ?? '') === 'image' && isset($attachment['payload']['url'])) {
-                $imageUrl = $attachment['payload']['url'];
-                break;
+        if ($mid) {
+            $exists = Message::where('facebook_mid', $mid)->exists();
+            if ($exists) {
+                Log::info('Duplicate webhook ignored', [
+                    'tenant_id' => $tenant->id,
+                    'sender_id' => $senderId,
+                    'mid' => $mid,
+                ]);
+                return;
             }
         }
 
-        if (! $text && ! $imageUrl) {
+        $text = $message['text'] ?? null;
+        $attachments = $message['attachments'] ?? [];
+        $imageUrls = [];
+
+        foreach ($attachments as $attachment) {
+            if (($attachment['type'] ?? '') === 'image' && isset($attachment['payload']['url'])) {
+                $imageUrls[] = $attachment['payload']['url'];
+            }
+        }
+
+        if (! $text && empty($imageUrls)) {
             return;
         }
 
@@ -117,16 +133,71 @@ class FacebookWebhookController extends Controller
             'tenant_id' => $tenant->id,
             'sender_id' => $senderId,
             'text' => $text,
-            'has_image' => $imageUrl !== null,
+            'image_count' => count($imageUrls),
+            'mid' => $mid,
         ]);
+
+        $conversation = Conversation::updateOrCreate(
+            ['sender_id' => $senderId],
+            ['last_message_at' => now()]
+        );
 
         $recipientId = $event['recipient']['id'] ?? null;
         $facebookSetting = FacebookSetting::where('page_id', $recipientId)->first()
             ?? FacebookSetting::first();
 
+        if (! $conversation->sender_name && $facebookSetting) {
+            $name = $this->fetchSenderName($senderId, $facebookSetting->page_access_token);
+            if ($name) {
+                $conversation->update(['sender_name' => $name]);
+            }
+        }
+
+        if (! empty($imageUrls)) {
+            foreach ($imageUrls as $imageUrl) {
+                try {
+                    Message::create([
+                        'conversation_id' => $conversation->id,
+                        'direction' => 'incoming',
+                        'type' => 'image',
+                        'content' => 'ইমেজ পাঠিয়েছে',
+                        'image_path' => $imageUrl,
+                        'facebook_mid' => $mid,
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::error('Failed to save incoming image message', [
+                        'sender_id' => $senderId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        } elseif ($text) {
+            try {
+                Message::create([
+                    'conversation_id' => $conversation->id,
+                    'direction' => 'incoming',
+                    'type' => 'text',
+                    'content' => $text,
+                    'facebook_mid' => $mid,
+                ]);
+            } catch (\Throwable $e) {
+                Log::error('Failed to save incoming message', [
+                    'sender_id' => $senderId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         if (! $facebookSetting) {
             Log::warning('No Facebook setting found for tenant', ['tenant_id' => $tenant->id]);
 
+            return;
+        }
+
+        $aiEnabled = $facebookSetting->ai_auto_reply_enabled ?? true;
+
+        if (! $aiEnabled) {
+            Log::info('AI auto-reply disabled for tenant', ['tenant_id' => $tenant->id]);
             return;
         }
 
@@ -136,19 +207,59 @@ class FacebookWebhookController extends Controller
                 senderId: $senderId,
                 messageText: $text ?? '',
                 pageAccessToken: $facebookSetting->page_access_token,
-                imageUrl: $imageUrl,
+                imageUrls: $imageUrls,
             );
 
             Log::info('AI reply job dispatched', [
                 'tenant_id' => $tenant->id,
                 'sender_id' => $senderId,
-                'has_image' => $imageUrl !== null,
+                'image_count' => count($imageUrls),
             ]);
         } catch (\Throwable $e) {
             Log::error('Failed to dispatch AI reply job', [
                 'tenant_id' => $tenant->id,
                 'error' => $e->getMessage(),
             ]);
+        }
+    }
+
+    private function fetchSenderName(string $senderId, string $pageAccessToken): ?string
+    {
+        try {
+            $response = Http::timeout(5)->get("https://graph.facebook.com/v21.0/{$senderId}", [
+                'fields' => 'first_name,last_name',
+                'access_token' => $pageAccessToken,
+            ]);
+
+            if ($response->failed()) {
+                Log::warning('Facebook Graph API failed for sender name', [
+                    'sender_id' => $senderId,
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                return null;
+            }
+
+            $data = $response->json();
+
+            Log::info('Facebook Graph API sender name response', [
+                'sender_id' => $senderId,
+                'data' => $data,
+            ]);
+
+            $firstName = $data['first_name'] ?? '';
+            $lastName = $data['last_name'] ?? '';
+
+            $name = trim("{$firstName} {$lastName}");
+
+            return $name !== '' ? $name : null;
+        } catch (\Exception $e) {
+            Log::warning('Failed to fetch sender name', [
+                'sender_id' => $senderId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
         }
     }
 }

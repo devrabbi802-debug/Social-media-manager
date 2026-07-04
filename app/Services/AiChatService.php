@@ -16,11 +16,16 @@ class AiChatService
 
     public function chatWithRotation(string $message, $keys): ?string
     {
+        return $this->chatWithHistory($message, $keys, []);
+    }
+
+    public function chatWithHistory(string $message, $keys, array $history = []): ?string
+    {
         $lastException = null;
 
         foreach ($keys as $key) {
             try {
-                $result = $this->chat($message, $key->api_key);
+                $result = $this->chatWithMessages($message, $key->api_key, $history);
 
                 if ($result !== null) {
                     return $result;
@@ -51,20 +56,45 @@ class AiChatService
 
     public function chat(string $message, string $apiKey): ?string
     {
+        return $this->chatWithMessages($message, $apiKey, []);
+    }
+
+    public function chatWithMessages(string $message, string $apiKey, array $history = []): ?string
+    {
         try {
+            $messages = [
+                ['role' => 'system', 'content' => $this->systemPrompt],
+            ];
+
+            foreach ($history as $msg) {
+                $messages[] = [
+                    'role' => $msg['role'],
+                    'content' => $msg['content'],
+                ];
+            }
+
+            $messages[] = ['role' => 'user', 'content' => $message];
+
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer '.$apiKey,
                 'Content-Type' => 'application/json',
             ])->timeout(15)->post('https://api.groq.com/openai/v1/chat/completions', [
                 'model' => config('services.groq.model', 'llama-3.3-70b-versatile'),
-                'messages' => [
-                    ['role' => 'system', 'content' => $this->systemPrompt],
-                    ['role' => 'user', 'content' => $message],
-                ],
+                'messages' => $messages,
             ]);
 
             if ($response->status() === 429) {
                 throw new \Exception('AI API rate limited (429)');
+            }
+
+            if ($response->status() === 413) {
+                Log::error('Groq API request too large (413)', [
+                    'message_length' => mb_strlen($message),
+                ]);
+
+                $truncatedMessage = mb_substr($message, 0, 4000) . "\n\n[বার্তা সংক্ষিপ্ত করা হয়েছে]";
+
+                return $this->chatWithMessages($truncatedMessage, $apiKey, $history);
             }
 
             if ($response->failed()) {

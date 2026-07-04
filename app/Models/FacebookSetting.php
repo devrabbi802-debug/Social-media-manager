@@ -14,6 +14,7 @@ class FacebookSetting extends Model
         'verify_token',
         'page_id',
         'page_access_token',
+        'ai_auto_reply_enabled',
     ];
 
     protected $hidden = [
