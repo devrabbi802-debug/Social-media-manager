@@ -99,6 +99,48 @@
                             </div>
                         </div>
 
+                        {{-- AI Auto-Reply Toggle --}}
+                        <div class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-6 mb-6 border border-purple-100">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <div class="w-12 h-12 {{ $facebookSetting->ai_auto_reply_enabled ? 'bg-green-100' : 'bg-gray-200' }} rounded-xl flex items-center justify-center mr-4">
+                                        <svg class="w-7 h-7 {{ $facebookSetting->ai_auto_reply_enabled ? 'text-green-600' : 'text-gray-500' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-lg font-bold text-gray-900">AI অটো রিপ্লাই</h3>
+                                        <p class="text-sm text-gray-500">
+                                            @if($facebookSetting->ai_auto_reply_enabled)
+                                                <span class="text-green-600 font-medium">চালু আছে</span> — কাস্টমারদের অটোমেটিক রিপ্লাই যাচ্ছে
+                                            @else
+                                                <span class="text-gray-500 font-medium">বন্ধ আছে</span> — কোনো অটো রিপ্লাই যাচ্ছে না
+                                            @endif
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <form action="{{ route('facebook.settings.toggle.ai.reply') }}" method="POST">
+                                    @csrf
+                                    <button type="submit" class="relative inline-flex h-12 w-24 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 {{ $facebookSetting->ai_auto_reply_enabled ? 'bg-green-500' : 'bg-gray-300' }}" role="switch" aria-checked="{{ $facebookSetting->ai_auto_reply_enabled ? 'true' : 'false' }}">
+                                        <span class="sr-only">AI অটো রিপ্লাই টগল করুন</span>
+                                        <span aria-hidden="true" class="pointer-events-none inline-block h-10 w-10 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out {{ $facebookSetting->ai_auto_reply_enabled ? 'translate-x-12' : 'translate-x-1' }}"></span>
+                                    </button>
+                                </form>
+                            </div>
+
+                            @if(!$facebookSetting->ai_auto_reply_enabled)
+                                <div class="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                                    <div class="flex items-center">
+                                        <svg class="w-5 h-5 text-yellow-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                        </svg>
+                                        <p class="text-sm text-yellow-700">AI অটো রিপ্লাই বন্ধ আছে। চালু করতে উপরের বাটনে ক্লিক করুন।</p>
+                                    </div>
+                                </div>
+                            @endif
+                        </div>
+
                         <a href="{{ route('facebook.redirect') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition">
                             <svg class="w-5 h-5 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388,10.954,10.125,11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007,1.792-4.669,4.533-4.669 1.312,0,2.686.235,2.686.235v2.953H15.83c-1.491,0-1.956.925-1.956,1.874v2.25h3.328l-.532,3.47h-2.796v8.385C19.612,23.027,24,18.062,24,12.073z"/>

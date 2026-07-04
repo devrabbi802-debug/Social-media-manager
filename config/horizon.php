@@ -21,7 +21,9 @@ return [
 
     "waits" => [
         "redis:facebook" => 60,
+        "redis:high" => 60,
         "redis:default" => 60,
+        "redis:low" => 60,
     ],
 
     "trim" => [
@@ -46,21 +48,21 @@ return [
 
     "fast_termination" => false,
 
-    "memory_limit" => 256,
+    "memory_limit" => 512,
 
     "defaults" => [
         "supervisor-1" => [
             "connection" => "redis",
-            "queue" => ["facebook"],
+            "queue" => ["facebook", "high", "default", "low"],
             "balance" => "auto",
             "autoScalingStrategy" => "time",
-            "minProcesses" => 1,
-            "maxProcesses" => 10,
+            "minProcesses" => 5,
+            "maxProcesses" => 30,
             "maxTime" => 3600,
             "maxJobs" => 0,
-            "memory" => 256,
-            "tries" => 5,
-            "backoff" => 30,
+            "memory" => 512,
+            "tries" => 3,
+            "backoff" => 15,
             "timeout" => 1800,
             "nice" => 0,
         ],
@@ -69,7 +71,8 @@ return [
     "environments" => [
         "production" => [
             "supervisor-1" => [
-                "maxProcesses" => 10,
+                "maxProcesses" => 30,
+                "minProcesses" => 5,
                 "balanceMaxShift" => 1,
                 "balanceCooldown" => 3,
             ],
@@ -77,8 +80,8 @@ return [
 
         "local" => [
             "supervisor-1" => [
-                "maxProcesses" => 5,
-                "minProcesses" => 1,
+                "maxProcesses" => 10,
+                "minProcesses" => 2,
                 "balanceMaxShift" => 1,
                 "balanceCooldown" => 3,
             ],

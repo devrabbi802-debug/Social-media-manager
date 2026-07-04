@@ -45,7 +45,16 @@ class GeminiApiService
             );
 
             if ($response->status() === 429) {
-                throw new \Exception('Gemini API rate limited (429)');
+                $retryAfter = $response->header('Retry-After', 60);
+                throw new \Exception("Gemini API rate limited (429). Retry after: {$retryAfter}s");
+            }
+
+            if ($response->status() === 503) {
+                throw new \Exception('Gemini API overloaded (503)');
+            }
+
+            if ($response->status() === 403) {
+                throw new \Exception('Gemini API key forbidden (403)');
             }
 
             if ($response->failed()) {
@@ -53,7 +62,6 @@ class GeminiApiService
                     'status' => $response->status(),
                     'body' => $response->body(),
                 ]);
-
                 return null;
             }
 
@@ -74,7 +82,7 @@ class GeminiApiService
 
             return null;
         } catch (\Exception $e) {
-            if (str_contains($e->getMessage(), '429')) {
+            if (str_contains($e->getMessage(), '429') || str_contains($e->getMessage(), '503')) {
                 throw $e;
             }
 
@@ -116,7 +124,6 @@ class GeminiApiService
                     'status' => $response->status(),
                     'body' => $response->body(),
                 ]);
-
                 return null;
             }
 
@@ -176,15 +183,27 @@ class GeminiApiService
             }
 
             if ($response->failed()) {
-                return ['success' => false, 'message' => 'API error: '.$response->status()];
+                return ['success' => false, 'message' => 'API error: ' . $response->status()];
             }
 
             $body = $response->json();
             $text = $body['candidates'][0]['content']['parts'][0]['text'] ?? null;
 
-            return ['success' => true, 'message' => 'Connected! Gemini replied: '.substr($text ?? '', 0, 50)];
+            return ['success' => true, 'message' => 'Connected! Gemini replied: ' . substr($text ?? '', 0, 50)];
         } catch (\Exception $e) {
-            return ['success' => false, 'message' => 'Error: '.$e->getMessage()];
+            return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
         }
+    }
+
+    public function getModelInfo(): array
+    {
+        return [
+            'model' => $this->model,
+            'rate_limit' => [
+                'rpm' => 15,
+                'rpd' => 1500,
+            ],
+            'timeout' => 60,
+        ];
     }
 }

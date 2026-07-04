@@ -9,7 +9,8 @@ use App\Models\FacebookSetting;
 use App\Models\Message;
 use App\Models\Tenant;
 use App\Services\AiChatService;
-use App\Services\GeminiApiService;
+use App\Services\GeminiKeyManager;
+use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -22,17 +23,17 @@ use Illuminate\Support\Facades\Log;
 
 class SendAiReplyJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 5;
+    public int $tries = 3;
 
-    public int $backoff = 30;
+    public int $backoff = 15;
 
     public int $timeout = 1800;
 
     public function retryUntil(): \DateTimeInterface
     {
-        return now()->addMinutes(3);
+        return now()->addMinutes(5);
     }
 
     public function __construct(
@@ -99,37 +100,37 @@ class SendAiReplyJob implements ShouldQueue
             try {
                 $conversation = Conversation::where('sender_id', $this->senderId)->first();
 
-            if ($conversation) {
-                $messageType = $hasImages ? 'ai_reply' : 'text';
-                $extra = [];
+                if ($conversation) {
+                    $messageType = $hasImages ? 'ai_reply' : 'text';
+                    $extra = [];
 
-                if ($imageAnalysis) {
-                    $extra['image_analysis'] = $imageAnalysis;
+                    if ($imageAnalysis) {
+                        $extra['image_analysis'] = $imageAnalysis;
+                    }
+
+                    if ($hasImages) {
+                        $extra['original_image_urls'] = $this->imageUrls;
+                    }
+
+                    Message::create([
+                        'conversation_id' => $conversation->id,
+                        'direction' => 'outgoing',
+                        'type' => $messageType,
+                        'content' => $reply,
+                        'image_analysis' => $extra !== [] ? $extra : null,
+                    ]);
+
+                    $conversation->update(['last_message_at' => now()]);
+
+                    Log::info('AI reply saved to conversation', [
+                        'conversation_id' => $conversation->id,
+                        'sender_id' => $this->senderId,
+                    ]);
+                } else {
+                    Log::warning('Conversation not found for outgoing message', [
+                        'sender_id' => $this->senderId,
+                    ]);
                 }
-
-                if ($hasImages) {
-                    $extra['original_image_urls'] = $this->imageUrls;
-                }
-
-                Message::create([
-                    'conversation_id' => $conversation->id,
-                    'direction' => 'outgoing',
-                    'type' => $messageType,
-                    'content' => $reply,
-                    'image_analysis' => $extra !== [] ? $extra : null,
-                ]);
-
-                $conversation->update(['last_message_at' => now()]);
-
-                Log::info('AI reply saved to conversation', [
-                    'conversation_id' => $conversation->id,
-                    'sender_id' => $this->senderId,
-                ]);
-            } else {
-                Log::warning('Conversation not found for outgoing message', [
-                    'sender_id' => $this->senderId,
-                ]);
-            }
             } catch (\Throwable $e) {
                 Log::error('Failed to save AI reply to conversation', [
                     'sender_id' => $this->senderId,
@@ -161,9 +162,7 @@ class SendAiReplyJob implements ShouldQueue
         }
 
         $history = $this->getConversationHistory();
-
         $aiService = new AiChatService($systemPrompt);
-
         $reply = $aiService->chatWithHistory($this->messageText, $aiKeys, $history);
 
         return $reply ? ['reply' => $reply] : null;
@@ -171,20 +170,6 @@ class SendAiReplyJob implements ShouldQueue
 
     private function handleImageMessage(FacebookSetting $facebookSetting, string $systemPrompt): ?array
     {
-        $imageKeys = AiSetting::where('user_id', $facebookSetting->user_id)
-            ->active()
-            ->byType('image')
-            ->byPriority()
-            ->get();
-
-        if ($imageKeys->isEmpty()) {
-            Log::warning('No image AI keys available', [
-                'user_id' => $facebookSetting->user_id,
-            ]);
-
-            return null;
-        }
-
         $groqKeys = AiSetting::where('user_id', $facebookSetting->user_id)
             ->active()
             ->byType('message')
@@ -195,84 +180,23 @@ class SendAiReplyJob implements ShouldQueue
             Log::warning('No message AI keys available for image reply', [
                 'user_id' => $facebookSetting->user_id,
             ]);
-
             return null;
         }
 
-        $allDescriptions = [];
-        $geminiCallCount = 0;
+        $keyManager = new GeminiKeyManager($facebookSetting->user_id);
+        $keyStats = $keyManager->getKeyStats();
 
-        foreach ($this->imageUrls as $index => $imageUrl) {
-            if ($geminiCallCount > 0) {
-                sleep(3);
-            }
-
-            $imageData = $this->downloadImage($imageUrl);
-
-            if (! $imageData) {
-                continue;
-            }
-
-            $imageDescription = null;
-
-            foreach ($imageKeys as $key) {
-                $maxRetries = 3;
-                for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
-                    try {
-                        $geminiService = new GeminiApiService($key->api_key);
-                        $imageDescription = $geminiService->analyzeImage(
-                            $imageData,
-                            'তুমি একটি প্রোডাক্ট ইমেজ বিশ্লেষণ করছো। নিচের নিয়মগুলো কঠোরভাবে মেনে চলো: ১) ইমেজের উপর থাকা ads, banner, watermark, text overlay, price tag, discount sticker, বা যেকোনো UI element সম্পর্কে কিছু লিখবে না। ২) শুধুমাত্র মূল প্রোডাক্টটি বর্ণনা করো — প্রোডাক্টের ধরন, রঙ, ডিজাইন, ম্যাটেরিয়াল, আনুমানিক সাইজ। ৩) প্রোডাক্ট ছাড়া অন্য কিছু (মানুষ, গাড়ি, রুম, প্রকৃতি) দেখতে পারলে তা বর্ণনা করো। ৪) ১৫০ শব্দের বেশি না লিখে সংক্ষেপে লেখো।',
-                        );
-
-                        $geminiCallCount++;
-
-                        if ($imageDescription !== null) {
-                            if (mb_strlen($imageDescription) > 800) {
-                                $imageDescription = mb_substr($imageDescription, 0, 800) . '...';
-                            }
-
-                            Log::info('Gemini image analysis done', [
-                                'key_id' => $key->id,
-                                'image_index' => $index,
-                                'description_length' => strlen($imageDescription),
-                            ]);
-
-                            break 2;
-                        }
-                    } catch (\Exception $e) {
-                        if (str_contains($e->getMessage(), '429') && $attempt < $maxRetries) {
-                            $wait = $attempt * 5;
-                            Log::warning('Gemini 429, retrying after delay', [
-                                'image_index' => $index,
-                                'attempt' => $attempt,
-                                'wait_seconds' => $wait,
-                            ]);
-                            sleep($wait);
-                            continue;
-                        }
-
-                        Log::warning('Image AI key failed', [
-                            'key_id' => $key->id,
-                            'error' => $e->getMessage(),
-                        ]);
-                        break;
-                    }
-                }
-            }
-
-            if ($imageDescription) {
-                $imageNum = count($allDescriptions) + 1;
-                $allDescriptions[] = "ছবি {$imageNum}: {$imageDescription}";
-            }
+        if ($keyStats['total'] === 0) {
+            Log::warning('No Gemini keys available', [
+                'user_id' => $facebookSetting->user_id,
+            ]);
+            return $this->getFallbackReply();
         }
 
-        if (empty($allDescriptions)) {
-            $fallbackReply = count($this->imageUrls) > 1
-                ? "আমি ".count($this->imageUrls)."টি ছবি পেয়েছি। দুঃখিত, ছবি বিশ্লেষণ করতে সাময়িক সমস্যা হচ্ছে। আপনি কি কী জানতে চান সেটা লিখে পাঠাতে পারেন?"
-                : "আমি আপনার ছবিটি পেয়েছি। দুঃখিত, ছবি বিশ্লেষণ করতে সাময়িক সমস্যা হচ্ছে। আপনি কি কী জানতে চান সেটা লিখে পাঠাতে পারেন?";
+        $allDescriptions = $this->processImagesInBatches($facebookSetting->user_id);
 
-            return ['reply' => $fallbackReply];
+        if (empty($allDescriptions)) {
+            return $this->getFallbackReply();
         }
 
         $combinedDescriptions = implode("\n\n", $allDescriptions);
@@ -287,9 +211,7 @@ class SendAiReplyJob implements ShouldQueue
         $combinedMessage = "{$userMessage}\n\nইমেজ বিশ্লেষণ:\n{$combinedDescriptions}";
 
         $history = $this->getConversationHistory();
-
         $aiService = new AiChatService($systemPrompt);
-
         $reply = $aiService->chatWithHistory($combinedMessage, $groqKeys, $history);
 
         return $reply ? [
@@ -300,6 +222,80 @@ class SendAiReplyJob implements ShouldQueue
                 'image_count' => $imageCount,
             ],
         ] : null;
+    }
+
+    private function processImagesInBatches(string $userId): array
+    {
+        $allDescriptions = [];
+        $batchSize = 10;
+        $imageChunks = array_chunk($this->imageUrls, $batchSize);
+
+        foreach ($imageChunks as $chunkIndex => $chunk) {
+            $batchId = uniqid('batch_', true);
+            $totalImages = count($chunk);
+
+            cache()->put("batch_{$batchId}_results", [], 300);
+            cache()->put("batch_{$batchId}_errors", [], 300);
+            cache()->put("batch_{$batchId}_total", $totalImages, 300);
+            cache()->put("batch_{$batchId}_done", false, 300);
+
+            $jobs = [];
+            foreach ($chunk as $index => $imageUrl) {
+                $globalIndex = ($chunkIndex * $batchSize) + $index;
+                $jobs[] = new ProcessImageBatch(
+                    userId: $userId,
+                    imageUrl: $imageUrl,
+                    imageIndex: $globalIndex,
+                    batchId: $batchId,
+                );
+            }
+
+            \Bus::batch($jobs)->onQueue('facebook')->dispatch();
+
+            $startTime = now();
+            $timeout = 90;
+
+            while (true) {
+                if (now()->diffInSeconds($startTime) > $timeout) {
+                    Log::warning('Batch processing timeout', [
+                        'batch_id' => $batchId,
+                        'elapsed' => now()->diffInSeconds($startTime),
+                    ]);
+                    break;
+                }
+
+                $done = cache()->get("batch_{$batchId}_done", false);
+                if ($done) {
+                    break;
+                }
+
+                usleep(500000);
+            }
+
+            $results = cache()->get("batch_{$batchId}_results", []);
+            $errors = cache()->get("batch_{$batchId}_errors", []);
+
+            usort($results, fn ($a, $b) => $a['index'] <=> $b['index']);
+
+            foreach ($results as $result) {
+                $allDescriptions[] = "ছবি " . ($result['index'] + 1) . ": " . $result['description'];
+            }
+
+            if ($chunkIndex < count($imageChunks) - 1) {
+                sleep(2);
+            }
+        }
+
+        return $allDescriptions;
+    }
+
+    private function getFallbackReply(): ?array
+    {
+        $fallbackReply = count($this->imageUrls) > 1
+            ? "আমি " . count($this->imageUrls) . "টি ছবি পেয়েছি। দুঃখিত, ছবি বিশ্লেষণ করতে সাময়িক সমস্যা হচ্ছে। আপনি কি কী জানতে চান সেটা লিখে পাঠাতে পারেন?"
+            : "আমি আপনার ছবিটি পেয়েছি। দুঃখিত, ছবি বিশ্লেষণ করতে সাময়িক সমস্যা হচ্ছে। আপনি কি কী জানতে চান সেটা লিখে পাঠাতে পারেন?";
+
+        return ['reply' => $fallbackReply];
     }
 
     private function getConversationHistory(): array
@@ -318,28 +314,6 @@ class SendAiReplyJob implements ShouldQueue
                 'content' => $msg->content,
             ])
             ->toArray();
-    }
-
-    private function downloadImage(?string $url): ?string
-    {
-        try {
-            $response = Http::timeout(30)->get($url);
-
-            if ($response->failed()) {
-                Log::error('Failed to download image', ['url' => $url]);
-
-                return null;
-            }
-
-            return base64_encode($response->body());
-        } catch (\Exception $e) {
-            Log::error('Image download exception', [
-                'url' => $url,
-                'error' => $e->getMessage(),
-            ]);
-
-            return null;
-        }
     }
 
     private function buildSystemPrompt(Tenant $tenant): string
@@ -370,7 +344,7 @@ class SendAiReplyJob implements ShouldQueue
         ]);
 
         if ($response->failed()) {
-            throw new \Exception('Facebook send message failed: '.$response->body());
+            throw new \Exception('Facebook send message failed: ' . $response->body());
         }
     }
 

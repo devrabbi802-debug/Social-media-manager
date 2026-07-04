@@ -157,4 +157,5 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/facebook/settings', [FacebookSettingController::class, 'index'])->name('facebook.settings');
     Route::post('/facebook/settings', [FacebookSettingController::class, 'store'])->name('facebook.settings.store');
     Route::delete('/facebook/settings', [FacebookSettingController::class, 'destroy'])->name('facebook.settings.destroy');
+    Route::post('/facebook/settings/toggle-ai-reply', [FacebookSettingController::class, 'toggleAiReply'])->name('facebook.settings.toggle.ai.reply');
 });

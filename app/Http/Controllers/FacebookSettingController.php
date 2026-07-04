@@ -43,4 +43,23 @@ class FacebookSettingController extends Controller
         return redirect()->route('facebook.settings')
             ->with('success', 'ফেসবুক সেটিংস মুছে ফেলা হয়েছে।');
     }
+
+    public function toggleAiReply()
+    {
+        $facebookSetting = FacebookSetting::where('user_id', Auth::id())->first();
+
+        if (! $facebookSetting) {
+            return redirect()->route('facebook.settings')
+                ->with('error', 'ফেসবুক সেটিংস পাওয়া যায়নি।');
+        }
+
+        $facebookSetting->update([
+            'ai_auto_reply_enabled' => ! $facebookSetting->ai_auto_reply_enabled,
+        ]);
+
+        $status = $facebookSetting->ai_auto_reply_enabled ? 'চালু' : 'বন্ধ';
+
+        return redirect()->route('facebook.settings')
+            ->with('success', "AI অটো রিপ্লাই {$status} করা হয়েছে।");
+    }
 }
