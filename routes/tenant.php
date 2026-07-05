@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
 use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FacebookSettingController;
 use App\Http\Controllers\FacebookOAuthController;
 use App\Http\Controllers\AiSettingController;
@@ -61,61 +62,15 @@ Route::middleware([
 
     // Dashboard Routes (authenticated users only)
     Route::middleware(['auth'])->group(function () {
-        Route::get('/dashboard', function () {
-            $user = auth()->user();
-            $facebookSetting = \App\Models\FacebookSetting::where('user_id', $user->id)->first();
-
-            $todayMessages = \App\Models\Message::whereDate('created_at', today())->count();
-            $totalConversations = \App\Models\Conversation::count();
-            $totalMessages = \App\Models\Message::count();
-            $aiReplies = \App\Models\Message::where('direction', 'outgoing')->count();
-
-            $recentConversations = \App\Models\Conversation::with('latestMessage')
-                ->orderBy('last_message_at', 'desc')
-                ->limit(5)
-                ->get();
-
-            return view('dashboard.index', compact(
-                'facebookSetting',
-                'todayMessages',
-                'totalConversations',
-                'totalMessages',
-                'aiReplies',
-                'recentConversations'
-            ));
-        })->name('dashboard');
-
-        Route::get('/settings', function () {
-            return view('dashboard.settings');
-        })->name('settings');
-
-        Route::get('/leads', function () {
-            return view('dashboard.leads');
-        })->name('leads');
-
-        Route::get('/inventory', function () {
-            return view('dashboard.inventory');
-        })->name('inventory');
-
-        Route::get('/reports', function () {
-            return view('dashboard.reports');
-        })->name('reports');
-
-        Route::get('/whatsapp/send', function () {
-            return view('dashboard.whatsapp');
-        })->name('whatsapp.send');
-
-        Route::get('/facebook/post', function () {
-            return view('dashboard.facebook');
-        })->name('facebook.post');
-
-        Route::get('/inventory/add', function () {
-            return view('dashboard.inventory-add');
-        })->name('inventory.add');
-        
-        Route::get('/integration', function () {
-            return view('dashboard.integration');
-        })->name('integration');
+        Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+        Route::get('/integration', [DashboardController::class, 'integration'])->name('integration');
+        Route::get('/facebook/post', [DashboardController::class, 'facebookPost'])->name('facebook.post');
+        Route::get('/settings', [DashboardController::class, 'settings'])->name('settings');
+        Route::get('/leads', [DashboardController::class, 'leads'])->name('leads');
+        Route::get('/reports', [DashboardController::class, 'reports'])->name('reports');
+        Route::get('/whatsapp/send', [DashboardController::class, 'whatsapp'])->name('whatsapp.send');
+        Route::get('/inventory', [DashboardController::class, 'inventory'])->name('inventory');
+        Route::get('/inventory/add', [DashboardController::class, 'inventoryAdd'])->name('inventory.add');
 
         // AI Setup
         Route::get('/ai-setup', [AiSettingController::class, 'index'])->name('ai.setup');
@@ -125,6 +80,7 @@ Route::middleware([
         Route::put('/ai-setup/{aiSetting}/priority', [AiSettingController::class, 'updatePriority'])->name('ai.setup.priority');
         Route::get('/ai-setup/{aiSetting}/test', [AiSettingController::class, 'test'])->name('ai.setup.test');
 
+        // Facebook Settings
         Route::get('/facebook/settings', [FacebookSettingController::class, 'index'])->name('facebook.settings');
         Route::post('/facebook/settings', [FacebookSettingController::class, 'store'])->name('facebook.settings.store');
         Route::delete('/facebook/settings', [FacebookSettingController::class, 'destroy'])->name('facebook.settings.destroy');
