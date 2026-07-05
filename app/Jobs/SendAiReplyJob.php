@@ -10,12 +10,10 @@ use App\Models\Message;
 use App\Models\Tenant;
 use App\Services\AiChatService;
 use App\Services\GeminiKeyManager;
-use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -23,17 +21,17 @@ use Illuminate\Support\Facades\Log;
 
 class SendAiReplyJob implements ShouldQueue
 {
-    use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 3;
+    public int $tries = 5;
 
     public int $backoff = 15;
 
-    public int $timeout = 1800;
+    public int $timeout = 90;
 
     public function retryUntil(): \DateTimeInterface
     {
-        return now()->addMinutes(5);
+        return now()->addMinutes(3);
     }
 
     public function __construct(
@@ -44,11 +42,6 @@ class SendAiReplyJob implements ShouldQueue
         public ?array $imageUrls = null,
     ) {
         $this->onQueue('facebook');
-    }
-
-    public function middleware(): array
-    {
-        return [new WithoutOverlapping('ai-reply-' . $this->tenantId . '-' . $this->senderId)];
     }
 
     public function failed(\Throwable $exception): void
@@ -63,9 +56,15 @@ class SendAiReplyJob implements ShouldQueue
 
     public function handle(): void
     {
+        Log::info('SendAiReplyJob: handle() called', [
+            'tenant_id' => $this->tenantId,
+            'sender_id' => $this->senderId,
+        ]);
+
         $tenant = Tenant::find($this->tenantId);
 
         if (! $tenant) {
+            Log::warning('SendAiReplyJob: tenant not found', ['tenant_id' => $this->tenantId]);
             return;
         }
 
@@ -75,6 +74,10 @@ class SendAiReplyJob implements ShouldQueue
             $facebookSetting = FacebookSetting::where('page_access_token', $this->pageAccessToken)->first();
 
             if (! $facebookSetting) {
+                Log::warning('SendAiReplyJob: facebookSetting not found', [
+                    'tenant_id' => $tenant->id,
+                    'page_access_token' => substr($this->pageAccessToken, 0, 20) . '...',
+                ]);
                 return;
             }
 
@@ -82,13 +85,24 @@ class SendAiReplyJob implements ShouldQueue
 
             $hasImages = ! empty($this->imageUrls);
 
-            $result = $hasImages
-                ? $this->handleImageMessage($facebookSetting, $systemPrompt)
-                : $this->handleTextMessage($facebookSetting, $systemPrompt);
-
-            $this->sendTypingIndicator(false);
+            try {
+                Log::info('SendAiReplyJob: starting AI processing', [
+                    'tenant_id' => $tenant->id,
+                    'sender_id' => $this->senderId,
+                    'has_images' => $hasImages,
+                ]);
+                $result = $hasImages
+                    ? $this->handleImageMessage($facebookSetting, $systemPrompt)
+                    : $this->handleTextMessage($facebookSetting, $systemPrompt);
+            } finally {
+                $this->sendTypingIndicator(false);
+            }
 
             if (! $result) {
+                Log::warning('SendAiReplyJob: AI returned null result', [
+                    'tenant_id' => $tenant->id,
+                    'sender_id' => $this->senderId,
+                ]);
                 return;
             }
 
@@ -157,7 +171,14 @@ class SendAiReplyJob implements ShouldQueue
             ->byPriority()
             ->get();
 
+        Log::info('SendAiReplyJob: handleTextMessage', [
+            'user_id' => $facebookSetting->user_id,
+            'ai_keys_count' => $aiKeys->count(),
+            'message_text' => mb_substr($this->messageText, 0, 50),
+        ]);
+
         if ($aiKeys->isEmpty()) {
+            Log::warning('SendAiReplyJob: no AI keys for text message', ['user_id' => $facebookSetting->user_id]);
             return null;
         }
 
@@ -246,7 +267,7 @@ class SendAiReplyJob implements ShouldQueue
                     userId: $userId,
                     imageUrl: $imageUrl,
                     imageIndex: $globalIndex,
-                    batchId: $batchId,
+                    trackingId: $batchId,
                 );
             }
 
@@ -307,8 +328,10 @@ class SendAiReplyJob implements ShouldQueue
         }
 
         return Message::where('conversation_id', $conversation->id)
-            ->orderBy('created_at')
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
             ->get()
+            ->reverse()
             ->map(fn (Message $msg) => [
                 'role' => $msg->direction === 'outgoing' ? 'assistant' : 'user',
                 'content' => $msg->content,
@@ -318,19 +341,23 @@ class SendAiReplyJob implements ShouldQueue
 
     private function buildSystemPrompt(Tenant $tenant): string
     {
-        $row = DB::connection('mysql')->table('ai_system_prompts')->first();
+        $cacheKey = 'system_prompt_' . $tenant->id;
 
-        if (! $row) {
-            return (new AiSystemPrompt)->defaultPrompt();
-        }
+        return cache()->remember($cacheKey, 300, function () use ($tenant) {
+            $row = DB::connection('mysql')->table('ai_system_prompts')->first();
 
-        $prompt = $row->prompt_text ?? (new AiSystemPrompt)->defaultPrompt();
+            if (! $row) {
+                return (new AiSystemPrompt)->defaultPrompt();
+            }
 
-        return str_replace(
-            ['{company_name}', '{owner_name}'],
-            [$tenant->name ?? 'এই কোম্পানি', $tenant->data['owner_name'] ?? ''],
-            $prompt
-        );
+            $prompt = $row->prompt_text ?? (new AiSystemPrompt)->defaultPrompt();
+
+            return str_replace(
+                ['{company_name}', '{owner_name}'],
+                [$tenant->name ?? 'এই কোম্পানি', $tenant->data['owner_name'] ?? ''],
+                $prompt
+            );
+        });
     }
 
     private function sendFacebookMessage(string $text): void

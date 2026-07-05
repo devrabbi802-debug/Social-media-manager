@@ -27,7 +27,7 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 ### Multi-Tenancy (Database-per-Tenant)
 
 - **Landlord DB** (`socialboost`): `tenants`, `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `cache`, `jobs`, `sessions`
-- **Tenant DB** (`{subdomain}_socialboost`): `users`, `sessions`, `password_reset_tokens`, `facebook_settings`, `ai_settings`
+- **Tenant DB** (`{subdomain}_socialboost`): `users`, `sessions`, `password_reset_tokens`, `facebook_settings`, `ai_settings`, `conversations`, `messages`
 - **Users table does NOT exist in landlord DB** — never `User::count()` from central routes
 - **Registration**: `Tenant::create()` → auto DB + migrate → user in tenant DB → redirect to `{subdomain}.smm.test`
 - **Tenant custom attributes** in `data` JSON column — query: `where('data->status', 'active')`, NOT `where('status', 'active')`
@@ -43,10 +43,15 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 ### AI Integration
 
 - **Groq API** (Llama 3.3 70B) for auto-reply on Facebook Messenger
+- **Gemini API** (Gemini 2.5 Flash) for image analysis
 - **`AiSystemPrompt`** — landlord-level table (`ai_system_prompts`), global default prompt with `{company_name}` placeholder
+- **`AiImagePrompt`** — landlord-level table (`ai_image_prompts`), Gemini image analysis prompt (editable from admin panel)
 - **`AiSetting`** — tenant-level table (`ai_settings`), per-user `api_key` and optional `system_prompt`
-- **`AiChatService`** (`app/Services/`) — Groq API wrapper, 15s timeout, handles 429 rate limiting
+- **`AiChatService`** (`app/Services/`) — Groq API wrapper, 15s timeout, handles 429 rate limiting, key rotation
+- **`GeminiApiService`** (`app/Services/`) — Gemini API wrapper for image analysis/generation, 60s timeout
+- **`GeminiKeyManager`** (`app/Services/`) — Round-robin key rotation with Cache-based rate limiting
 - **`SendAiReplyJob`** — queued on `facebook` queue, 3 tries, 45s backoff, `WithoutOverlapping` per tenant+sender. Sends typing indicators during AI processing
+- **`ProcessImageBatch`** — Batch image analysis via Gemini API
 - **Queue**: Redis, queue name `facebook`, Horizon supervisor (1-10 processes, 256MB memory)
 
 ### Facebook Integration
@@ -58,6 +63,8 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 - **Multi-tenant webhook**: `FacebookWebhookController` iterates ALL tenants to find matching `page_id` (O(n), won't scale well)
 - **Ngrok URL check**: `wget -qO- http://127.0.0.1:4040/api/tunnels`
 - **Facebook App ID**: `703674879507719`, permissions: `pages_show_list`, `pages_messaging`, `pages_read_engagement`
+- **Duplicate message handling**: Checks `facebook_mid` before saving incoming messages
+- **Sender name fetching**: Uses Facebook Graph API to fetch sender's first_name + last_name
 
 ### Docker
 
@@ -89,7 +96,7 @@ docker exec laravel-app php artisan <command>
 - **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/admin/layouts/app.blade.php` (admin)
 - **Menu config**: `config/menu.php` — add admin sidebar menu groups here
 - **Tenancy config**: `config/tenancy.php` — central domains, DB suffix, tenant model
-- **Services config**: `config/services.php` — Facebook OAuth + Groq model
+- **Services config**: `config/services.php` — Facebook OAuth + Groq + Gemini model
 - **Landlord migrations**: `database/migrations/`
 - **Tenant migrations**: `database/migrations/tenant/`
 
@@ -102,8 +109,22 @@ Visiting these routes throws `ViewNotFoundException`.
 
 ## Database
 
-### Tenant DB extra tables
-- `ai_settings` — id, user_id (FK), api_key (hidden), system_prompt (nullable)
+### Landlord DB Tables
+1. `tenants` — id (string PK), data (JSON), timestamps
+2. `domains` — id, domain, tenant_id (FK), timestamps
+3. `admins` — id, name, email, password, role, timestamps
+4. `admin_user_permissions` — id, admin_id (FK), menu_slug, permission, timestamps
+5. `ai_system_prompts` — id, prompt_text, timestamps
+6. `ai_image_prompts` — id, prompt_text, timestamps
+7. `cache`, `jobs`, `sessions` — Standard Laravel tables
+
+### Tenant DB Tables
+1. `users` — id, name, email, phone, company, password, timestamps
+2. `facebook_settings` — id, user_id (FK), app_id, app_secret, verify_token, page_id, page_access_token, ai_auto_reply_enabled, timestamps
+3. `ai_settings` — id, user_id (FK), api_key, type, is_active, priority, timestamps
+4. `conversations` — id, sender_id, sender_name, status, last_message_at, timestamps
+5. `messages` — id, facebook_mid, conversation_id (FK), direction, type, content, image_path, image_analysis, timestamps
+6. `password_reset_tokens`, `sessions` — Standard Laravel tables
 
 ### Seeder
 - `AdminSeeder` creates `admin@socialboost.com` / `Admin@123456`, role `super_admin` (idempotent via `updateOrCreate`)

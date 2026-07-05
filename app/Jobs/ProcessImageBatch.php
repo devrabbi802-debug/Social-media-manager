@@ -3,8 +3,10 @@
 namespace App\Jobs;
 
 use App\Models\AiSetting;
+use App\Models\AiImagePrompt;
 use App\Services\GeminiApiService;
 use App\Services\GeminiKeyManager;
+use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -15,7 +17,7 @@ use Illuminate\Support\Facades\Log;
 
 class ProcessImageBatch implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
 
@@ -27,7 +29,7 @@ class ProcessImageBatch implements ShouldQueue
         public string $userId,
         public string $imageUrl,
         public int $imageIndex,
-        public string $batchId,
+        public string $trackingId,
     ) {
         $this->onQueue('facebook');
     }
@@ -42,11 +44,11 @@ class ProcessImageBatch implements ShouldQueue
         Log::error('ProcessImageBatch failed permanently', [
             'user_id' => $this->userId,
             'image_index' => $this->imageIndex,
-            'batch_id' => $this->batchId,
+            'batch_id' => $this->trackingId,
             'error' => $exception->getMessage(),
         ]);
 
-        cache()->push("batch_{$this->batchId}_errors", [
+        cache()->push("batch_{$this->trackingId}_errors", [
             'index' => $this->imageIndex,
             'error' => $exception->getMessage(),
         ]);
@@ -75,7 +77,7 @@ class ProcessImageBatch implements ShouldQueue
 
         $geminiService = new GeminiApiService($key->api_key);
 
-        $prompt = 'তুমি একটি প্রোডাক্ট ইমেজ বিশ্লেষণ করছো। নিচের নিয়মগুলো কঠোরভাবে মেনে চলো: ১) ইমেজের উপর থাকা ads, banner, watermark, text overlay, price tag, discount sticker, বা যেকোনো UI element সম্পর্কে কিছু লিখবে না। ২) শুধুমাত্র মূল প্রোডাক্টটি বর্ণনা করো — প্রোডাক্টের ধরন, রঙ, ডিজাইন, ম্যাটেরিয়াল, আনুমানিক সাইজ। ৩) প্রোডাক্ট ছাড়া অন্য কিছু (মানুষ, গাড়ি, রুম, প্রকৃতি) দেখতে পারলে তা বর্ণনা করো। ৪) ১৫০ শব্দের বেশি না লিখে সংক্ষেপে লেখো।';
+        $prompt = AiImagePrompt::getActive()->prompt_text;
 
         try {
             $description = $geminiService->analyzeImage($imageData, $prompt);
@@ -85,7 +87,7 @@ class ProcessImageBatch implements ShouldQueue
                     $description = mb_substr($description, 0, 800) . '...';
                 }
 
-                cache()->push("batch_{$this->batchId}_results", [
+                cache()->push("batch_{$this->trackingId}_results", [
                     'index' => $this->imageIndex,
                     'description' => $description,
                     'url' => $this->imageUrl,
@@ -94,7 +96,7 @@ class ProcessImageBatch implements ShouldQueue
                 Log::info('Image analysis done', [
                     'user_id' => $this->userId,
                     'image_index' => $this->imageIndex,
-                    'batch_id' => $this->batchId,
+                    'batch_id' => $this->trackingId,
                     'description_length' => strlen($description),
                 ]);
 
@@ -134,20 +136,20 @@ class ProcessImageBatch implements ShouldQueue
 
     private function checkBatchCompletion(): void
     {
-        $results = cache()->get("batch_{$this->batchId}_results", []);
-        $errors = cache()->get("batch_{$this->batchId}_errors", []);
-        $totalExpected = cache()->get("batch_{$this->batchId}_total", 0);
+        $results = cache()->get("batch_{$this->trackingId}_results", []);
+        $errors = cache()->get("batch_{$this->trackingId}_errors", []);
+        $totalExpected = cache()->get("batch_{$this->trackingId}_total", 0);
 
         $completed = count($results) + count($errors);
 
         if ($completed >= $totalExpected) {
             Log::info('Batch completed', [
-                'batch_id' => $this->batchId,
+                'batch_id' => $this->trackingId,
                 'successful' => count($results),
                 'failed' => count($errors),
             ]);
 
-            cache()->put("batch_{$this->batchId}_done", true, 300);
+            cache()->put("batch_{$this->trackingId}_done", true, 300);
         }
     }
 }

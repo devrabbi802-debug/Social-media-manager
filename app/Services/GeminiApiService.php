@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use App\Models\AiImagePrompt;
 
 class GeminiApiService
 {
@@ -21,7 +22,7 @@ class GeminiApiService
     {
         try {
             $parts = [
-                ['text' => $systemPrompt ?? 'তুমি একজন পেশাদার সেলস ম্যানেজার এবং কাস্টমার সাপোর্ট এজেন্ট। বাংলায় উত্তর দাও।'],
+                ['text' => $systemPrompt ?? AiImagePrompt::getActive()->prompt_text],
                 [
                     'inlineData' => [
                         'mimeType' => 'image/jpeg',

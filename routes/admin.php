@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\TenantController;
 use App\Http\Controllers\Admin\AiSystemPromptController;
+use App\Http\Controllers\Admin\AiImagePromptController;
 
 Route::middleware(['web'])->group(function () {
 
@@ -71,6 +72,10 @@ Route::middleware(['web'])->group(function () {
         // AI System Prompt
         Route::get('/ai-system-prompt', [AiSystemPromptController::class, 'index'])->name('admin.ai-prompt.index');
         Route::put('/ai-system-prompt', [AiSystemPromptController::class, 'update'])->name('admin.ai-prompt.update');
+
+        // AI Image Prompt
+        Route::get('/ai-image-prompt', [AiImagePromptController::class, 'index'])->name('admin.ai-image-prompt.index');
+        Route::put('/ai-image-prompt', [AiImagePromptController::class, 'update'])->name('admin.ai-image-prompt.update');
 
     });
 

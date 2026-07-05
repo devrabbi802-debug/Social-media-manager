@@ -22,6 +22,7 @@ class AiChatService
     public function chatWithHistory(string $message, $keys, array $history = []): ?string
     {
         $lastException = null;
+        $allRateLimited = true;
 
         foreach ($keys as $key) {
             try {
@@ -31,12 +32,18 @@ class AiChatService
                     return $result;
                 }
 
+                $allRateLimited = false;
+
                 Log::warning('AI key returned null, trying next key', [
                     'key_label' => $key->label,
                     'key_id' => $key->id,
                 ]);
             } catch (\Exception $e) {
                 $lastException = $e;
+
+                if (! str_contains($e->getMessage(), '429')) {
+                    $allRateLimited = false;
+                }
 
                 Log::warning('AI key failed, trying next key', [
                     'key_label' => $key->label,
@@ -50,6 +57,10 @@ class AiChatService
             'keys_tried' => count($keys),
             'last_error' => $lastException?->getMessage(),
         ]);
+
+        if ($allRateLimited && $lastException) {
+            throw $lastException;
+        }
 
         return null;
     }
@@ -84,6 +95,8 @@ class AiChatService
             ]);
 
             if ($response->status() === 429) {
+                $retryAfter = (int) $response->header('Retry-After', 30);
+                Log::warning('Groq 429 rate limited', ['retry_after' => $retryAfter]);
                 throw new \Exception('AI API rate limited (429)');
             }
 
