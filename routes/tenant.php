@@ -62,7 +62,27 @@ Route::middleware([
     // Dashboard Routes (authenticated users only)
     Route::middleware(['auth'])->group(function () {
         Route::get('/dashboard', function () {
-            return view('dashboard.index');
+            $user = auth()->user();
+            $facebookSetting = \App\Models\FacebookSetting::where('user_id', $user->id)->first();
+
+            $todayMessages = \App\Models\Message::whereDate('created_at', today())->count();
+            $totalConversations = \App\Models\Conversation::count();
+            $totalMessages = \App\Models\Message::count();
+            $aiReplies = \App\Models\Message::where('direction', 'outgoing')->count();
+
+            $recentConversations = \App\Models\Conversation::with('latestMessage')
+                ->orderBy('last_message_at', 'desc')
+                ->limit(5)
+                ->get();
+
+            return view('dashboard.index', compact(
+                'facebookSetting',
+                'todayMessages',
+                'totalConversations',
+                'totalMessages',
+                'aiReplies',
+                'recentConversations'
+            ));
         })->name('dashboard');
 
         Route::get('/settings', function () {

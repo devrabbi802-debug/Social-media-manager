@@ -36,9 +36,8 @@
             <div class="bg-white rounded-2xl p-6 shadow-sm card-hover">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-500">মোট লিড</p>
-                        <p class="text-3xl font-bold text-gray-900">১২৪</p>
-                        <p class="text-sm text-green-600 mt-1">+১২% গত মাস থেকে</p>
+                        <p class="text-sm text-gray-500">মোট কথোপকথন</p>
+                        <p class="text-3xl font-bold text-gray-900">{{ $totalConversations }}</p>
                     </div>
                     <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
                         <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -52,8 +51,7 @@
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-sm text-gray-500">AI রিপ্লাই</p>
-                        <p class="text-3xl font-bold text-gray-900">৪৫৬</p>
-                        <p class="text-sm text-green-600 mt-1">+২৫% গত মাস থেকে</p>
+                        <p class="text-3xl font-bold text-gray-900">{{ $aiReplies }}</p>
                     </div>
                     <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
                         <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -66,13 +64,12 @@
             <div class="bg-white rounded-2xl p-6 shadow-sm card-hover">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-500">অর্ডার</p>
-                        <p class="text-3xl font-bold text-gray-900">৮৯</p>
-                        <p class="text-sm text-green-600 mt-1">+১৮% গত মাস থেকে</p>
+                        <p class="text-sm text-gray-500">মোট মেসেজ</p>
+                        <p class="text-3xl font-bold text-gray-900">{{ $totalMessages }}</p>
                     </div>
                     <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
                         <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
                         </svg>
                     </div>
                 </div>
@@ -81,13 +78,12 @@
             <div class="bg-white rounded-2xl p-6 shadow-sm card-hover">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-500">ইনভেন্টরি</p>
-                        <p class="text-3xl font-bold text-gray-900">৩২</p>
-                        <p class="text-sm text-orange-600 mt-1">৫টি স্টক কম</p>
+                        <p class="text-sm text-gray-500">আজকের মেসেজ</p>
+                        <p class="text-3xl font-bold text-gray-900">{{ $todayMessages }}</p>
                     </div>
                     <div class="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
                         <svg class="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                     </div>
                 </div>
@@ -101,25 +97,27 @@
                 <div class="bg-white rounded-2xl p-6 shadow-sm">
                     <h2 class="text-lg font-bold text-gray-900 mb-4">প্ল্যাটফর্ম ইন্টিগ্রেশন</h2>
                     <div class="grid md:grid-cols-2 gap-4">
-                        <div class="border border-gray-200 rounded-xl p-4">
+                        {{-- WhatsApp (coming soon) --}}
+                        <div class="border border-gray-200 rounded-xl p-4 relative overflow-hidden">
+                            <div class="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-0.5 rounded-bl-lg">শীঘ্রই</div>
                             <div class="flex items-center justify-between mb-3">
                                 <div class="flex items-center">
-                                    <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
+                                    <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3 opacity-50">
                                         <svg class="w-6 h-6 text-green-600" viewBox="0 0 24 24" fill="currentColor">
                                             <path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.832-1.438A9.955 9.955 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2z"/>
                                         </svg>
                                     </div>
                                     <div>
                                         <h3 class="font-semibold text-gray-900">WhatsApp</h3>
-                                        <p class="text-sm text-green-600">সংযুক্ত</p>
+                                        <p class="text-sm text-yellow-600">শীঘ্রই আসছে</p>
                                     </div>
                                 </div>
-                                <span class="w-3 h-3 bg-green-500 rounded-full"></span>
+                                <span class="w-3 h-3 bg-yellow-400 rounded-full"></span>
                             </div>
-                            <p class="text-sm text-gray-500">নম্বর: +880 1XXXXXXXXX</p>
-                            <p class="text-sm text-gray-500">আজকের মেসেজ: ২৪টি</p>
+                            <p class="text-sm text-gray-500">WhatsApp Business API শীঘ্রই যুক্ত হবে</p>
                         </div>
 
+                        {{-- Facebook --}}
                         <div class="border border-gray-200 rounded-xl p-4">
                             <div class="flex items-center justify-between mb-3">
                                 <div class="flex items-center">
@@ -130,13 +128,31 @@
                                     </div>
                                     <div>
                                         <h3 class="font-semibold text-gray-900">Facebook</h3>
-                                        <p class="text-sm text-green-600">সংযুক্ত</p>
+                                        @if($facebookSetting)
+                                            <p class="text-sm text-green-600">সংযুক্ত</p>
+                                        @else
+                                            <p class="text-sm text-gray-500">অসংযুক্ত</p>
+                                        @endif
                                     </div>
                                 </div>
-                                <span class="w-3 h-3 bg-green-500 rounded-full"></span>
+                                @if($facebookSetting)
+                                    <span class="w-3 h-3 bg-green-500 rounded-full"></span>
+                                @else
+                                    <span class="w-3 h-3 bg-gray-300 rounded-full"></span>
+                                @endif
                             </div>
-                            <p class="text-sm text-gray-500">পেজ: My Business Page</p>
-                            <p class="text-sm text-gray-500">আজকের মেসেজ: ১৮টি</p>
+                            @if($facebookSetting)
+                                <p class="text-sm text-gray-500">পেজ ID: {{ \Illuminate\Support\Str::limit($facebookSetting->page_id, 20) }}</p>
+                                <p class="text-sm text-gray-500">আজকের মেসেজ: {{ $todayMessages }}টি</p>
+                                @if($facebookSetting->ai_auto_reply_enabled)
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 mt-2">AI অটো রিপ্লাই চালু</span>
+                                @endif
+                            @else
+                                <p class="text-sm text-gray-500">Facebook সংযুক্ত করুন</p>
+                                <a href="{{ url('/integration') }}" class="inline-flex items-center mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium">
+                                    সংযুক্ত করুন →
+                                </a>
+                            @endif
                         </div>
                     </div>
                 </div>
@@ -145,70 +161,67 @@
                 <div class="bg-white rounded-2xl p-6 shadow-sm">
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-lg font-bold text-gray-900">সাম্প্রতিক লিড</h2>
-                        <a href="{{ url('/leads') }}" class="text-purple-600 hover:text-purple-700 text-sm font-medium">সব দেখুন</a>
+                        <a href="{{ route('conversations') }}" class="text-purple-600 hover:text-purple-700 text-sm font-medium">সব দেখুন</a>
                     </div>
                     <div class="overflow-x-auto">
+                        @if($recentConversations->count())
                         <table class="w-full">
                             <thead>
                                 <tr class="text-left text-sm text-gray-500 border-b">
                                     <th class="pb-3 font-medium">নাম</th>
                                     <th class="pb-3 font-medium">প্ল্যাটফর্ম</th>
-                                    <th class="pb-3 font-medium">মেসেজ</th>
+                                    <th class="pb-3 font-medium">শেষ মেসেজ</th>
                                     <th class="pb-3 font-medium">সময়</th>
                                     <th class="pb-3 font-medium">স্ট্যাটাস</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y">
-                                <tr>
+                                @foreach($recentConversations as $conversation)
+                                <tr class="hover:bg-gray-50 cursor-pointer" onclick="window.location='{{ route('conversations.show', $conversation) }}'">
                                     <td class="py-3">
                                         <div class="flex items-center">
-                                            <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 font-bold text-sm">র</div>
-                                            <span class="ml-3 font-medium text-gray-900">রাকিব হাসান</span>
-                                        </div>
-                                    </td>
-                                    <td class="py-3">
-                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">WhatsApp</span>
-                                    </td>
-                                    <td class="py-3 text-gray-600 text-sm">"পণ্যের দাম কত?"</td>
-                                    <td class="py-3 text-gray-500 text-sm">২ মিনিট আগে</td>
-                                    <td class="py-3">
-                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">নতুন</span>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="py-3">
-                                        <div class="flex items-center">
-                                            <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-sm">স</div>
-                                            <span class="ml-3 font-medium text-gray-900">সাবরিনা আক্তার</span>
+                                            <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 font-bold text-sm">
+                                                {{ mb_substr($conversation->sender_name ?? $conversation->sender_id, 0, 1) }}
+                                            </div>
+                                            <span class="ml-3 font-medium text-gray-900">{{ $conversation->sender_name ?? 'ID: '.$conversation->sender_id }}</span>
                                         </div>
                                     </td>
                                     <td class="py-3">
                                         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Facebook</span>
                                     </td>
-                                    <td class="py-3 text-gray-600 text-sm">"অর্ডার কিভাবে করব?"</td>
-                                    <td class="py-3 text-gray-500 text-sm">৫ মিনিট আগে</td>
+                                    <td class="py-3 text-gray-600 text-sm">
+                                        @if($conversation->latestMessage)
+                                            {{ Str::limit($conversation->latestMessage->content, 40) }}
+                                        @else
+                                            —
+                                        @endif
+                                    </td>
+                                    <td class="py-3 text-gray-500 text-sm">
+                                        @if($conversation->last_message_at)
+                                            {{ $conversation->last_message_at->diffForHumans() }}
+                                        @endif
+                                    </td>
                                     <td class="py-3">
-                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">সম্পন্ন</span>
+                                        @if($conversation->status === 'open')
+                                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">খোলা</span>
+                                        @elseif($conversation->status === 'closed')
+                                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">বন্ধ</span>
+                                        @else
+                                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">চলমান</span>
+                                        @endif
                                     </td>
                                 </tr>
-                                <tr>
-                                    <td class="py-3">
-                                        <div class="flex items-center">
-                                            <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center text-green-600 font-bold text-sm">ক</div>
-                                            <span class="ml-3 font-medium text-gray-900">কামরুজ্জামান</span>
-                                        </div>
-                                    </td>
-                                    <td class="py-3">
-                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">WhatsApp</span>
-                                    </td>
-                                    <td class="py-3 text-gray-600 text-sm">"ডেলিভারি চার্জ কত?"</td>
-                                    <td class="py-3 text-gray-500 text-sm">১০ মিনিট আগে</td>
-                                    <td class="py-3">
-                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">চলমান</span>
-                                    </td>
-                                </tr>
+                                @endforeach
                             </tbody>
                         </table>
+                        @else
+                        <div class="text-center py-8">
+                            <svg class="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                            </svg>
+                            <p class="text-gray-500 text-sm">কোনো লিড নেই</p>
+                        </div>
+                        @endif
                     </div>
                 </div>
 
