@@ -229,7 +229,7 @@
                 <div class="bg-white rounded-2xl p-6 shadow-sm">
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-lg font-bold text-gray-900">ইনভেন্টরি স্ট্যাটাস</h2>
-                        <a href="{{ url('/inventory') }}" class="text-purple-600 hover:text-purple-700 text-sm font-medium">সব দেখুন</a>
+                        <a href="{{ route('inventory.index') }}" class="text-purple-600 hover:text-purple-700 text-sm font-medium">সব দেখুন</a>
                     </div>
                     <div class="space-y-4">
                         <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
@@ -334,7 +334,7 @@
                             </div>
                         </a>
 
-                        <a href="{{ url('/inventory/add') }}" class="flex items-center p-3 bg-orange-50 rounded-xl hover:bg-orange-100 transition">
+                        <a href="{{ route('inventory.products.create') }}" class="flex items-center p-3 bg-orange-50 rounded-xl hover:bg-orange-100 transition">
                             <div class="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
                                 <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>

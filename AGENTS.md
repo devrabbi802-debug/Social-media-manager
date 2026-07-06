@@ -27,7 +27,7 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 ### Multi-Tenancy (Database-per-Tenant)
 
 - **Landlord DB** (`socialboost`): `tenants`, `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `cache`, `jobs`, `sessions`
-- **Tenant DB** (`{subdomain}_socialboost`): `users`, `sessions`, `password_reset_tokens`, `facebook_settings`, `ai_settings`, `conversations`, `messages`
+- **Tenant DB** (`{subdomain}_socialboost`): `users`, `sessions`, `password_reset_tokens`, `facebook_settings`, `ai_settings`, `conversations`, `messages`, `categories`, `attribute_templates`, `brands`, `products`, `product_attribute_values`, `product_variants`, `product_images`, `warehouses`, `stock_movements`, `inventory_alerts`
 - **Users table does NOT exist in landlord DB** — never `User::count()` from central routes
 - **Registration**: `Tenant::create()` → auto DB + migrate → user in tenant DB → redirect to `{subdomain}.smm.test`
 - **Tenant custom attributes** in `data` JSON column — query: `where('data->status', 'active')`, NOT `where('status', 'active')`
@@ -52,6 +52,7 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 - **`GeminiKeyManager`** (`app/Services/`) — Round-robin key rotation with Cache-based rate limiting
 - **`SendAiReplyJob`** — queued on `facebook` queue, 3 tries, 45s backoff, `WithoutOverlapping` per tenant+sender. Sends typing indicators during AI processing
 - **`ProcessImageBatch`** — Batch image analysis via Gemini API
+- **`AnalyzeProductImageJob`** — Product image analysis via Gemini API, queued on `facebook` queue, stores analysis in `product_images.image_analysis` JSON column
 - **Queue**: Redis, queue name `facebook`, Horizon supervisor (1-10 processes, 256MB memory)
 
 ### Facebook Integration
@@ -91,7 +92,7 @@ docker exec laravel-app php artisan <command>
 ## Key Paths
 
 - **Public views**: `resources/views/` (welcome, features, pricing, about, contact, auth)
-- **Dashboard views**: `resources/views/dashboard/` — only `index`, `integration`, `facebook-settings`, `facebook-select-page`, `ai-setup` exist
+- **Dashboard views**: `resources/views/dashboard/` — `index`, `integration`, `facebook-settings`, `facebook-select-page`, `ai-setup`, `products/` (CRUD+show), `categories/` (CRUD), `brands/` (CRUD), `warehouses/` (CRUD), `inventory/` (index+movements+alerts), `attribute-templates/` (CRUD)
 - **Admin views**: `resources/views/admin/` (auth, dashboard, users CRUD, tenants CRUD, ai-system-prompt)
 - **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/admin/layouts/app.blade.php` (admin)
 - **Menu config**: `config/menu.php` — add admin sidebar menu groups here
@@ -103,7 +104,7 @@ docker exec laravel-app php artisan <command>
 ## Missing Views (routes exist, views don't)
 
 These views are referenced in `routes/web.php` and `routes/tenant.php` but **do not exist on disk**:
-`dashboard.settings`, `dashboard.leads`, `dashboard.reports`, `dashboard.whatsapp`, `dashboard.inventory`, `dashboard.inventory-add`, `dashboard.facebook`
+`dashboard.settings`, `dashboard.leads`, `dashboard.reports`, `dashboard.whatsapp`, `dashboard.facebook`
 
 Visiting these routes throws `ViewNotFoundException`.
 
@@ -124,7 +125,17 @@ Visiting these routes throws `ViewNotFoundException`.
 3. `ai_settings` — id, user_id (FK), api_key, type, is_active, priority, timestamps
 4. `conversations` — id, sender_id, sender_name, status, last_message_at, timestamps
 5. `messages` — id, facebook_mid, conversation_id (FK), direction, type, content, image_path, image_analysis, timestamps
-6. `password_reset_tokens`, `sessions` — Standard Laravel tables
+6. `categories` — id, parent_id (self-FK nullable), name, slug, description, image, sort_order, is_active, timestamps
+7. `attribute_templates` — id, category_id (FK), name, slug, type (text/number/select/boolean/date), options (JSON), is_required, sort_order, timestamps
+8. `brands` — id, name, slug, logo, is_active, timestamps
+9. `products` — id, category_id (FK), brand_id (FK nullable), name, slug, sku, description, base_price, discount_price, stock_quantity, unit, barcode, status, is_featured, meta_title, meta_description, sort_order, timestamps
+10. `product_attribute_values` — id, product_id (FK), attribute_template_id (FK), value, timestamps (unique on product_id + attribute_template_id)
+11. `product_variants` — id, product_id (FK), sku, name, price, stock_quantity, attributes (JSON), barcode, is_active, timestamps
+12. `product_images` — id, product_id (FK), image_path, alt_text, sort_order, image_analysis (JSON), timestamps
+13. `warehouses` — id, name, address, phone, is_active, timestamps
+14. `stock_movements` — id, product_id (FK), variant_id (FK nullable), warehouse_id (FK), type (in/out/adjustment), quantity, reference, notes, created_by (FK nullable), timestamps
+15. `inventory_alerts` — id, product_id (FK unique), threshold, is_active, timestamps
+16. `password_reset_tokens`, `sessions` — Standard Laravel tables
 
 ### Seeder
 - `AdminSeeder` creates `admin@socialboost.com` / `Admin@123456`, role `super_admin` (idempotent via `updateOrCreate`)

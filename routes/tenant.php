@@ -10,6 +10,12 @@ use App\Http\Controllers\FacebookSettingController;
 use App\Http\Controllers\FacebookOAuthController;
 use App\Http\Controllers\AiSettingController;
 use App\Http\Controllers\ConversationController;
+use App\Http\Controllers\Dashboard\ProductController;
+use App\Http\Controllers\Dashboard\CategoryController;
+use App\Http\Controllers\Dashboard\BrandController;
+use App\Http\Controllers\Dashboard\AttributeTemplateController;
+use App\Http\Controllers\Dashboard\WarehouseController;
+use App\Http\Controllers\Dashboard\InventoryController;
 
 /*
 |--------------------------------------------------------------------------
@@ -69,8 +75,64 @@ Route::middleware([
         Route::get('/leads', [DashboardController::class, 'leads'])->name('leads');
         Route::get('/reports', [DashboardController::class, 'reports'])->name('reports');
         Route::get('/whatsapp/send', [DashboardController::class, 'whatsapp'])->name('whatsapp.send');
-        Route::get('/inventory', [DashboardController::class, 'inventory'])->name('inventory');
-        Route::get('/inventory/add', [DashboardController::class, 'inventoryAdd'])->name('inventory.add');
+        // Inventory Routes
+        Route::prefix('inventory')->name('inventory.')->group(function () {
+
+            // Products
+            Route::get('/products', [ProductController::class, 'index'])->name('products.index');
+            Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
+            Route::post('/products', [ProductController::class, 'store'])->name('products.store');
+            Route::get('/products/{product}', [ProductController::class, 'show'])->name('products.show');
+            Route::get('/products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
+            Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
+            Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
+            Route::get('/products/attributes', [ProductController::class, 'getAttributes'])->name('products.attributes');
+
+            // Categories
+            Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
+            Route::get('/categories/create', [CategoryController::class, 'create'])->name('categories.create');
+            Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');
+            Route::get('/categories/{category}/edit', [CategoryController::class, 'edit'])->name('categories.edit');
+            Route::put('/categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
+            Route::delete('/categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy');
+
+            // Brands
+            Route::get('/brands', [BrandController::class, 'index'])->name('brands.index');
+            Route::get('/brands/create', [BrandController::class, 'create'])->name('brands.create');
+            Route::post('/brands', [BrandController::class, 'store'])->name('brands.store');
+            Route::get('/brands/{brand}/edit', [BrandController::class, 'edit'])->name('brands.edit');
+            Route::put('/brands/{brand}', [BrandController::class, 'update'])->name('brands.update');
+            Route::delete('/brands/{brand}', [BrandController::class, 'destroy'])->name('brands.destroy');
+
+            // Attribute Templates
+            Route::get('/attributes', [AttributeTemplateController::class, 'index'])->name('attributes.index');
+            Route::get('/attributes/create', [AttributeTemplateController::class, 'create'])->name('attributes.create');
+            Route::post('/attributes', [AttributeTemplateController::class, 'store'])->name('attributes.store');
+            Route::get('/attributes/{attribute}/edit', [AttributeTemplateController::class, 'edit'])->name('attributes.edit');
+            Route::put('/attributes/{attribute}', [AttributeTemplateController::class, 'update'])->name('attributes.update');
+            Route::delete('/attributes/{attribute}', [AttributeTemplateController::class, 'destroy'])->name('attributes.destroy');
+
+            // Warehouses
+            Route::get('/warehouses', [WarehouseController::class, 'index'])->name('warehouses.index');
+            Route::get('/warehouses/create', [WarehouseController::class, 'create'])->name('warehouses.create');
+            Route::post('/warehouses', [WarehouseController::class, 'store'])->name('warehouses.store');
+            Route::get('/warehouses/{warehouse}/edit', [WarehouseController::class, 'edit'])->name('warehouses.edit');
+            Route::put('/warehouses/{warehouse}', [WarehouseController::class, 'update'])->name('warehouses.update');
+            Route::delete('/warehouses/{warehouse}', [WarehouseController::class, 'destroy'])->name('warehouses.destroy');
+
+            // Inventory Management
+            Route::get('/', [InventoryController::class, 'index'])->name('index');
+            Route::get('/movements', [InventoryController::class, 'movements'])->name('movements');
+            Route::post('/stock-in', [InventoryController::class, 'stockIn'])->name('stock-in');
+            Route::post('/stock-out', [InventoryController::class, 'stock-out'])->name('stock-out');
+            Route::post('/adjust-stock', [InventoryController::class, 'adjustStock'])->name('adjust-stock');
+
+            // Alerts
+            Route::get('/alerts', [InventoryController::class, 'alerts'])->name('alerts');
+            Route::post('/alerts', [InventoryController::class, 'storeAlert'])->name('alerts.store');
+            Route::put('/alerts/{alert}', [InventoryController::class, 'updateAlert'])->name('alerts.update');
+            Route::delete('/alerts/{alert}', [InventoryController::class, 'destroyAlert'])->name('alerts.destroy');
+        });
 
         // AI Setup
         Route::get('/ai-setup', [AiSettingController::class, 'index'])->name('ai.setup');
