@@ -20,7 +20,15 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">লোগো</label>
-                    <input type="file" name="logo" accept="image/*" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                    <div id="image-dropzone" class="relative border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-all duration-200">
+                        <input type="file" name="logo" accept="image/*" class="hidden" id="image-input">
+                        <svg class="mx-auto h-10 w-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <p class="mt-2 text-sm text-gray-600">ড্র্যাগ করুন অথবা <span class="text-purple-600 font-medium">ক্লিক করে সিলেক্ট করুন</span></p>
+                        <p class="mt-1 text-xs text-gray-400">PNG, JPG, WEBP (সর্বোচ্চ ৫MB)</p>
+                    </div>
+                    <div id="image-preview" class="mt-3"></div>
                 </div>
                 <div class="flex items-center">
                     <input type="hidden" name="is_active" value="0">
@@ -35,4 +43,50 @@
         </form>
     </div>
 </div>
+
+@push('scripts')
+<script>
+const imageDropzone = document.getElementById('image-dropzone');
+const imageInput = document.getElementById('image-input');
+const imagePreview = document.getElementById('image-preview');
+
+imageDropzone.addEventListener('click', () => imageInput.click());
+
+imageDropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    imageDropzone.classList.add('border-purple-500', 'bg-purple-50');
+});
+
+imageDropzone.addEventListener('dragleave', () => {
+    imageDropzone.classList.remove('border-purple-500', 'bg-purple-50');
+});
+
+imageDropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    imageDropzone.classList.remove('border-purple-500', 'bg-purple-50');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+        imageInput.files = e.dataTransfer.files;
+        showPreview(file);
+    }
+});
+
+imageInput.addEventListener('change', (e) => {
+    if (e.target.files[0]) showPreview(e.target.files[0]);
+});
+
+function showPreview(file) {
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+        imagePreview.innerHTML = `<div class="relative inline-block"><img src="${ev.target.result}" class="w-20 h-20 object-cover rounded-lg"><button type="button" onclick="clearImage()" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">✕</button></div>`;
+    };
+    reader.readAsDataURL(file);
+}
+
+function clearImage() {
+    imageInput.value = '';
+    imagePreview.innerHTML = '';
+}
+</script>
+@endpush
 @endsection

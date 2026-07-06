@@ -18,7 +18,9 @@
 /public/fonts-manifest.dev.json
 /public/hot
 /public/storage
-/storage/*.key
+/storage/app/public/*
+!/storage/app/public/.gitignore
+/storage/tenant*/
 /storage/pail
 /vendor
 _ide_helper.php
