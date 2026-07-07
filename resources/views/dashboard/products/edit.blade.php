@@ -186,6 +186,7 @@
                                 @foreach($existingOptions as $opt)
                                     <th class="px-3 py-2 font-medium text-left border">{{ $opt->name }}</th>
                                 @endforeach
+                                <th class="px-3 py-2 font-medium text-left border">ইমেজ</th>
                                 <th class="px-3 py-2 font-medium text-left border">SKU</th>
                                 <th class="px-3 py-2 font-medium text-left border">মূল্য</th>
                                 <th class="px-3 py-2 font-medium text-left border">স্টক</th>
@@ -194,7 +195,7 @@
                         </thead>
                         <tbody class="divide-y">
                             @foreach($product->variants as $variant)
-                            <tr class="hover:bg-gray-50">
+                            <tr class="hover:bg-gray-50" id="variant-row-{{ $variant->id }}">
                                 @foreach($existingOptions as $opt)
                                     <td class="px-3 py-2 border">
                                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
@@ -202,15 +203,30 @@
                                         </span>
                                     </td>
                                 @endforeach
+                                <td class="px-3 py-2 border">
+                                    <div class="flex flex-wrap gap-1" id="variant-images-{{ $variant->id }}">
+                                        @foreach($variant->images->sortBy('sort_order') as $img)
+                                            <div class="relative group" id="variant-img-{{ $img->id }}">
+                                                <img src="{{ asset('storage/' . $img->image_path) }}" class="w-10 h-10 object-cover rounded-lg">
+                                                <button type="button" onclick="toggleDeleteVariantImage({{ $variant->id }}, {{ $img->id }})"
+                                                    class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition hover:bg-red-700"
+                                                    id="delete-btn-{{ $img->id }}">✕</button>
+                                            </div>
+                                        @endforeach
+                                        <div id="delete-inputs-{{ $variant->id }}"></div>
+                                    </div>
+                                    <label class="mt-1 inline-flex items-center px-2 py-1 bg-gray-100 rounded-lg text-xs text-gray-600 hover:bg-gray-200 cursor-pointer transition">
+                                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                                        ইমেজ
+                                        <input type="file" name="variant_images[{{ $variant->id }}][]" multiple accept="image/*" class="hidden" onchange="previewVariantImages(this, {{ $variant->id }})">
+                                    </label>
+                                </td>
                                 <td class="px-3 py-2 border font-mono text-xs">{{ $variant->sku }}</td>
                                 <td class="px-3 py-2 border">৳{{ number_format($variant->effective_price, 2) }}</td>
                                 <td class="px-3 py-2 border">{{ $variant->stock_quantity }}</td>
                                 <td class="px-3 py-2 border">
                                     <div class="flex items-center space-x-2">
-                                        <form action="{{ route('inventory.products.variants.destroy', [$product, $variant]) }}" method="POST" class="inline" onsubmit="return confirm('এই ভ্যারিয়েন্ট ডিলিট করতে চান?')">
-                                            @csrf @method('DELETE')
-                                            <button type="submit" class="text-red-600 hover:text-red-800 text-xs font-medium">ডিলিট</button>
-                                        </form>
+                                        <button type="button" onclick="deleteVariant({{ $product->id }}, {{ $variant->id }})" class="text-red-600 hover:text-red-800 text-xs font-medium">ডিলিট</button>
                                     </div>
                                 </td>
                             </tr>
@@ -218,6 +234,7 @@
                         </tbody>
                     </table>
                 </div>
+                <p class="text-xs text-gray-500 mt-3">ইমেজ আপলোড করতে "+" বাটনে ক্লিক করুন। ডিলিট করতে ইমেজের উপর ✕ ক্লিক করুন। পরিবর্তন সেভ করতে পেজের শেষে যান।</p>
             </div>
             @endif
 
@@ -327,6 +344,26 @@
 
 @push('scripts')
 <script>
+function deleteVariant(productId, variantId) {
+    if (!confirm('এই ভ্যারিয়েন্ট ডিলিট করতে চান?')) return;
+
+    fetch(`/inventory/products/${productId}/variants/${variantId}`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'Accept': 'application/json',
+        },
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('variant-row-' + variantId)?.remove();
+            alert(data.message || 'ডিলিট হয়েছে!');
+        }
+    })
+    .catch(err => alert('Error: ' + err.message));
+}
+
 let optionIndex = 100;
 const existingOptions = @json($existingOptions->map(fn($o) => ['name' => $o->name, 'values' => $o->options ?? []])->values());
 
@@ -447,6 +484,7 @@ function generateMatrix() {
     options.forEach(opt => {
         headerHtml += `<th class="px-3 py-2 font-medium text-left border">${opt.name}</th>`;
     });
+    headerHtml += '<th class="px-3 py-2 font-medium text-left border">ইমেজ</th>';
     headerHtml += '<th class="px-3 py-2 font-medium text-left border">SKU</th>';
     headerHtml += '<th class="px-3 py-2 font-medium text-left border">মূল্য (৳)</th>';
     headerHtml += '<th class="px-3 py-2 font-medium text-left border">স্টক *</th>';
@@ -464,6 +502,7 @@ function generateMatrix() {
         combo.forEach((val, j) => {
             bodyHtml += `<td class="px-3 py-2 border"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">${val}</span><input type="hidden" name="variants[${i}][attributes][${options[j].name}]" value="${val}"></td>`;
         });
+        bodyHtml += `<td class="px-3 py-2 border"><label class="inline-flex items-center px-2 py-1 bg-gray-100 rounded-lg text-xs text-gray-600 hover:bg-gray-200 cursor-pointer transition"><svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>ইমেজ<input type="file" name="variants[${i}][images][]" multiple accept="image/*" class="hidden" onchange="previewMatrixImage(this, ${i})"></label><div id="matrix-img-preview-${i}" class="flex flex-wrap gap-1 mt-1"></div></td>`;
         bodyHtml += `<td class="px-3 py-2 border"><input type="text" name="variants[${i}][sku]" value="${autoSku}" required class="w-full border border-gray-200 rounded px-2 py-1 text-xs font-mono focus:ring-1 focus:ring-purple-500"></td>`;
         bodyHtml += `<td class="px-3 py-2 border"><input type="number" name="variants[${i}][price]" value="${basePrice}" step="0.01" min="0" class="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-purple-500"></td>`;
         bodyHtml += `<td class="px-3 py-2 border"><input type="number" name="variants[${i}][stock_quantity]" value="0" min="0" required class="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-purple-500"></td>`;
@@ -472,6 +511,23 @@ function generateMatrix() {
     });
     matrixBody.innerHTML = bodyHtml;
     matrixSection.classList.remove('hidden');
+}
+
+function previewMatrixImage(input, variantIndex) {
+    const container = document.getElementById('matrix-img-preview-' + variantIndex);
+    container.innerHTML = '';
+    const files = input.files;
+
+    for (let i = 0; i < files.length; i++) {
+        const reader = new FileReader();
+        reader.onload = function(ev) {
+            const img = document.createElement('img');
+            img.src = ev.target.result;
+            img.className = 'w-8 h-8 object-cover rounded border border-green-400';
+            container.appendChild(img);
+        };
+        reader.readAsDataURL(files[i]);
+    }
 }
 
 function getCombinations(options) {
@@ -496,6 +552,53 @@ imageDropzone.addEventListener('dragover', (e) => { e.preventDefault(); imageDro
 imageDropzone.addEventListener('dragleave', () => imageDropzone.classList.remove('border-purple-500', 'bg-purple-50'));
 imageDropzone.addEventListener('drop', (e) => { e.preventDefault(); imageDropzone.classList.remove('border-purple-500', 'bg-purple-50'); addFiles(Array.from(e.target.files || e.dataTransfer.files).filter(f => f.type.startsWith('image/'))); });
 imageInput.addEventListener('change', (e) => addFiles(Array.from(e.target.files)));
+
+const deleteVariantImages = {};
+
+function toggleDeleteVariantImage(variantId, imageId) {
+    const btn = document.getElementById('delete-btn-' + imageId);
+    const imgContainer = document.getElementById('variant-img-' + imageId);
+    const inputsContainer = document.getElementById('delete-inputs-' + variantId);
+
+    if (!deleteVariantImages[variantId]) deleteVariantImages[variantId] = [];
+
+    const idx = deleteVariantImages[variantId].indexOf(imageId);
+    if (idx === -1) {
+        deleteVariantImages[variantId].push(imageId);
+        btn.classList.add('bg-red-700', 'ring-2', 'ring-red-400');
+        imgContainer.querySelector('img').classList.add('opacity-40', 'ring-2', 'ring-red-500');
+    } else {
+        deleteVariantImages[variantId].splice(idx, 1);
+        btn.classList.remove('bg-red-700', 'ring-2', 'ring-red-400');
+        imgContainer.querySelector('img').classList.remove('opacity-40', 'ring-2', 'ring-red-500');
+    }
+
+    // Recreate hidden inputs
+    inputsContainer.innerHTML = '';
+    deleteVariantImages[variantId].forEach(id => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'delete_variant_images[' + variantId + '][]';
+        input.value = id;
+        inputsContainer.appendChild(input);
+    });
+}
+
+function previewVariantImages(input, variantId) {
+    const container = document.getElementById('variant-images-' + variantId);
+    const files = input.files;
+
+    for (let i = 0; i < files.length; i++) {
+        const reader = new FileReader();
+        reader.onload = function(ev) {
+            const div = document.createElement('div');
+            div.className = 'relative group';
+            div.innerHTML = `<img src="${ev.target.result}" class="w-10 h-10 object-cover rounded-lg border-2 border-green-400" title="নতুন ইমেজ">`;
+            container.appendChild(div);
+        };
+        reader.readAsDataURL(files[i]);
+    }
+}
 
 function addFiles(files) {
     files.forEach(file => { if (!selectedFiles.find(f => f.name === file.name && f.size === file.size)) selectedFiles.push(file); });

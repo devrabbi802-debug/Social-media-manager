@@ -42,6 +42,12 @@ class ProductVariant extends Model
         return $this->hasMany(VariantAttributeValue::class, 'variant_id');
     }
 
+    // Variant images
+    public function images(): HasMany
+    {
+        return $this->hasMany(VariantImage::class, 'variant_id');
+    }
+
     public function getEffectivePriceAttribute(): float
     {
         return $this->price ?? $this->product->base_price;

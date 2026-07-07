@@ -199,6 +199,7 @@
                         <table class="w-full text-sm">
                             <thead>
                                 <tr class="bg-gray-50 text-left text-gray-500">
+                                    <th class="px-4 py-2 font-medium">ইমেজ</th>
                                     <th class="px-4 py-2 font-medium">নাম</th>
                                     <th class="px-4 py-2 font-medium">SKU</th>
                                     <th class="px-4 py-2 font-medium">মূল্য</th>
@@ -210,6 +211,20 @@
                             <tbody class="divide-y">
                                 @foreach($product->variants as $variant)
                                 <tr>
+                                    <td class="px-4 py-2">
+                                        @if($variant->images->count())
+                                            <div class="flex gap-1">
+                                                @foreach($variant->images->sortBy('sort_order')->take(3) as $img)
+                                                    <img src="{{ asset('storage/' . $img->image_path) }}" class="w-10 h-10 object-cover rounded-lg border">
+                                                @endforeach
+                                                @if($variant->images->count() > 3)
+                                                    <span class="w-10 h-10 flex items-center justify-center bg-gray-100 rounded-lg text-xs text-gray-500">+{{ $variant->images->count() - 3 }}</span>
+                                                @endif
+                                            </div>
+                                        @else
+                                            <span class="text-gray-400 text-xs">ছবি নেই</span>
+                                        @endif
+                                    </td>
                                     <td class="px-4 py-2 font-medium">{{ $variant->name ?? '-' }}</td>
                                     <td class="px-4 py-2 font-mono text-xs">{{ $variant->sku }}</td>
                                     <td class="px-4 py-2">৳{{ number_format($variant->effective_price, 2) }}</td>
@@ -221,10 +236,7 @@
                                     </td>
                                     <td class="px-4 py-2">
                                         <div class="flex items-center space-x-2">
-                                            <form action="{{ route('inventory.products.variants.destroy', [$product, $variant]) }}" method="POST" class="inline" onsubmit="return confirm('এই ভ্যারিয়েন্ট ডিলিট করতে চান?')">
-                                                @csrf @method('DELETE')
-                                                <button type="submit" class="text-red-600 hover:text-red-800 text-xs font-medium">ডিলিট</button>
-                                            </form>
+                                            <button type="button" onclick="deleteVariant({{ $product->id }}, {{ $variant->id }})" class="text-red-600 hover:text-red-800 text-xs font-medium">ডিলিট</button>
                                         </div>
                                     </td>
                                 </tr>
@@ -328,6 +340,44 @@
                 </div>
                 @endif
 
+                {{-- AI Variant Image Analysis --}}
+                @php
+                    $variantImagesWithAnalysis = collect();
+                    foreach($product->variants as $variant) {
+                        foreach($variant->images->where('image_analysis', '!=', null) as $img) {
+                            $variantImagesWithAnalysis->push($img);
+                        }
+                    }
+                @endphp
+                @if($variantImagesWithAnalysis->count())
+                <div class="bg-white rounded-2xl p-6 shadow-sm">
+                    <h2 class="text-lg font-bold text-gray-900 mb-4">AI ভ্যারিয়েন্ট ইমেজ বিশ্লেষণ</h2>
+                    <div class="space-y-4">
+                        @foreach($variantImagesWithAnalysis as $image)
+                        <div class="border border-gray-200 rounded-xl p-3">
+                            <div class="flex items-center gap-2 mb-2">
+                                <img src="{{ asset('storage/' . $image->image_path) }}" class="w-16 h-16 object-cover rounded-lg">
+                                <div>
+                                    <span class="text-xs font-medium text-purple-600">{{ $image->variant->sku ?? '-' }}</span>
+                                    <p class="text-xs text-gray-500">{{ $image->variant->display ?? '' }}</p>
+                                </div>
+                            </div>
+                            <div class="space-y-1">
+                                @foreach($image->image_analysis as $key => $value)
+                                    @if($value)
+                                    <div class="flex justify-between text-xs">
+                                        <span class="text-gray-500">{{ ucfirst(str_replace('_', ' ', $key)) }}</span>
+                                        <span class="text-gray-900">{{ $value }}</span>
+                                    </div>
+                                    @endif
+                                @endforeach
+                            </div>
+                        </div>
+                        @endforeach
+                    </div>
+                </div>
+                @endif
+
                 {{-- Info --}}
                 <div class="bg-white rounded-2xl p-6 shadow-sm">
                     <h2 class="text-lg font-bold text-gray-900 mb-4">তথ্য</h2>
@@ -354,6 +404,23 @@
 
 @push('scripts')
 <script>
-// Variant modal removed - edit from edit page
+function deleteVariant(productId, variantId) {
+    if (!confirm('এই ভ্যারিয়েন্ট ডিলিট করতে চান?')) return;
+
+    fetch(`/inventory/products/${productId}/variants/${variantId}`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'Accept': 'application/json',
+        },
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        }
+    })
+    .catch(err => alert('Error: ' + err.message));
+}
 </script>
 @endpush

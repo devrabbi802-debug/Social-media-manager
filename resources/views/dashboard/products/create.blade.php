@@ -376,6 +376,7 @@ function generateMatrix() {
     options.forEach(opt => {
         headerHtml += `<th class="px-3 py-2 font-medium text-left border">${opt.name}</th>`;
     });
+    headerHtml += '<th class="px-3 py-2 font-medium text-left border">ইমেজ</th>';
     headerHtml += '<th class="px-3 py-2 font-medium text-left border">SKU</th>';
     headerHtml += '<th class="px-3 py-2 font-medium text-left border">মূল্য (৳)</th>';
     headerHtml += '<th class="px-3 py-2 font-medium text-left border">স্টক *</th>';
@@ -399,6 +400,7 @@ function generateMatrix() {
                 <input type="hidden" name="variants[${i}][attributes][${options[j].name}]" value="${val}">
             </td>`;
         });
+        bodyHtml += `<td class="px-3 py-2 border"><label class="inline-flex items-center px-2 py-1 bg-gray-100 rounded-lg text-xs text-gray-600 hover:bg-gray-200 cursor-pointer transition"><svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>ইমেজ<input type="file" name="variants[${i}][images][]" multiple accept="image/*" class="hidden" onchange="previewMatrixImage(this, ${i})"></label><div id="matrix-img-preview-${i}" class="flex flex-wrap gap-1 mt-1"></div></td>`;
         bodyHtml += `<td class="px-3 py-2 border"><input type="text" name="variants[${i}][sku]" value="${autoSku}" required class="w-full border border-gray-200 rounded px-2 py-1 text-xs font-mono focus:ring-1 focus:ring-purple-500"></td>`;
         bodyHtml += `<td class="px-3 py-2 border"><input type="number" name="variants[${i}][price]" value="${basePrice}" step="0.01" min="0" class="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-purple-500"></td>`;
         bodyHtml += `<td class="px-3 py-2 border"><input type="number" name="variants[${i}][stock_quantity]" value="0" min="0" required class="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-purple-500"></td>`;
@@ -407,6 +409,23 @@ function generateMatrix() {
     });
     matrixBody.innerHTML = bodyHtml;
     matrixSection.classList.remove('hidden');
+}
+
+function previewMatrixImage(input, variantIndex) {
+    const container = document.getElementById('matrix-img-preview-' + variantIndex);
+    container.innerHTML = '';
+    const files = input.files;
+
+    for (let i = 0; i < files.length; i++) {
+        const reader = new FileReader();
+        reader.onload = function(ev) {
+            const img = document.createElement('img');
+            img.src = ev.target.result;
+            img.className = 'w-8 h-8 object-cover rounded border border-green-400';
+            container.appendChild(img);
+        };
+        reader.readAsDataURL(files[i]);
+    }
 }
 
 function getCombinations(options) {

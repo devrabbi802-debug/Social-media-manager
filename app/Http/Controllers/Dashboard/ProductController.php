@@ -11,6 +11,7 @@ use App\Models\ProductAttributeValue;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Jobs\AnalyzeProductImageJob;
+use App\Jobs\AnalyzeVariantImageJob;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
@@ -87,6 +88,8 @@ class ProductController extends Controller
             'variants.*.price' => 'nullable|numeric|min:0',
             'variants.*.stock_quantity' => 'required_with:variants|integer|min:0',
             'variants.*.barcode' => 'nullable|string|max:255',
+            'variants.*.images' => 'nullable|array',
+            'variants.*.images.*' => 'image|max:5120',
             'variants.*.attributes' => 'nullable|array',
         ]);
 
@@ -186,6 +189,22 @@ class ProductController extends Controller
                         }
                     }
                 }
+
+                // Handle variant images from matrix
+                if (!empty($variantData['images'])) {
+                    foreach ($variantData['images'] as $index => $imageFile) {
+                        if ($imageFile instanceof \Illuminate\Http\UploadedFile) {
+                            $imagePath = $imageFile->store('variants', 'public');
+                            $variantImage = \App\Models\VariantImage::create([
+                                'variant_id' => $variant->id,
+                                'image_path' => $imagePath,
+                                'sort_order' => $index,
+                            ]);
+
+                            \App\Jobs\AnalyzeVariantImageJob::dispatch($variantImage, auth()->id());
+                        }
+                    }
+                }
             }
             $product->update(['stock_quantity' => $totalVariantStock]);
         }
@@ -209,20 +228,35 @@ class ProductController extends Controller
 
     public function show(Product $product)
     {
-        $product->load(['category', 'brand', 'attributeValues.attributeTemplate', 'variants.product', 'images', 'inventoryAlert', 'stockMovements.warehouse']);
+        $product->load(['category', 'brand', 'attributeValues.attributeTemplate', 'variants.images', 'images', 'inventoryAlert', 'stockMovements.warehouse']);
 
         return view('dashboard.products.show', compact('product'));
     }
 
     public function edit(Product $product)
     {
-        $product->load(['attributeValues.attributeTemplate', 'images', 'variants.attributeValues.attributeTemplate']);
+        $product->load(['attributeValues.attributeTemplate', 'images', 'variants.attributeValues.attributeTemplate', 'variants.images']);
         $categories = Category::where('is_active', true)
             ->with('children')
             ->orderBy('name')
             ->get();
         $brands = Brand::where('is_active', true)->orderBy('name')->get();
+
+        // Shudhu sei attribute templates dekhao jei ei product er variants e actually use hoy
+        $productOptionNames = $product->variants->flatMap(function ($variant) {
+            return is_array($variant->attributes) ? array_keys($variant->attributes) : [];
+        })->unique()->values()->all();
+
         $attributeTemplates = AttributeTemplate::forCategory($product->category_id)
+            ->where(function ($q) use ($productOptionNames) {
+                // Variant options: shudhu jei gulo ei product er variants e ache
+                $q->where(function ($q2) use ($productOptionNames) {
+                    $q2->where('is_variant_option', true)
+                       ->whereIn('name', $productOptionNames);
+                });
+                // Non-variant attributes (product-level): shob show koro
+                $q->orWhere('is_variant_option', false);
+            })
             ->orderBy('is_global', 'desc')
             ->orderBy('sort_order')
             ->get();
@@ -252,6 +286,10 @@ class ProductController extends Controller
             'images.*' => 'image|max:5120',
             'attribute.*' => 'nullable|string',
             'delete_images' => 'nullable|array',
+            'delete_variant_images' => 'nullable|array',
+            'variant_images' => 'nullable|array',
+            'variant_images.*' => 'nullable|array',
+            'variant_images.*.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
         ]);
 
         $validated['is_featured'] = $request->boolean('is_featured');
@@ -283,6 +321,7 @@ class ProductController extends Controller
             }
         }
 
+        // Delete product images
         if ($request->filled('delete_images')) {
             foreach ($request->delete_images as $imageId) {
                 $image = ProductImage::find($imageId);
@@ -293,6 +332,7 @@ class ProductController extends Controller
             }
         }
 
+        // Add new product images
         if ($request->hasFile('images')) {
             $maxSort = $product->images()->max('sort_order') ?? 0;
             foreach ($request->file('images') as $index => $imageFile) {
@@ -304,6 +344,45 @@ class ProductController extends Controller
                 ]);
 
                 AnalyzeProductImageJob::dispatch($productImage, auth()->id());
+            }
+        }
+
+        // Handle variant images delete
+        if ($request->filled('delete_variant_images')) {
+            foreach ($request->delete_variant_images as $variantId => $imageIds) {
+                $variant = $product->variants()->find($variantId);
+                if ($variant) {
+                    foreach ($imageIds as $imageId) {
+                        $img = $variant->images()->find($imageId);
+                        if ($img) {
+                            \Storage::disk('public')->delete($img->image_path);
+                            $img->delete();
+                        }
+                    }
+                }
+            }
+        }
+
+        // Handle variant images upload (file() use because filled() input bag check kore, not files bag)
+        $variantImageFiles = $request->file('variant_images', []);
+        if (!empty($variantImageFiles)) {
+            foreach ($variantImageFiles as $variantId => $files) {
+                $variant = $product->variants()->find($variantId);
+                if ($variant && !empty($files)) {
+                    $existingCount = $variant->images()->count();
+                    foreach ($files as $index => $imageFile) {
+                        if ($imageFile instanceof \Illuminate\Http\UploadedFile) {
+                            $imagePath = $imageFile->store('variants', 'public');
+                            $variantImage = \App\Models\VariantImage::create([
+                                'variant_id' => $variant->id,
+                                'image_path' => $imagePath,
+                                'sort_order' => $existingCount + $index,
+                            ]);
+
+                            \App\Jobs\AnalyzeVariantImageJob::dispatch($variantImage, auth()->id());
+                        }
+                    }
+                }
             }
         }
 
@@ -375,6 +454,8 @@ class ProductController extends Controller
             'stock_quantity' => 'required|integer|min:0',
             'attributes' => 'required|array',
             'barcode' => 'nullable|string|max:255',
+            'images' => 'nullable|array',
+            'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
         ]);
 
         $variant = ProductVariant::create(array_merge($validated, [
@@ -382,13 +463,27 @@ class ProductController extends Controller
             'is_active' => true,
         ]));
 
+        // Handle variant images
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $index => $imageFile) {
+                $imagePath = $imageFile->store('variants', 'public');
+                $variantImage = \App\Models\VariantImage::create([
+                    'variant_id' => $variant->id,
+                    'image_path' => $imagePath,
+                    'sort_order' => $index,
+                ]);
+
+                \App\Jobs\AnalyzeVariantImageJob::dispatch($variantImage, auth()->id());
+            }
+        }
+
         $product->recalculateStock();
 
         if ($request->ajax()) {
             return response()->json([
                 'success' => true,
                 'message' => 'ভ্যারিয়েন্ট যোগ হয়েছে!',
-                'variant' => $variant,
+                'variant' => $variant->load('images'),
             ]);
         }
 
@@ -403,12 +498,44 @@ class ProductController extends Controller
             'name' => 'nullable|string|max:255',
             'price' => 'nullable|numeric|min:0',
             'stock_quantity' => 'required|integer|min:0',
-            'attributes' => 'required|array',
+            'attributes' => 'nullable|array',
             'barcode' => 'nullable|string|max:255',
             'is_active' => 'boolean',
+            'images' => 'nullable|array',
+            'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'delete_variant_images' => 'nullable|array',
         ]);
 
+        // Delete selected images
+        if (!empty($validated['delete_variant_images'])) {
+            foreach ($validated['delete_variant_images'] as $imageIds) {
+                if (is_array($imageIds)) {
+                    $imagesToDelete = $variant->images()->whereIn('id', $imageIds)->get();
+                    foreach ($imagesToDelete as $img) {
+                        \Storage::disk('public')->delete($img->image_path);
+                        $img->delete();
+                    }
+                }
+            }
+        }
+        unset($validated['delete_variant_images']);
+
         $variant->update($validated);
+
+        // Handle new variant images
+        if ($request->hasFile('images')) {
+            $existingCount = $variant->images()->count();
+            foreach ($request->file('images') as $index => $imageFile) {
+                $imagePath = $imageFile->store('variants', 'public');
+                $variantImage = \App\Models\VariantImage::create([
+                    'variant_id' => $variant->id,
+                    'image_path' => $imagePath,
+                    'sort_order' => $existingCount + $index,
+                ]);
+
+                \App\Jobs\AnalyzeVariantImageJob::dispatch($variantImage, auth()->id());
+            }
+        }
 
         $product->recalculateStock();
 
@@ -416,7 +543,7 @@ class ProductController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'ভ্যারিয়েন্ট আপডেট হয়েছে!',
-                'variant' => $variant,
+                'variant' => $variant->load('images'),
             ]);
         }
 
@@ -426,6 +553,11 @@ class ProductController extends Controller
 
     public function destroyVariant(Request $request, Product $product, ProductVariant $variant)
     {
+        // Delete variant images from storage
+        foreach ($variant->images as $image) {
+            \Storage::disk('public')->delete($image->image_path);
+        }
+
         $variant->delete();
 
         $product->recalculateStock();
