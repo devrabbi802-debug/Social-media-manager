@@ -208,8 +208,13 @@
                     <h2 class="text-lg font-bold text-gray-900 mb-4">কাস্টম অ্যাট্রিবিউট</h2>
                     <div class="space-y-3">
                         @foreach($product->attributeValues as $attrValue)
-                        <div class="flex justify-between">
-                            <span class="text-gray-600">{{ $attrValue->attributeTemplate->name }}</span>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">
+                                {{ $attrValue->attributeTemplate->name }}
+                                @if($attrValue->attributeTemplate->is_global)
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 ml-1">গ্লোবাল</span>
+                                @endif
+                            </span>
                             <span class="font-medium text-gray-900">{{ $attrValue->value }}</span>
                         </div>
                         @endforeach

@@ -15,10 +15,19 @@ class AttributeTemplateController extends Controller
         $query = AttributeTemplate::with('category');
 
         if ($request->filled('category_id')) {
-            $query->where('category_id', $request->category_id);
+            $query->forCategory($request->category_id);
         }
 
-        $attributes = $query->orderBy('category_id')->orderBy('sort_order')->orderBy('name')->paginate(30);
+        if ($request->boolean('global_only')) {
+            $query->global();
+        }
+
+        $attributes = $query->orderBy('is_global', 'desc')
+            ->orderBy('category_id')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->paginate(30);
+
         $categories = Category::whereNull('parent_id')->orderBy('name')->get();
 
         return view('dashboard.attribute-templates.index', compact('attributes', 'categories'));
@@ -34,17 +43,25 @@ class AttributeTemplateController extends Controller
 
     public function store(Request $request)
     {
+        $isGlobal = $request->boolean('is_global');
+
         $validated = $request->validate([
-            'category_id' => 'required|exists:categories,id',
+            'category_id' => $isGlobal ? 'nullable' : 'required|exists:categories,id',
             'name' => 'required|string|max:255',
             'type' => 'required|in:text,number,select,boolean,date',
             'options' => 'nullable|string',
             'is_required' => 'boolean',
+            'is_global' => 'boolean',
             'sort_order' => 'nullable|integer|min:0',
         ]);
 
         $validated['slug'] = Str::slug($validated['name']);
         $validated['is_required'] = $request->boolean('is_required');
+        $validated['is_global'] = $isGlobal;
+
+        if ($isGlobal) {
+            $validated['category_id'] = null;
+        }
 
         if ($validated['type'] === 'select' && !empty($validated['options'])) {
             $validated['options'] = array_map('trim', explode(',', $validated['options']));
@@ -55,7 +72,7 @@ class AttributeTemplateController extends Controller
         AttributeTemplate::create($validated);
 
         return redirect()->route('inventory.attributes.index')
-            ->with('success', 'অ্যাট্রিবিউট টেমপ্লেট তৈরি হয়েছে!');
+            ->with('success', $isGlobal ? 'গ্লোবাল অ্যাট্রিবিউট তৈরি হয়েছে!' : 'অ্যাট্রিবিউট টেমপ্লেট তৈরি হয়েছে!');
     }
 
     public function edit(AttributeTemplate $attribute)
@@ -68,17 +85,25 @@ class AttributeTemplateController extends Controller
 
     public function update(Request $request, AttributeTemplate $attribute)
     {
+        $isGlobal = $request->boolean('is_global');
+
         $validated = $request->validate([
-            'category_id' => 'required|exists:categories,id',
+            'category_id' => $isGlobal ? 'nullable' : 'required|exists:categories,id',
             'name' => 'required|string|max:255',
             'type' => 'required|in:text,number,select,boolean,date',
             'options' => 'nullable|string',
             'is_required' => 'boolean',
+            'is_global' => 'boolean',
             'sort_order' => 'nullable|integer|min:0',
         ]);
 
         $validated['slug'] = Str::slug($validated['name']);
         $validated['is_required'] = $request->boolean('is_required');
+        $validated['is_global'] = $isGlobal;
+
+        if ($isGlobal) {
+            $validated['category_id'] = null;
+        }
 
         if ($validated['type'] === 'select' && !empty($validated['options'])) {
             $validated['options'] = array_map('trim', explode(',', $validated['options']));
@@ -89,7 +114,7 @@ class AttributeTemplateController extends Controller
         $attribute->update($validated);
 
         return redirect()->route('inventory.attributes.index')
-            ->with('success', 'অ্যাট্রিবিউট টেমপ্লেট আপডেট হয়েছে!');
+            ->with('success', $isGlobal ? 'গ্লোবাল অ্যাট্রিবিউট আপডেট হয়েছে!' : 'অ্যাট্রিবিউট টেমপ্লেট আপডেট হয়েছে!');
     }
 
     public function destroy(AttributeTemplate $attribute)

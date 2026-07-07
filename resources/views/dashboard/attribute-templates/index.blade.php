@@ -35,13 +35,19 @@
         </div>
 
         <div class="bg-white rounded-2xl p-6 shadow-sm mb-6">
-            <form method="GET" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                     <select name="category_id" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
                         <option value="">সব ক্যাটাগরি</option>
                         @foreach($categories as $cat)
                             <option value="{{ $cat->id }}" {{ request('category_id') == $cat->id ? 'selected' : '' }}>{{ $cat->name }}</option>
                         @endforeach
+                    </select>
+                </div>
+                <div>
+                    <select name="global_only" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                        <option value="">সব অ্যাট্রিবিউট</option>
+                        <option value="1" {{ request('global_only') == '1' ? 'selected' : '' }}>শুধু গ্লোবাল</option>
                     </select>
                 </div>
                 <div class="flex items-center">
@@ -64,9 +70,14 @@
                 </thead>
                 <tbody class="divide-y">
                     @forelse($attributes as $attr)
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-6 py-4 font-medium text-gray-900">{{ $attr->name }}</td>
-                        <td class="px-6 py-4 text-sm text-gray-600">{{ $attr->category->name }}</td>
+                    <tr class="hover:bg-gray-50 {{ $attr->is_global ? 'bg-purple-50/50' : '' }}">
+                        <td class="px-6 py-4 font-medium text-gray-900">
+                            {{ $attr->name }}
+                            @if($attr->is_global)
+                                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">গ্লোবাল</span>
+                            @endif
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-600">{{ $attr->display_category_name }}</td>
                         <td class="px-6 py-4">
                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">{{ $attr->type }}</span>
                         </td>

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -16,12 +17,14 @@ class AttributeTemplate extends Model
         'type',
         'options',
         'is_required',
+        'is_global',
         'sort_order',
     ];
 
     protected $casts = [
         'options' => 'array',
         'is_required' => 'boolean',
+        'is_global' => 'boolean',
     ];
 
     protected static function booted(): void
@@ -42,6 +45,30 @@ class AttributeTemplate extends Model
     {
         return $this->hasMany(ProductAttributeValue::class, 'attribute_template_id');
     }
+
+    // --- Scopes ---
+
+    public function scopeGlobal(Builder $query): Builder
+    {
+        return $query->where('is_global', true);
+    }
+
+    public function scopeForCategory(Builder $query, ?int $categoryId): Builder
+    {
+        return $query->where(function (Builder $q) use ($categoryId) {
+            $q->where('is_global', true)
+              ->orWhere('category_id', $categoryId);
+        });
+    }
+
+    // --- Accessors ---
+
+    public function getDisplayCategoryNameAttribute(): string
+    {
+        return $this->is_global ? 'সব ক্যাটাগরি (Global)' : ($this->category?->name ?? '-');
+    }
+
+    // --- Type Checks ---
 
     public function isSelect(): bool
     {

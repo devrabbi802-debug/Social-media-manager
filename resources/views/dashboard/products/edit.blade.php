@@ -116,34 +116,85 @@
             {{-- Dynamic Attributes --}}
             <div class="bg-white rounded-2xl p-6 shadow-sm" id="attributes-section" @if(!$attributeTemplates->count()) style="display: none;" @endif>
                 <h2 class="text-lg font-bold text-gray-900 mb-4">কাস্টম অ্যাট্রিবিউট</h2>
-                <div id="attributes-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    @foreach($attributeTemplates as $attr)
-                        @php $val = $product->attributeValues->where('attribute_template_id', $attr->id)->first(); @endphp
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $attr->name }} {{ $attr->is_required ? '*' : '' }}</label>
-                            @if($attr->type === 'select')
-                                <select name="attribute[{{ $attr->id }}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                                    <option value="">নির্বাচন করুন</option>
-                                    @foreach($attr->options ?? [] as $opt)
-                                        <option value="{{ $opt }}" {{ $val && $val->value === $opt ? 'selected' : '' }}>{{ $opt }}</option>
-                                    @endforeach
-                                </select>
-                            @elseif($attr->type === 'boolean')
-                                <select name="attribute[{{ $attr->id }}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                                    <option value="">নির্বাচন করুন</option>
-                                    <option value="1" {{ $val && $val->value == '1' ? 'selected' : '' }}>হ্যাঁ</option>
-                                    <option value="0" {{ $val && $val->value == '0' ? 'selected' : '' }}>না</option>
-                                </select>
-                            @elseif($attr->type === 'date')
-                                <input type="date" name="attribute[{{ $attr->id }}]" value="{{ old('attribute.'.$attr->id, $val->value ?? '') }}" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                            @elseif($attr->type === 'number')
-                                <input type="number" name="attribute[{{ $attr->id }}]" value="{{ old('attribute.'.$attr->id, $val->value ?? '') }}" step="any" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                            @else
-                                <input type="text" name="attribute[{{ $attr->id }}]" value="{{ old('attribute.'.$attr->id, $val->value ?? '') }}" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                            @endif
-                        </div>
-                    @endforeach
+
+                @php
+                    $globalAttrs = $attributeTemplates->where('is_global', true);
+                    $categoryAttrs = $attributeTemplates->where('is_global', false);
+                @endphp
+
+                @if($globalAttrs->count())
+                <div class="mb-4">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">গ্লোবাল</span>
+                        <span class="text-xs text-gray-500">সব ক্যাটাগরিতে প্রযোজ্য</span>
+                    </div>
+                    <div id="global-attrs-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        @foreach($globalAttrs as $attr)
+                            @php $val = $product->attributeValues->where('attribute_template_id', $attr->id)->first(); @endphp
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $attr->name }} {{ $attr->is_required ? '*' : '' }}</label>
+                                @if($attr->type === 'select')
+                                    <select name="attribute[{{ $attr->id }}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                                        <option value="">নির্বাচন করুন</option>
+                                        @foreach($attr->options ?? [] as $opt)
+                                            <option value="{{ $opt }}" {{ $val && $val->value === $opt ? 'selected' : '' }}>{{ $opt }}</option>
+                                        @endforeach
+                                    </select>
+                                @elseif($attr->type === 'boolean')
+                                    <select name="attribute[{{ $attr->id }}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                                        <option value="">নির্বাচন করুন</option>
+                                        <option value="1" {{ $val && $val->value == '1' ? 'selected' : '' }}>হ্যাঁ</option>
+                                        <option value="0" {{ $val && $val->value == '0' ? 'selected' : '' }}>না</option>
+                                    </select>
+                                @elseif($attr->type === 'date')
+                                    <input type="date" name="attribute[{{ $attr->id }}]" value="{{ old('attribute.'.$attr->id, $val->value ?? '') }}" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                                @elseif($attr->type === 'number')
+                                    <input type="number" name="attribute[{{ $attr->id }}]" value="{{ old('attribute.'.$attr->id, $val->value ?? '') }}" step="any" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                                @else
+                                    <input type="text" name="attribute[{{ $attr->id }}]" value="{{ old('attribute.'.$attr->id, $val->value ?? '') }}" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
                 </div>
+                @endif
+
+                @if($categoryAttrs->count())
+                <div>
+                    <div class="flex items-center space-x-2 mb-2">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">ক্যাটাগরি</span>
+                        <span class="text-xs text-gray-500">এই ক্যাটাগরির জন্য নির্দিষ্ট</span>
+                    </div>
+                    <div id="category-attrs-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        @foreach($categoryAttrs as $attr)
+                            @php $val = $product->attributeValues->where('attribute_template_id', $attr->id)->first(); @endphp
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $attr->name }} {{ $attr->is_required ? '*' : '' }}</label>
+                                @if($attr->type === 'select')
+                                    <select name="attribute[{{ $attr->id }}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                                        <option value="">নির্বাচন করুন</option>
+                                        @foreach($attr->options ?? [] as $opt)
+                                            <option value="{{ $opt }}" {{ $val && $val->value === $opt ? 'selected' : '' }}>{{ $opt }}</option>
+                                        @endforeach
+                                    </select>
+                                @elseif($attr->type === 'boolean')
+                                    <select name="attribute[{{ $attr->id }}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                                        <option value="">নির্বাচন করুন</option>
+                                        <option value="1" {{ $val && $val->value == '1' ? 'selected' : '' }}>হ্যাঁ</option>
+                                        <option value="0" {{ $val && $val->value == '0' ? 'selected' : '' }}>না</option>
+                                    </select>
+                                @elseif($attr->type === 'date')
+                                    <input type="date" name="attribute[{{ $attr->id }}]" value="{{ old('attribute.'.$attr->id, $val->value ?? '') }}" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                                @elseif($attr->type === 'number')
+                                    <input type="number" name="attribute[{{ $attr->id }}]" value="{{ old('attribute.'.$attr->id, $val->value ?? '') }}" step="any" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                                @else
+                                    <input type="text" name="attribute[{{ $attr->id }}]" value="{{ old('attribute.'.$attr->id, $val->value ?? '') }}" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+                @endif
             </div>
 
             {{-- Variants --}}
@@ -301,26 +352,60 @@ document.getElementById('category_id').addEventListener('change', function() {
         .then(r => r.json())
         .then(attributes => {
             const section = document.getElementById('attributes-section');
-            const container = document.getElementById('attributes-container');
-            if (!attributes.length) { section.style.display = 'none'; return; }
+            const globalContainer = document.getElementById('global-attrs-grid');
+            const categoryContainer = document.getElementById('category-attrs-grid');
+            const globalSection = document.getElementById('global-attributes-container');
+            const categorySection = document.getElementById('category-attributes-container');
+
+            if (!attributes.length) {
+                section.style.display = 'none';
+                return;
+            }
+
             section.style.display = 'block';
-            container.innerHTML = attributes.map(attr => {
-                let input = '';
-                if (attr.type === 'select') {
-                    input = `<select name="attribute[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2"><option value="">নির্বাচন করুন</option>${(attr.options||[]).map(o=>`<option value="${o}">${o}</option>`).join('')}</select>`;
-                } else if (attr.type === 'boolean') {
-                    input = `<select name="attribute[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2"><option value="">নির্বাচন</option><option value="1">হ্যাঁ</option><option value="0">না</option></select>`;
-                } else if (attr.type === 'date') {
-                    input = `<input type="date" name="attribute[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2">`;
-                } else if (attr.type === 'number') {
-                    input = `<input type="number" name="attribute[${attr.id}]" step="any" class="w-full border border-gray-300 rounded-xl px-4 py-2">`;
-                } else {
-                    input = `<input type="text" name="attribute[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2">`;
-                }
-                return `<div><label class="block text-sm font-medium text-gray-700 mb-1">${attr.name}</label>${input}</div>`;
-            }).join('');
+            globalContainer.innerHTML = '';
+            categoryContainer.innerHTML = '';
+
+            const globalAttrs = attributes.filter(a => a.is_global);
+            const categoryAttrs = attributes.filter(a => !a.is_global);
+
+            if (globalAttrs.length > 0) {
+                globalSection.style.display = 'block';
+                globalAttrs.forEach(attr => {
+                    globalContainer.innerHTML += renderAttributeInput(attr, 'attribute');
+                });
+            } else {
+                globalSection.style.display = 'none';
+            }
+
+            if (categoryAttrs.length > 0) {
+                categorySection.style.display = 'block';
+                categoryAttrs.forEach(attr => {
+                    categoryContainer.innerHTML += renderAttributeInput(attr, 'attribute');
+                });
+            } else {
+                categorySection.style.display = 'none';
+            }
         });
 });
+
+function renderAttributeInput(attr, namePrefix) {
+    let input = '';
+    if (attr.type === 'select') {
+        const options = (attr.options || []).map(o => `<option value="${o}">${o}</option>`).join('');
+        input = `<select name="${namePrefix}[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500"><option value="">নির্বাচন করুন</option>${options}</select>`;
+    } else if (attr.type === 'boolean') {
+        input = `<select name="${namePrefix}[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500"><option value="">নির্বাচন করুন</option><option value="1">হ্যাঁ</option><option value="0">না</option></select>`;
+    } else if (attr.type === 'date') {
+        input = `<input type="date" name="${namePrefix}[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">`;
+    } else if (attr.type === 'number') {
+        input = `<input type="number" name="${namePrefix}[${attr.id}]" step="any" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">`;
+    } else {
+        input = `<input type="text" name="${namePrefix}[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">`;
+    }
+    const badge = attr.is_global ? '<span class="text-xs text-purple-500">গ্লোবাল</span>' : '';
+    return `<div><label class="block text-sm font-medium text-gray-700 mb-1">${attr.name} ${badge} ${attr.is_required ? '*' : ''}</label>${input}</div>`;
+}
 
 // Variant Modal
 const variantModal = document.getElementById('variant-modal');
@@ -381,6 +466,7 @@ function loadVariantAttributes(selectedAttributes = {}) {
             }
             variantAttributesFields.innerHTML = attributes.map(attr => {
                 const selectedVal = selectedAttributes[attr.slug] || '';
+                const badge = attr.is_global ? '<span class="text-xs text-purple-500">গ্লোবাল</span>' : '';
                 let input = '';
                 if (attr.type === 'select') {
                     const options = (attr.options || []).map(o =>
@@ -390,7 +476,7 @@ function loadVariantAttributes(selectedAttributes = {}) {
                 } else {
                     input = `<input type="text" name="attributes[${attr.slug}]" value="${selectedVal}" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">`;
                 }
-                return `<div><label class="block text-xs font-medium text-gray-600 mb-1">${attr.name}</label>${input}</div>`;
+                return `<div><label class="block text-xs font-medium text-gray-600 mb-1">${attr.name} ${badge}</label>${input}</div>`;
             }).join('');
         });
 }

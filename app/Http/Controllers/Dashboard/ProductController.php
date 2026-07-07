@@ -165,7 +165,8 @@ class ProductController extends Controller
         $product->load(['attributeValues.attributeTemplate', 'images', 'variants']);
         $categories = Category::where('is_active', true)->orderBy('name')->get();
         $brands = Brand::where('is_active', true)->orderBy('name')->get();
-        $attributeTemplates = AttributeTemplate::where('category_id', $product->category_id)
+        $attributeTemplates = AttributeTemplate::forCategory($product->category_id)
+            ->orderBy('is_global', 'desc')
             ->orderBy('sort_order')
             ->get();
 
@@ -265,7 +266,8 @@ class ProductController extends Controller
     public function getAttributes(Request $request)
     {
         $categoryId = $request->category_id;
-        $attributes = AttributeTemplate::where('category_id', $categoryId)
+        $attributes = AttributeTemplate::forCategory($categoryId)
+            ->orderBy('is_global', 'desc')
             ->orderBy('sort_order')
             ->get();
 

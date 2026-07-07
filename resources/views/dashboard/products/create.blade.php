@@ -123,7 +123,19 @@
             {{-- Dynamic Attributes --}}
             <div class="bg-white rounded-2xl p-6 shadow-sm" id="attributes-section" style="display: none;">
                 <h2 class="text-lg font-bold text-gray-900 mb-4">কাস্টম অ্যাট্রিবিউট</h2>
-                <div id="attributes-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div id="global-attributes-container" class="mb-4" style="display: none;">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">গ্লোবাল</span>
+                        <span class="text-xs text-gray-500">সব ক্যাটাগরিতে প্রযোজ্য</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="global-attrs-grid"></div>
+                </div>
+                <div id="category-attributes-container" style="display: none;">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">ক্যাটাগরি</span>
+                        <span class="text-xs text-gray-500">এই ক্যাটাগরির জন্য নির্দিষ্ট</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="category-attrs-grid"></div>
                 </div>
             </div>
 
@@ -215,6 +227,23 @@ function toggleVariantSection() {
     }
 }
 
+function renderAttributeInput(attr, namePrefix) {
+    let input = '';
+    if (attr.type === 'select') {
+        const options = (attr.options || []).map(o => `<option value="${o}">${o}</option>`).join('');
+        input = `<select name="${namePrefix}[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500"><option value="">নির্বাচন করুন</option>${options}</select>`;
+    } else if (attr.type === 'boolean') {
+        input = `<select name="${namePrefix}[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500"><option value="">নির্বাচন করুন</option><option value="1">হ্যাঁ</option><option value="0">না</option></select>`;
+    } else if (attr.type === 'date') {
+        input = `<input type="date" name="${namePrefix}[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">`;
+    } else if (attr.type === 'number') {
+        input = `<input type="number" name="${namePrefix}[${attr.id}]" step="any" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">`;
+    } else {
+        input = `<input type="text" name="${namePrefix}[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">`;
+    }
+    return `<div><label class="block text-sm font-medium text-gray-700 mb-1">${attr.name} ${attr.is_required ? '*' : ''}</label>${input}</div>`;
+}
+
 function addVariantRow() {
     variantIndex++;
     const container = document.getElementById('variant-rows');
@@ -295,50 +324,62 @@ function loadVariantAttributesForIndex(index) {
                 } else {
                     input = `<input type="text" name="variants[${index}][attributes][${attr.slug}]" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">`;
                 }
-                return `<div class="inline-block mr-2 mb-2"><label class="block text-xs text-gray-500 mb-0.5">${attr.name}</label>${input}</div>`;
+                const badge = attr.is_global ? '<span class="text-xs text-purple-500">গ্লোবাল</span>' : '';
+                return `<div class="inline-block mr-2 mb-2"><label class="block text-xs text-gray-500 mb-0.5">${attr.name} ${badge}</label>${input}</div>`;
             }).join('');
         });
 }
 
-// Category change -> reload all variant attribute dropdowns
+// Category change -> reload all attribute sections
 document.getElementById('category_id').addEventListener('change', function() {
     const categoryId = this.value;
     const section = document.getElementById('attributes-section');
-    const container = document.getElementById('attributes-container');
+    const globalContainer = document.getElementById('global-attrs-grid');
+    const categoryContainer = document.getElementById('category-attrs-grid');
+    const globalSection = document.getElementById('global-attributes-container');
+    const categorySection = document.getElementById('category-attributes-container');
 
     if (!categoryId) {
         section.style.display = 'none';
-        container.innerHTML = '';
+        globalContainer.innerHTML = '';
+        categoryContainer.innerHTML = '';
         return;
     }
 
-    // Load product attributes
     fetch('{{ route("inventory.products.attributes") }}?category_id=' + categoryId)
         .then(r => r.json())
         .then(attributes => {
             if (attributes.length === 0) {
                 section.style.display = 'none';
-                container.innerHTML = '';
+                globalContainer.innerHTML = '';
+                categoryContainer.innerHTML = '';
                 return;
             }
+
             section.style.display = 'block';
-            container.innerHTML = '';
-            attributes.forEach(attr => {
-                let input = '';
-                if (attr.type === 'select') {
-                    const options = (attr.options || []).map(o => `<option value="${o}">${o}</option>`).join('');
-                    input = `<select name="attribute[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500"><option value="">নির্বাচন করুন</option>${options}</select>`;
-                } else if (attr.type === 'boolean') {
-                    input = `<select name="attribute[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500"><option value="">নির্বাচন করুন</option><option value="1">হ্যাঁ</option><option value="0">না</option></select>`;
-                } else if (attr.type === 'date') {
-                    input = `<input type="date" name="attribute[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">`;
-                } else if (attr.type === 'number') {
-                    input = `<input type="number" name="attribute[${attr.id}]" step="any" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">`;
-                } else {
-                    input = `<input type="text" name="attribute[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">`;
-                }
-                container.innerHTML += `<div><label class="block text-sm font-medium text-gray-700 mb-1">${attr.name} ${attr.is_required ? '*' : ''}</label>${input}</div>`;
-            });
+            globalContainer.innerHTML = '';
+            categoryContainer.innerHTML = '';
+
+            const globalAttrs = attributes.filter(a => a.is_global);
+            const categoryAttrs = attributes.filter(a => !a.is_global);
+
+            if (globalAttrs.length > 0) {
+                globalSection.style.display = 'block';
+                globalAttrs.forEach(attr => {
+                    globalContainer.innerHTML += renderAttributeInput(attr, 'attribute');
+                });
+            } else {
+                globalSection.style.display = 'none';
+            }
+
+            if (categoryAttrs.length > 0) {
+                categorySection.style.display = 'block';
+                categoryAttrs.forEach(attr => {
+                    categoryContainer.innerHTML += renderAttributeInput(attr, 'attribute');
+                });
+            } else {
+                categorySection.style.display = 'none';
+            }
 
             // Reload variant attribute rows
             document.querySelectorAll('.variant-row').forEach((row, i) => {

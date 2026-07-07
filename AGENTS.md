@@ -126,7 +126,7 @@ Visiting these routes throws `ViewNotFoundException`.
 4. `conversations` — id, sender_id, sender_name, status, last_message_at, timestamps
 5. `messages` — id, facebook_mid, conversation_id (FK), direction, type, content, image_path, image_analysis, timestamps
 6. `categories` — id, parent_id (self-FK nullable), name, slug, description, image, sort_order, is_active, timestamps
-7. `attribute_templates` — id, category_id (FK), name, slug, type (text/number/select/boolean/date), options (JSON), is_required, sort_order, timestamps
+7. `attribute_templates` — id, category_id (FK nullable when is_global), name, slug, type (text/number/select/boolean/date), options (JSON), is_required, is_global (boolean, default false), sort_order, timestamps
 8. `brands` — id, name, slug, logo, is_active, timestamps
 9. `products` — id, category_id (FK), brand_id (FK nullable), name, slug, sku, description, base_price, discount_price, stock_quantity, unit, barcode, status, is_featured, meta_title, meta_description, sort_order, timestamps
 10. `product_attribute_values` — id, product_id (FK), attribute_template_id (FK), value, timestamps (unique on product_id + attribute_template_id)
