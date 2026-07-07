@@ -135,7 +135,9 @@ Visiting these routes throws `ViewNotFoundException`.
 13. `warehouses` — id, name, address, phone, is_active, timestamps
 14. `stock_movements` — id, product_id (FK), variant_id (FK nullable), warehouse_id (FK), type (in/out/adjustment), quantity, reference, notes, created_by (FK nullable), timestamps
 15. `inventory_alerts` — id, product_id (FK unique), threshold, is_active, timestamps
-16. `password_reset_tokens`, `sessions` — Standard Laravel tables
+16. `attribute_options` — id, attribute_template_id (FK), value, slug, sort_order, is_active, timestamps (unique on attribute_template_id + slug)
+17. `stock_transfers` — id, product_id (FK), variant_id (FK nullable), from_warehouse_id (FK), to_warehouse_id (FK), quantity, status (pending/completed/cancelled), notes, created_by (FK nullable), timestamps
+18. `password_reset_tokens`, `sessions` — Standard Laravel tables
 
 ### Seeder
 - `AdminSeeder` creates `admin@socialboost.com` / `Admin@123456`, role `super_admin` (idempotent via `updateOrCreate`)
@@ -164,6 +166,74 @@ Visiting these routes throws `ViewNotFoundException`.
 - **Facebook test users**: Dev mode only testers/admins trigger webhooks
 - **Horizon**: runs inside Docker worker container via Supervisor, not directly
 - **Redis**: queue + cache driver in `.env` (`QUEUE_CONNECTION=redis`, `CACHE_STORE=redis`)
+
+## Inventory System Improvements (Phase 1-4 Complete)
+
+### Bug Fixes Applied
+- **Stock operations** now wrapped in `DB::transaction()` — prevents race conditions
+- **Variant stock recalculation** — `recalculateStock()` called after every variant stock change
+- **Attribute stale values** — existing attributes deleted before re-saving on product edit
+- **Low stock alert** — now checks variant stock if product has variants
+- **Category dropdown** — supports subcategories with hierarchical indentation
+- **Product status** — removed auto-override from model boot hook (user's choice respected)
+- **Variant modal URL** — fixed string concatenation bug in show.blade.php
+
+### New Tables
+- **`attribute_options`** — standardized values per attribute (for future variant matrix)
+- **`stock_transfers`** — atomic stock movement between warehouses
+
+### New Controllers
+- **`StockTransferController`** — full CRUD + complete/cancel workflow with DB transactions
+
+### Key Architecture Decisions
+- **`Product::recalculateStock()`** — public method on model (not private on controller)
+- **Stock In/Out/Adjust** — all wrapped in `DB::transaction()` for atomicity
+- **`StockTransfer`** — creates 2 StockMovement records (out + in) atomically
+- **`InventoryAlert::isLowStock()`** — variant-aware (checks variant stock if variants exist)
+
+## Shopify-Style Product Creation System (Phase 5 Complete)
+
+### How It Works Now
+```
+Step 1: Title + Description + Category
+Step 2: Price + Status
+Step 3: OPTIONS define koro (Color → Red, Blue, Green | Size → S, M, L)
+Step 4: AUTO-GENERATE variant matrix (3×3 = 9 variants)
+Step 5: Per-variant: SKU (auto), Price, Stock, Barcode
+```
+
+### Database Changes
+- **`attribute_templates.is_variant_option`** — boolean, marks if template is a variant option (Color/Size) vs product-level attribute (Material/Weight)
+- When creating product with options, system creates `AttributeTemplate` records with `type = 'option'` and `is_variant_option = true`
+- `options` JSON column stores values: `["Red", "Blue", "Green"]`
+
+### Variant Matrix Generation
+- JavaScript `getCombinations()` — recursive cartesian product of all option values
+- Auto SKU format: `{PRODUCT-SKU}-{OPTION1}-{OPTION2}` (e.g., `TSHIRT-RED-M`)
+- Matrix renders as editable table: SKU, Price, Stock, Barcode per row
+
+### Key Files
+```
+app/Http/Controllers/Dashboard/ProductController.php — store() handles options + variants
+app/Http/Controllers/Dashboard/StockTransferController.php — stock between warehouses
+app/Models/AttributeTemplate.php — is_variant_option field
+app/Models/AttributeOption.php — standardized option values
+app/Models/StockTransfer.php — warehouse transfer model
+resources/views/dashboard/products/create.blade.php — Shopify-style wizard
+resources/views/dashboard/products/edit.blade.php — shows existing + new options
+resources/views/dashboard/inventory/transfers.blade.php — stock transfer UI
+```
+
+### Option vs Attribute Distinction
+| Type | Purpose | Example | Where Used |
+|------|---------|---------|------------|
+| Variant Option | Generates variants | Color, Size | Product create → Options section |
+| Product Attribute | Extra info | Material, Weight | Product create → Attributes section |
+
+### Variant Attributes Storage
+- Variant attributes stored as JSON: `{"Color": "Red", "Size": "M"}`
+- Product-level attributes stored in `product_attribute_values` table
+- Both coexist — variant attrs are for variant identification, product attrs are for display
 
 # Agent Instructions
 

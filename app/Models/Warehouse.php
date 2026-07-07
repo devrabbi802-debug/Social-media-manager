@@ -23,6 +23,16 @@ class Warehouse extends Model
         return $this->hasMany(StockMovement::class);
     }
 
+    public function outgoingTransfers(): HasMany
+    {
+        return $this->hasMany(StockTransfer::class, 'from_warehouse_id');
+    }
+
+    public function incomingTransfers(): HasMany
+    {
+        return $this->hasMany(StockTransfer::class, 'to_warehouse_id');
+    }
+
     public function scopeActive($query)
     {
         return $query->where('is_active', true);

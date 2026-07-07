@@ -9,6 +9,7 @@ use App\Models\ProductVariant;
 use App\Models\StockMovement;
 use App\Models\Warehouse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class InventoryController extends Controller
 {
@@ -91,28 +92,34 @@ class InventoryController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        $product = Product::findOrFail($validated['product_id']);
+        DB::transaction(function () use ($validated) {
+            $product = Product::findOrFail($validated['product_id']);
 
-        if ($validated['variant_id']) {
-            $variant = ProductVariant::findOrFail($validated['variant_id']);
-            $variant->increment('stock_quantity', $validated['quantity']);
-            $variant->refresh();
-            if ($variant->stock_quantity > 0 && $product->status === 'out_of_stock') {
-                $product->update(['status' => 'active']);
-            }
-        } else {
-            $product->increment('stock_quantity', $validated['quantity']);
-            $product->refresh();
-            if ($product->stock_quantity > 0 && $product->status === 'out_of_stock') {
-                $product->update(['status' => 'active']);
-            }
-        }
+            if ($validated['variant_id']) {
+                $variant = ProductVariant::findOrFail($validated['variant_id']);
+                $variant->increment('stock_quantity', $validated['quantity']);
+                $variant->refresh();
 
-        StockMovement::create([
-            ...$validated,
-            'type' => 'in',
-            'created_by' => auth()->id(),
-        ]);
+                $product->recalculateStock();
+
+                if ($product->status === 'out_of_stock' && $product->stock_quantity > 0) {
+                    $product->update(['status' => 'active']);
+                }
+            } else {
+                $product->increment('stock_quantity', $validated['quantity']);
+                $product->refresh();
+
+                if ($product->stock_quantity > 0 && $product->status === 'out_of_stock') {
+                    $product->update(['status' => 'active']);
+                }
+            }
+
+            StockMovement::create([
+                ...$validated,
+                'type' => 'in',
+                'created_by' => auth()->id(),
+            ]);
+        });
 
         return redirect()->route('inventory.movements')
             ->with('success', 'স্টক সফলভাবে যোগ হয়েছে!');
@@ -136,24 +143,38 @@ class InventoryController extends Controller
             if ($variant->stock_quantity < $validated['quantity']) {
                 return back()->with('error', 'পর্যাপ্ত স্টক নেই!');
             }
-            $variant->decrement('stock_quantity', $validated['quantity']);
-            $variant->refresh();
         } else {
             if ($product->stock_quantity < $validated['quantity']) {
                 return back()->with('error', 'পর্যাপ্ত স্টক নেই!');
             }
-            $product->decrement('stock_quantity', $validated['quantity']);
-            $product->refresh();
-            if ($product->stock_quantity <= 0) {
-                $product->update(['status' => 'out_of_stock']);
-            }
         }
 
-        StockMovement::create([
-            ...$validated,
-            'type' => 'out',
-            'created_by' => auth()->id(),
-        ]);
+        DB::transaction(function () use ($validated, $product) {
+            if ($validated['variant_id']) {
+                $variant = ProductVariant::findOrFail($validated['variant_id']);
+                $variant->decrement('stock_quantity', $validated['quantity']);
+                $variant->refresh();
+
+                $product->recalculateStock();
+
+                if ($product->stock_quantity <= 0 && $product->status !== 'inactive') {
+                    $product->update(['status' => 'out_of_stock']);
+                }
+            } else {
+                $product->decrement('stock_quantity', $validated['quantity']);
+                $product->refresh();
+
+                if ($product->stock_quantity <= 0 && $product->status !== 'inactive') {
+                    $product->update(['status' => 'out_of_stock']);
+                }
+            }
+
+            StockMovement::create([
+                ...$validated,
+                'type' => 'out',
+                'created_by' => auth()->id(),
+            ]);
+        });
 
         return redirect()->route('inventory.movements')
             ->with('success', 'স্টক সফলভাবে বের হয়েছে!');
@@ -165,29 +186,34 @@ class InventoryController extends Controller
             'product_id' => 'required|exists:products,id',
             'variant_id' => 'nullable|exists:product_variants,id',
             'warehouse_id' => 'required|exists:warehouses,id',
-            'quantity' => 'required|integer|min:0',
+            'quantity' => 'required|integer|min:1',
             'notes' => 'nullable|string',
         ]);
 
-        $product = Product::findOrFail($validated['product_id']);
+        DB::transaction(function () use ($validated) {
+            $product = Product::findOrFail($validated['product_id']);
 
-        if ($validated['variant_id']) {
-            $variant = ProductVariant::findOrFail($validated['variant_id']);
-            $variant->update(['stock_quantity' => $validated['quantity']]);
-        } else {
-            $product->update(['stock_quantity' => $validated['quantity']]);
+            if ($validated['variant_id']) {
+                $variant = ProductVariant::findOrFail($validated['variant_id']);
+                $variant->update(['stock_quantity' => $validated['quantity']]);
+
+                $product->recalculateStock();
+            } else {
+                $product->update(['stock_quantity' => $validated['quantity']]);
+            }
+
             if ($validated['quantity'] <= 0) {
                 $product->update(['status' => 'out_of_stock']);
             } elseif ($product->status === 'out_of_stock') {
                 $product->update(['status' => 'active']);
             }
-        }
 
-        StockMovement::create([
-            ...$validated,
-            'type' => 'adjustment',
-            'created_by' => auth()->id(),
-        ]);
+            StockMovement::create([
+                ...$validated,
+                'type' => 'adjustment',
+                'created_by' => auth()->id(),
+            ]);
+        });
 
         return redirect()->route('inventory.movements')
             ->with('success', 'স্টক অ্যাডজাস্ট হয়েছে!');

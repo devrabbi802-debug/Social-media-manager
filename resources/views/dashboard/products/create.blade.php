@@ -9,7 +9,7 @@
             <div class="flex items-center justify-between">
                 <div>
                     <h1 class="text-2xl font-bold text-gray-900">নতুন প্রোডাক্ট যোগ করুন</h1>
-                    <p class="text-gray-600">প্রোডাক্টের তথ্য পূরণ করুন</p>
+                    <p class="text-gray-600">প্রোডাক্টের তথ্য ও ভ্যারিয়েন্ট পূরণ করুন</p>
                 </div>
                 <a href="{{ route('inventory.products.index') }}" class="text-gray-600 hover:text-purple-600 font-medium">← ফিরে যান</a>
             </div>
@@ -20,26 +20,32 @@
         <form action="{{ route('inventory.products.store') }}" method="POST" enctype="multipart/form-data" class="space-y-6">
             @csrf
 
-            {{-- Basic Info --}}
+            {{-- Step 1: Basic Info --}}
             <div class="bg-white rounded-2xl p-6 shadow-sm">
-                <h2 class="text-lg font-bold text-gray-900 mb-4">মৌলিক তথ্য</h2>
+                <div class="flex items-center space-x-3 mb-4">
+                    <span class="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">1</span>
+                    <h2 class="text-lg font-bold text-gray-900">মৌলিক তথ্য</h2>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="md:col-span-2">
                         <label class="block text-sm font-medium text-gray-700 mb-1">প্রোডাক্টের নাম *</label>
-                        <input type="text" name="name" value="{{ old('name') }}" required
-                            class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                        <input type="text" name="name" id="product-name" value="{{ old('name') }}" required
+                            class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            placeholder="যেমন: ক্লাসিক টি-শার্ট">
                         @error('name') <p class="text-red-500 text-sm mt-1">{{ $message }}</p> @enderror
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">SKU *</label>
-                        <input type="text" name="sku" value="{{ old('sku') }}" required
-                            class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">SKU (প্রোডাক্ট কোড) *</label>
+                        <input type="text" name="sku" id="product-sku" value="{{ old('sku') }}" required
+                            class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500"
+                            placeholder="যেমন: TSHIRT-001">
+                        <p class="text-xs text-gray-500 mt-1">ভ্যারিয়েন্ট SKU এই থেকে অটো জেনারেট হবে</p>
                         @error('sku') <p class="text-red-500 text-sm mt-1">{{ $message }}</p> @enderror
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">বারকোড</label>
                         <input type="text" name="barcode" value="{{ old('barcode') }}"
-                            class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                            class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">ক্যাটাগরি *</label>
@@ -47,6 +53,12 @@
                             <option value="">ক্যাটাগরি নির্বাচন করুন</option>
                             @foreach($categories as $cat)
                                 <option value="{{ $cat->id }}" {{ old('category_id') == $cat->id ? 'selected' : '' }}>{{ $cat->name }}</option>
+                                @foreach($cat->children as $child)
+                                    <option value="{{ $child->id }}" {{ old('category_id') == $child->id ? 'selected' : '' }}>&nbsp;&nbsp;&nbsp;└ {{ $child->name }}</option>
+                                    @foreach($child->children as $grandchild)
+                                        <option value="{{ $grandchild->id }}" {{ old('category_id') == $grandchild->id ? 'selected' : '' }}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└ {{ $grandchild->name }}</option>
+                                    @endforeach
+                                @endforeach
                             @endforeach
                         </select>
                         @error('category_id') <p class="text-red-500 text-sm mt-1">{{ $message }}</p> @enderror
@@ -63,30 +75,28 @@
                     <div class="md:col-span-2">
                         <label class="block text-sm font-medium text-gray-700 mb-1">বিবরণ</label>
                         <textarea name="description" rows="3"
-                            class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent">{{ old('description') }}</textarea>
+                            class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            placeholder="প্রোডাক্টের বিস্তারিত বিবরণ লিখুন">{{ old('description') }}</textarea>
                     </div>
                 </div>
             </div>
 
-            {{-- Pricing --}}
+            {{-- Step 2: Pricing --}}
             <div class="bg-white rounded-2xl p-6 shadow-sm">
-                <h2 class="text-lg font-bold text-gray-900 mb-4">মূল্য ও স্টক</h2>
+                <div class="flex items-center space-x-3 mb-4">
+                    <span class="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">2</span>
+                    <h2 class="text-lg font-bold text-gray-900">মূল্য</h2>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">মূল মূল্য (৳) *</label>
-                        <input type="number" name="base_price" value="{{ old('base_price') }}" step="0.01" min="0" required
+                        <input type="number" name="base_price" id="base-price" value="{{ old('base_price') }}" step="0.01" min="0" required
                             class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
                         @error('base_price') <p class="text-red-500 text-sm mt-1">{{ $message }}</p> @enderror
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">ডিসকাউন্ট মূল্য (৳)</label>
                         <input type="number" name="discount_price" value="{{ old('discount_price') }}" step="0.01" min="0"
-                            class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                        @error('discount_price') <p class="text-red-500 text-sm mt-1">{{ $message }}</p> @enderror
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">স্টক পরিমাণ</label>
-                        <input type="number" name="stock_quantity" value="{{ old('stock_quantity', 0) }}" min="0"
                             class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
                     </div>
                     <div>
@@ -99,7 +109,6 @@
                             <option value="box" {{ old('unit') === 'box' ? 'selected' : '' }}>বক্স (box)</option>
                             <option value="pair" {{ old('unit') === 'pair' ? 'selected' : '' }}>জোড়া (pair)</option>
                             <option value="set" {{ old('unit') === 'set' ? 'selected' : '' }}>সেট (set)</option>
-                            <option value="meter" {{ old('unit') === 'meter' ? 'selected' : '' }}>মিটার (meter)</option>
                         </select>
                     </div>
                     <div>
@@ -120,58 +129,57 @@
                 </div>
             </div>
 
-            {{-- Dynamic Attributes --}}
-            <div class="bg-white rounded-2xl p-6 shadow-sm" id="attributes-section" style="display: none;">
-                <h2 class="text-lg font-bold text-gray-900 mb-4">কাস্টম অ্যাট্রিবিউট</h2>
-                <div id="global-attributes-container" class="mb-4" style="display: none;">
-                    <div class="flex items-center space-x-2 mb-2">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">গ্লোবাল</span>
-                        <span class="text-xs text-gray-500">সব ক্যাটাগরিতে প্রযোজ্য</span>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="global-attrs-grid"></div>
-                </div>
-                <div id="category-attributes-container" style="display: none;">
-                    <div class="flex items-center space-x-2 mb-2">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">ক্যাটাগরি</span>
-                        <span class="text-xs text-gray-500">এই ক্যাটাগরির জন্য নির্দিষ্ট</span>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="category-attrs-grid"></div>
-                </div>
-            </div>
-
-            {{-- Variant Toggle --}}
+            {{-- Step 3: Options (Shopify Style) --}}
             <div class="bg-white rounded-2xl p-6 shadow-sm">
-                <div class="flex items-center space-x-3">
-                    <input type="checkbox" id="has_variants" name="has_variants" value="1"
-                        class="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                        {{ old('has_variants') ? 'checked' : '' }}
-                        onchange="toggleVariantSection()">
-                    <div>
-                        <label for="has_variants" class="text-lg font-bold text-gray-900 cursor-pointer">ভ্যারিয়েন্ট আছে?</label>
-                        <p class="text-sm text-gray-500">যদি প্রোডাক্টে Size, Color ইত্যাদি variant থাকে, তাহলে চেক করুন</p>
-                    </div>
+                <div class="flex items-center space-x-3 mb-2">
+                    <span class="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">3</span>
+                    <h2 class="text-lg font-bold text-gray-900">অপশন (ভ্যারিয়েন্ট তৈরি করতে)</h2>
+                </div>
+                <p class="text-sm text-gray-500 mb-4 ml-11">যদি প্রোডাক্টে Color, Size ইত্যাদি ভ্যারিয়েন্ট থাকে, তাহলে এখানে অপশন যোগ করুন। সিস্টেম অটোমেটিক্যালি সব কম্বিনেশন তৈরি করবে।</p>
+
+                <div id="options-container" class="space-y-4">
+                    {{-- Options will be added here dynamically --}}
+                </div>
+
+                <button type="button" onclick="addOption()" class="mt-4 px-4 py-2 border-2 border-dashed border-gray-300 rounded-xl text-gray-600 font-medium hover:border-purple-400 hover:text-purple-600 hover:bg-purple-50 transition w-full">
+                    + অপশন যোগ করুন (যেমন: Color, Size, Material)
+                </button>
+
+                <div id="no-option-msg" class="text-center py-8 text-gray-500">
+                    <p>কোনো অপশন নেই। অপশন যোগ করলে সিস্টেম অটোমেটিক্যালি ভ্যারিয়েন্ট তৈরি করবে।</p>
+                    <p class="text-xs mt-1">সিঙ্গল প্রোডাক্ট হলে অপশন ছাড়াই সেভ করতে পারেন।</p>
                 </div>
             </div>
 
-            {{-- Variant Section --}}
-            <div id="variant-section" class="hidden space-y-6">
-                <div class="bg-white rounded-2xl p-6 shadow-sm">
-                    <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-lg font-bold text-gray-900">ভ্যারিয়েন্ট তালিকা</h2>
-                        <button type="button" onclick="addVariantRow()" class="px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700 transition">+ ভ্যারিয়েন্ট যোগ করুন</button>
-                    </div>
-
-                    <div id="variant-rows" class="space-y-4">
-                        {{-- Variant rows will be added here --}}
-                    </div>
-
-                    <p id="no-variant-msg" class="text-gray-500 text-sm">কোনো ভ্যারিয়েন্ট নেই। উপরের বাটনে ক্লিক করে যোগ করুন।</p>
+            {{-- Step 4: Variant Matrix --}}
+            <div id="variant-matrix-section" class="hidden bg-white rounded-2xl p-6 shadow-sm">
+                <div class="flex items-center space-x-3 mb-4">
+                    <span class="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">4</span>
+                    <h2 class="text-lg font-bold text-gray-900">ভ্যারিয়েন্ট ম্যাট্রিক্স</h2>
                 </div>
+
+                <div id="matrix-info" class="mb-4 p-3 bg-purple-50 rounded-xl">
+                    <p class="text-sm text-purple-700 font-medium" id="matrix-count"></p>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm border" id="variant-matrix">
+                        <thead id="matrix-header">
+                        </thead>
+                        <tbody id="matrix-body">
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="text-xs text-gray-500 mt-3">* SKU অটো জেনারেট হয়েছে। প্রয়োজনে পরিবর্তন করতে পারেন।</p>
             </div>
 
-            {{-- Images --}}
+            {{-- Step 5: Images --}}
             <div class="bg-white rounded-2xl p-6 shadow-sm">
-                <h2 class="text-lg font-bold text-gray-900 mb-4">প্রোডাক্ট ইমেজ</h2>
+                <div class="flex items-center space-x-3 mb-4">
+                    <span class="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">5</span>
+                    <h2 class="text-lg font-bold text-gray-900">প্রোডাক্ট ইমেজ</h2>
+                </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">ইমেজ (একাধিক আপলোড করতে পারেন)</label>
                     <div id="image-dropzone" class="relative border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-all duration-200">
@@ -187,19 +195,24 @@
                 <div id="image-preview" class="grid grid-cols-4 gap-4 mt-4"></div>
             </div>
 
-            {{-- SEO --}}
+            {{-- Step 6: SEO --}}
             <div class="bg-white rounded-2xl p-6 shadow-sm">
-                <h2 class="text-lg font-bold text-gray-900 mb-4">SEO তথ্য</h2>
+                <div class="flex items-center space-x-3 mb-4">
+                    <span class="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">6</span>
+                    <h2 class="text-lg font-bold text-gray-900">SEO তথ্য</h2>
+                </div>
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">মেটা টাইটেল</label>
                         <input type="text" name="meta_title" value="{{ old('meta_title') }}"
-                            class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                            class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500"
+                            placeholder="সার্চ ইঞ্জিনে যে টাইটেল দেখাবে">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">মেটা বিবরণ</label>
                         <textarea name="meta_description" rows="2"
-                            class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">{{ old('meta_description') }}</textarea>
+                            class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500"
+                            placeholder="সার্চ ইঞ্জিনে যে বিবরণ দেখাবে">{{ old('meta_description') }}</textarea>
                     </div>
                 </div>
             </div>
@@ -215,179 +228,142 @@
 
 @push('scripts')
 <script>
-let variantIndex = 0;
+let options = [];
+let optionIndex = 0;
 
-function toggleVariantSection() {
-    const section = document.getElementById('variant-section');
-    const checkbox = document.getElementById('has_variants');
-    if (checkbox.checked) {
-        section.classList.remove('hidden');
-    } else {
-        section.classList.add('hidden');
-    }
-}
-
-function renderAttributeInput(attr, namePrefix) {
-    let input = '';
-    if (attr.type === 'select') {
-        const options = (attr.options || []).map(o => `<option value="${o}">${o}</option>`).join('');
-        input = `<select name="${namePrefix}[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500"><option value="">নির্বাচন করুন</option>${options}</select>`;
-    } else if (attr.type === 'boolean') {
-        input = `<select name="${namePrefix}[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500"><option value="">নির্বাচন করুন</option><option value="1">হ্যাঁ</option><option value="0">না</option></select>`;
-    } else if (attr.type === 'date') {
-        input = `<input type="date" name="${namePrefix}[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">`;
-    } else if (attr.type === 'number') {
-        input = `<input type="number" name="${namePrefix}[${attr.id}]" step="any" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">`;
-    } else {
-        input = `<input type="text" name="${namePrefix}[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">`;
-    }
-    return `<div><label class="block text-sm font-medium text-gray-700 mb-1">${attr.name} ${attr.is_required ? '*' : ''}</label>${input}</div>`;
-}
-
-function addVariantRow() {
-    variantIndex++;
-    const container = document.getElementById('variant-rows');
-    const noMsg = document.getElementById('no-variant-msg');
+function addOption(name = '', values = []) {
+    optionIndex++;
+    const idx = optionIndex;
+    const container = document.getElementById('options-container');
+    const noMsg = document.getElementById('no-option-msg');
     noMsg.style.display = 'none';
 
-    const row = document.createElement('div');
-    row.className = 'variant-row bg-gray-50 rounded-xl p-4 border border-gray-200';
-    row.id = 'variant-row-' + variantIndex;
-    row.innerHTML = `
+    const div = document.createElement('div');
+    div.className = 'option-group border border-gray-200 rounded-xl p-4 bg-gray-50';
+    div.id = 'option-' + idx;
+    div.innerHTML = `
         <div class="flex items-center justify-between mb-3">
-            <span class="font-medium text-gray-700">ভ্যারিয়েন্ট #${variantIndex}</span>
-            <button type="button" onclick="removeVariantRow(${variantIndex})" class="text-red-500 hover:text-red-700 text-sm font-medium">✕ মুছুন</button>
+            <span class="font-medium text-gray-700">অপশন #${idx}</span>
+            <button type="button" onclick="removeOption(${idx})" class="text-red-500 hover:text-red-700 text-sm font-medium">✕ মুছুন</button>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">নাম</label>
-                <input type="text" name="variants[${variantIndex}][name]" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500" placeholder="যেমন: Medium / Black">
+                <label class="block text-xs font-medium text-gray-600 mb-1">অপশনের নাম *</label>
+                <input type="text" name="options[${idx}][name]" value="${name}" required
+                    class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500"
+                    placeholder="যেমন: Color, Size, Material"
+                    onchange="generateMatrix()">
             </div>
             <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">SKU *</label>
-                <input type="text" name="variants[${variantIndex}][sku]" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500" placeholder="যেমন: TSHIRT-M-BL">
-            </div>
-            <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">মূল্য (৳)</label>
-                <input type="number" name="variants[${variantIndex}][price]" step="0.01" min="0" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500" placeholder="খালি রাখলে মূল মূল্য ব্যবহার হবে">
-            </div>
-            <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">স্টক *</label>
-                <input type="number" name="variants[${variantIndex}][stock_quantity]" required min="0" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500" placeholder="0">
-            </div>
-            <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">বারকোড</label>
-                <input type="text" name="variants[${variantIndex}][barcode]" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">
-            </div>
-            <div id="variant-attrs-${variantIndex}" class="md:col-span-3">
-                <label class="block text-xs font-medium text-gray-600 mb-1">অ্যাট্রিবিউট</label>
-                <div class="variant-attrs-container" data-index="${variantIndex}">
-                    <p class="text-xs text-gray-400">ক্যাটাগরি সিলেক্ট করলে অ্যাট্রিবিউট দেখা যাবে</p>
-                </div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">মানগুলো (কমা দিয়ে আলাদা করুন) *</label>
+                <input type="text" name="options[${idx}][values]" value="${values.join(', ')}" required
+                    class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500"
+                    placeholder="যেমন: Red, Blue, Green"
+                    onchange="generateMatrix()">
+                <p class="text-xs text-gray-400 mt-1">কমা দিয়ে আলাদা করুন: Red, Blue, Green</p>
             </div>
         </div>
     `;
-    container.appendChild(row);
-
-    loadVariantAttributesForIndex(variantIndex);
+    container.appendChild(div);
 }
 
-function removeVariantRow(index) {
-    const row = document.getElementById('variant-row-' + index);
-    if (row) {
-        row.remove();
-    }
-    const container = document.getElementById('variant-rows');
-    const noMsg = document.getElementById('no-variant-msg');
+function removeOption(idx) {
+    const div = document.getElementById('option-' + idx);
+    if (div) div.remove();
+    generateMatrix();
+
+    const container = document.getElementById('options-container');
+    const noMsg = document.getElementById('no-option-msg');
     if (container.children.length === 0) {
         noMsg.style.display = 'block';
     }
 }
 
-function loadVariantAttributesForIndex(index) {
-    const categoryId = document.getElementById('category_id').value;
-    if (!categoryId) return;
+function generateMatrix() {
+    const container = document.getElementById('options-container');
+    const optionGroups = container.querySelectorAll('.option-group');
+    const matrixSection = document.getElementById('variant-matrix-section');
+    const matrixHeader = document.getElementById('matrix-header');
+    const matrixBody = document.getElementById('matrix-body');
+    const matrixCount = document.getElementById('matrix-count');
+    const baseSku = document.getElementById('product-sku').value || 'PRODUCT';
+    const basePrice = document.getElementById('base-price').value || '0';
 
-    fetch('{{ route("inventory.products.attributes") }}?category_id=' + categoryId)
-        .then(r => r.json())
-        .then(attributes => {
-            if (!attributes.length) return;
-
-            const container = document.querySelector(`#variant-attrs-${index} .variant-attrs-container`);
-            container.innerHTML = attributes.map(attr => {
-                let input = '';
-                if (attr.type === 'select') {
-                    const options = (attr.options || []).map(o => `<option value="${o}">${o}</option>`).join('');
-                    input = `<select name="variants[${index}][attributes][${attr.slug}]" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500"><option value="">নির্বাচন করুন</option>${options}</select>`;
-                } else if (attr.type === 'number') {
-                    input = `<input type="number" name="variants[${index}][attributes][${attr.slug}]" step="any" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">`;
-                } else {
-                    input = `<input type="text" name="variants[${index}][attributes][${attr.slug}]" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">`;
-                }
-                const badge = attr.is_global ? '<span class="text-xs text-purple-500">গ্লোবাল</span>' : '';
-                return `<div class="inline-block mr-2 mb-2"><label class="block text-xs text-gray-500 mb-0.5">${attr.name} ${badge}</label>${input}</div>`;
-            }).join('');
-        });
-}
-
-// Category change -> reload all attribute sections
-document.getElementById('category_id').addEventListener('change', function() {
-    const categoryId = this.value;
-    const section = document.getElementById('attributes-section');
-    const globalContainer = document.getElementById('global-attrs-grid');
-    const categoryContainer = document.getElementById('category-attrs-grid');
-    const globalSection = document.getElementById('global-attributes-container');
-    const categorySection = document.getElementById('category-attributes-container');
-
-    if (!categoryId) {
-        section.style.display = 'none';
-        globalContainer.innerHTML = '';
-        categoryContainer.innerHTML = '';
+    if (optionGroups.length === 0) {
+        matrixSection.classList.add('hidden');
         return;
     }
 
-    fetch('{{ route("inventory.products.attributes") }}?category_id=' + categoryId)
-        .then(r => r.json())
-        .then(attributes => {
-            if (attributes.length === 0) {
-                section.style.display = 'none';
-                globalContainer.innerHTML = '';
-                categoryContainer.innerHTML = '';
-                return;
-            }
+    options = [];
+    optionGroups.forEach(group => {
+        const nameInput = group.querySelector('input[name$="[name]"]');
+        const valuesInput = group.querySelector('input[name$="[values]"]');
+        const name = nameInput.value.trim();
+        const values = valuesInput.value.split(',').map(v => v.trim()).filter(v => v);
 
-            section.style.display = 'block';
-            globalContainer.innerHTML = '';
-            categoryContainer.innerHTML = '';
+        if (name && values.length > 0) {
+            options.push({ name, values });
+        }
+    });
 
-            const globalAttrs = attributes.filter(a => a.is_global);
-            const categoryAttrs = attributes.filter(a => !a.is_global);
+    if (options.length === 0) {
+        matrixSection.classList.add('hidden');
+        return;
+    }
 
-            if (globalAttrs.length > 0) {
-                globalSection.style.display = 'block';
-                globalAttrs.forEach(attr => {
-                    globalContainer.innerHTML += renderAttributeInput(attr, 'attribute');
-                });
-            } else {
-                globalSection.style.display = 'none';
-            }
+    const combinations = getCombinations(options);
+    matrixCount.textContent = `${combinations.length}টি ভ্যারিয়েন্ট জেনারেট হয়েছে`;
 
-            if (categoryAttrs.length > 0) {
-                categorySection.style.display = 'block';
-                categoryAttrs.forEach(attr => {
-                    categoryContainer.innerHTML += renderAttributeInput(attr, 'attribute');
-                });
-            } else {
-                categorySection.style.display = 'none';
-            }
+    // Header
+    let headerHtml = '<tr class="bg-gray-100">';
+    options.forEach(opt => {
+        headerHtml += `<th class="px-3 py-2 font-medium text-left border">${opt.name}</th>`;
+    });
+    headerHtml += '<th class="px-3 py-2 font-medium text-left border">SKU</th>';
+    headerHtml += '<th class="px-3 py-2 font-medium text-left border">মূল্য (৳)</th>';
+    headerHtml += '<th class="px-3 py-2 font-medium text-left border">স্টক *</th>';
+    headerHtml += '<th class="px-3 py-2 font-medium text-left border">বারকোড</th>';
+    headerHtml += '</tr>';
+    matrixHeader.innerHTML = headerHtml;
 
-            // Reload variant attribute rows
-            document.querySelectorAll('.variant-row').forEach((row, i) => {
-                const idx = row.id.replace('variant-row-', '');
-                loadVariantAttributesForIndex(idx);
-            });
+    // Body
+    let bodyHtml = '';
+    combinations.forEach((combo, i) => {
+        const skuParts = [baseSku];
+        combo.forEach(val => {
+            skuParts.push(val.toUpperCase().replace(/\s+/g, '-'));
         });
-});
+        const autoSku = skuParts.join('-');
+
+        bodyHtml += `<tr class="hover:bg-gray-50 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}">`;
+        combo.forEach((val, j) => {
+            bodyHtml += `<td class="px-3 py-2 border">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">${val}</span>
+                <input type="hidden" name="variants[${i}][attributes][${options[j].name}]" value="${val}">
+            </td>`;
+        });
+        bodyHtml += `<td class="px-3 py-2 border"><input type="text" name="variants[${i}][sku]" value="${autoSku}" required class="w-full border border-gray-200 rounded px-2 py-1 text-xs font-mono focus:ring-1 focus:ring-purple-500"></td>`;
+        bodyHtml += `<td class="px-3 py-2 border"><input type="number" name="variants[${i}][price]" value="${basePrice}" step="0.01" min="0" class="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-purple-500"></td>`;
+        bodyHtml += `<td class="px-3 py-2 border"><input type="number" name="variants[${i}][stock_quantity]" value="0" min="0" required class="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-purple-500"></td>`;
+        bodyHtml += `<td class="px-3 py-2 border"><input type="text" name="variants[${i}][barcode]" class="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-purple-500"></td>`;
+        bodyHtml += '</tr>';
+    });
+    matrixBody.innerHTML = bodyHtml;
+    matrixSection.classList.remove('hidden');
+}
+
+function getCombinations(options) {
+    if (options.length === 0) return [[]];
+    const result = [];
+    const first = options[0];
+    const rest = getCombinations(options.slice(1));
+    first.values.forEach(val => {
+        rest.forEach(combo => {
+            result.push([val, ...combo]);
+        });
+    });
+    return result;
+}
 
 // Image dropzone
 const imageDropzone = document.getElementById('image-dropzone');
@@ -421,5 +397,8 @@ function updatePreview() {
         reader.readAsDataURL(file);
     });
 }
+
+// Regenerate matrix when SKU changes
+document.getElementById('product-sku').addEventListener('input', generateMatrix);
 </script>
 @endpush

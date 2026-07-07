@@ -129,8 +129,15 @@ Route::middleware([
             Route::get('/', [InventoryController::class, 'index'])->name('index');
             Route::get('/movements', [InventoryController::class, 'movements'])->name('movements');
             Route::post('/stock-in', [InventoryController::class, 'stockIn'])->name('stock-in');
-            Route::post('/stock-out', [InventoryController::class, 'stock-out'])->name('stock-out');
+            Route::post('/stock-out', [InventoryController::class, 'stockOut'])->name('stock-out');
             Route::post('/adjust-stock', [InventoryController::class, 'adjustStock'])->name('adjust-stock');
+
+            // Stock Transfers
+            Route::get('/transfers', [\App\Http\Controllers\Dashboard\StockTransferController::class, 'index'])->name('transfers.index');
+            Route::post('/transfers', [\App\Http\Controllers\Dashboard\StockTransferController::class, 'store'])->name('transfers.store');
+            Route::post('/transfers/{transfer}/complete', [\App\Http\Controllers\Dashboard\StockTransferController::class, 'complete'])->name('transfers.complete');
+            Route::post('/transfers/{transfer}/cancel', [\App\Http\Controllers\Dashboard\StockTransferController::class, 'cancel'])->name('transfers.cancel');
+            Route::delete('/transfers/{transfer}', [\App\Http\Controllers\Dashboard\StockTransferController::class, 'destroy'])->name('transfers.destroy');
 
             // Alerts
             Route::get('/alerts', [InventoryController::class, 'alerts'])->name('alerts');

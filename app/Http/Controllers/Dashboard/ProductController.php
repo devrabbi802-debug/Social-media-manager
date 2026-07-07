@@ -48,7 +48,10 @@ class ProductController extends Controller
 
     public function create()
     {
-        $categories = Category::where('is_active', true)->orderBy('name')->get();
+        $categories = Category::where('is_active', true)
+            ->with('children')
+            ->orderBy('name')
+            ->get();
         $brands = Brand::where('is_active', true)->orderBy('name')->get();
 
         return view('dashboard.products.create', compact('categories', 'brands'));
@@ -74,10 +77,12 @@ class ProductController extends Controller
             'sort_order' => 'nullable|integer|min:0',
             'images' => 'nullable|array',
             'images.*' => 'image|max:5120',
+            'options' => 'nullable|array',
+            'options.*.name' => 'nullable|string|max:255',
+            'options.*.values' => 'nullable|string',
+            'attribute' => 'nullable|array',
             'attribute.*' => 'nullable|string',
-            'has_variants' => 'nullable|boolean',
             'variants' => 'nullable|array',
-            'variants.*.name' => 'nullable|string|max:255',
             'variants.*.sku' => 'required_with:variants|string|max:255|unique:product_variants,sku',
             'variants.*.price' => 'nullable|numeric|min:0',
             'variants.*.stock_quantity' => 'required_with:variants|integer|min:0',
@@ -99,6 +104,31 @@ class ProductController extends Controller
 
         $product = Product::create($validated);
 
+        // Save options as AttributeTemplate records
+        if ($request->has('options')) {
+            foreach ($request->options as $optionData) {
+                $name = trim($optionData['name'] ?? '');
+                $valuesStr = trim($optionData['values'] ?? '');
+
+                if (empty($name) || empty($valuesStr)) continue;
+
+                $values = array_map('trim', explode(',', $valuesStr));
+                $values = array_filter($values);
+
+                AttributeTemplate::create([
+                    'category_id' => $product->category_id,
+                    'name' => $name,
+                    'slug' => \Str::slug($name),
+                    'type' => 'option',
+                    'options' => $values,
+                    'is_required' => false,
+                    'is_global' => false,
+                    'is_variant_option' => true,
+                ]);
+            }
+        }
+
+        // Save product-level attributes
         if ($request->has('attribute')) {
             foreach ($request->attribute as $attrId => $value) {
                 if (!empty(trim($value))) {
@@ -111,9 +141,9 @@ class ProductController extends Controller
             }
         }
 
-        // Handle variants
-        $hasVariants = $request->boolean('has_variants');
-        if ($hasVariants && $request->filled('variants')) {
+        // Handle variants from matrix
+        $hasVariants = $request->filled('variants');
+        if ($hasVariants) {
             $totalVariantStock = 0;
             foreach ($request->variants as $variantData) {
                 if (empty($variantData['sku'])) continue;
@@ -123,7 +153,7 @@ class ProductController extends Controller
 
                 ProductVariant::create([
                     'product_id' => $product->id,
-                    'name' => $variantData['name'] ?? null,
+                    'name' => null,
                     'sku' => $variantData['sku'],
                     'price' => $variantData['price'] ?? null,
                     'stock_quantity' => $variantStock,
@@ -132,7 +162,6 @@ class ProductController extends Controller
                     'is_active' => true,
                 ]);
             }
-            // Update product stock to sum of variants
             $product->update(['stock_quantity' => $totalVariantStock]);
         }
 
@@ -163,7 +192,10 @@ class ProductController extends Controller
     public function edit(Product $product)
     {
         $product->load(['attributeValues.attributeTemplate', 'images', 'variants']);
-        $categories = Category::where('is_active', true)->orderBy('name')->get();
+        $categories = Category::where('is_active', true)
+            ->with('children')
+            ->orderBy('name')
+            ->get();
         $brands = Brand::where('is_active', true)->orderBy('name')->get();
         $attributeTemplates = AttributeTemplate::forCategory($product->category_id)
             ->orderBy('is_global', 'desc')
@@ -212,13 +244,16 @@ class ProductController extends Controller
 
         $product->update($validated);
 
+        $product->attributeValues()->delete();
+
         if ($request->has('attribute')) {
             foreach ($request->attribute as $attrId => $value) {
                 if (!empty(trim($value))) {
-                    ProductAttributeValue::updateOrCreate(
-                        ['product_id' => $product->id, 'attribute_template_id' => $attrId],
-                        ['value' => $value]
-                    );
+                    ProductAttributeValue::create([
+                        'product_id' => $product->id,
+                        'attribute_template_id' => $attrId,
+                        'value' => $value,
+                    ]);
                 }
             }
         }
@@ -290,7 +325,7 @@ class ProductController extends Controller
             'is_active' => true,
         ]));
 
-        $this->recalculateProductStock($product);
+        $product->recalculateStock();
 
         if ($request->ajax()) {
             return response()->json([
@@ -318,7 +353,7 @@ class ProductController extends Controller
 
         $variant->update($validated);
 
-        $this->recalculateProductStock($product);
+        $product->recalculateStock();
 
         if ($request->ajax()) {
             return response()->json([
@@ -336,7 +371,7 @@ class ProductController extends Controller
     {
         $variant->delete();
 
-        $this->recalculateProductStock($product);
+        $product->recalculateStock();
 
         if ($request->ajax()) {
             return response()->json([
@@ -349,9 +384,4 @@ class ProductController extends Controller
             ->with('success', 'ভ্যারিয়েন্ট ডিলিট হয়েছে!');
     }
 
-    private function recalculateProductStock(Product $product): void
-    {
-        $totalStock = $product->variants()->sum('stock_quantity');
-        $product->update(['stock_quantity' => $totalStock]);
-    }
 }

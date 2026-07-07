@@ -296,7 +296,7 @@ function editVariant(variant) {
     variantMethodField.innerHTML = '@method("PUT")';
     variantModalTitle.textContent = 'ভ্যারিয়েন্ট এডিট করুন';
     variantSubmitBtn.textContent = 'আপডেট করুন';
-    variantForm.action = '{{ url("/dashboard/products") }}/' + '{{ $product->id }} + '/variants/' + variant.id;
+    variantForm.action = '{{ route("inventory.products.variants.update", [$product, "__ID__"]) }}'.replace('__ID__', variant.id);
 
     document.getElementById('variant-name').value = variant.name || '';
     document.getElementById('variant-sku').value = variant.sku || '';

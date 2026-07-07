@@ -48,11 +48,15 @@ class Product extends Model
             if ($product->isDirty('name') && !$product->isDirty('slug')) {
                 $product->slug = Str::slug($product->name);
             }
-
-            if ($product->stock_quantity <= 0 && $product->status !== 'inactive') {
-                $product->status = 'out_of_stock';
-            }
         });
+    }
+
+    public function recalculateStock(): void
+    {
+        if ($this->variants()->count() > 0) {
+            $totalStock = $this->variants()->sum('stock_quantity');
+            $this->updateQuietly(['stock_quantity' => $totalStock]);
+        }
     }
 
     public function category(): BelongsTo

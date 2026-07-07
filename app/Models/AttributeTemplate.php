@@ -18,6 +18,7 @@ class AttributeTemplate extends Model
         'options',
         'is_required',
         'is_global',
+        'is_variant_option',
         'sort_order',
     ];
 
@@ -25,6 +26,7 @@ class AttributeTemplate extends Model
         'options' => 'array',
         'is_required' => 'boolean',
         'is_global' => 'boolean',
+        'is_variant_option' => 'boolean',
     ];
 
     protected static function booted(): void
@@ -44,6 +46,11 @@ class AttributeTemplate extends Model
     public function attributeValues(): HasMany
     {
         return $this->hasMany(ProductAttributeValue::class, 'attribute_template_id');
+    }
+
+    public function options(): HasMany
+    {
+        return $this->hasMany(AttributeOption::class);
     }
 
     // --- Scopes ---

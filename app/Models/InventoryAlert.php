@@ -25,7 +25,11 @@ class InventoryAlert extends Model
 
     public function isLowStock(): bool
     {
-        return $this->product->stock_quantity <= $this->threshold;
+        $stock = $this->product->variants->count() > 0
+            ? $this->product->variants->sum('stock_quantity')
+            : $this->product->stock_quantity;
+
+        return $stock <= $this->threshold;
     }
 
     public function scopeActive($query)
