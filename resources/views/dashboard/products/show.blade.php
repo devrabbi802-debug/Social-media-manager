@@ -25,27 +25,161 @@
             <div class="lg:col-span-2 space-y-6">
                 {{-- Images --}}
                 <div class="bg-white rounded-2xl p-6 shadow-sm">
-                    <h2 class="text-lg font-bold text-gray-900 mb-4">প্রোডাক্ট ইমেজ</h2>
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-bold text-gray-900">প্রোডাক্ট ইমেজ</h2>
+                        @if($product->images->count())
+                            <span class="text-sm text-gray-500">{{ $product->images->count() }}টি ইমেজ</span>
+                        @endif
+                    </div>
+
                     @if($product->images->count())
-                        <div class="grid grid-cols-3 gap-4">
-                            @foreach($product->images->sortBy('sort_order') as $image)
-                            <div class="relative group">
-                                <img src="{{ asset('storage/' . $image->image_path) }}" alt="{{ $image->alt_text ?? $product->name }}"
-                                    class="w-full h-32 object-cover rounded-xl">
-                                @if($image->hasAnalysis())
-                                    <div class="absolute bottom-1 left-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded flex items-center">
+                        {{-- Main Image --}}
+                        <div class="relative mb-4">
+                            <div id="main-image-container" class="relative overflow-hidden rounded-xl bg-gray-100">
+                                @php $sortedImages = $product->images->sortBy('sort_order'); @endphp
+                                <img id="main-image" src="{{ asset('storage/' . $sortedImages->first()->image_path) }}"
+                                    alt="{{ $sortedImages->first()->alt_text ?? $product->name }}"
+                                    class="w-full h-80 object-contain cursor-pointer hover:opacity-95 transition"
+                                    onclick="openLightbox(0)">
+
+                                {{-- Image Counter --}}
+                                <div class="absolute top-3 right-3 bg-black/60 text-white text-xs px-2 py-1 rounded-full">
+                                    <span id="current-index">1</span> / {{ $product->images->count() }}
+                                </div>
+
+                                {{-- Navigation Arrows --}}
+                                @if($product->images->count() > 1)
+                                    <button type="button" onclick="prevImage()" class="absolute left-3 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full w-10 h-10 flex items-center justify-center shadow-lg transition">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                                    </button>
+                                    <button type="button" onclick="nextImage()" class="absolute right-3 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full w-10 h-10 flex items-center justify-center shadow-lg transition">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                    </button>
+                                @endif
+
+                                {{-- AI Badge --}}
+                                @if($sortedImages->first()->hasAnalysis())
+                                    <div class="absolute bottom-3 left-3 bg-green-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
                                         <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                                         AI বিশ্লেষিত
                                     </div>
-                                @else
-                                    <div class="absolute bottom-1 left-1 bg-yellow-500 text-white text-xs px-1.5 py-0.5 rounded">বিশ্লেষণ হচ্ছে...</div>
                                 @endif
                             </div>
-                            @endforeach
                         </div>
+
+                        {{-- Thumbnails --}}
+                        @if($product->images->count() > 1)
+                            <div class="flex gap-2 overflow-x-auto pb-2">
+                                @foreach($sortedImages as $index => $image)
+                                    <button type="button" onclick="changeImage({{ $index }})"
+                                        class="thumbnail-btn flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 {{ $index === 0 ? 'border-purple-500' : 'border-transparent hover:border-gray-300' }} transition"
+                                        data-index="{{ $index }}">
+                                        <img src="{{ asset('storage/' . $image->image_path) }}"
+                                            alt="{{ $image->alt_text ?? $product->name }}"
+                                            class="w-full h-full object-cover">
+                                    </button>
+                                @endforeach
+                            </div>
+                        @endif
+
+                        {{-- Hidden array for JS --}}
+                        <script>
+                        const images = @json($sortedImages->map(fn($img) => [
+                            'url' => asset('storage/' . $img->image_path),
+                            'alt' => $img->alt_text ?? $product->name,
+                            'analysis' => $img->hasAnalysis() ? $img->analysis_summary : null
+                        ])->values());
+                        let currentIndex = 0;
+
+                        function changeImage(index) {
+                            currentIndex = index;
+                            document.getElementById('main-image').src = images[index].url;
+                            document.getElementById('current-index').textContent = index + 1;
+
+                            document.querySelectorAll('.thumbnail-btn').forEach((btn, i) => {
+                                btn.classList.toggle('border-purple-500', i === index);
+                                btn.classList.toggle('border-transparent', i !== index);
+                            });
+                        }
+
+                        function nextImage() {
+                            changeImage((currentIndex + 1) % images.length);
+                        }
+
+                        function prevImage() {
+                            changeImage((currentIndex - 1 + images.length) % images.length);
+                        }
+
+                        function openLightbox(index) {
+                            currentIndex = index;
+                            const lightbox = document.getElementById('lightbox');
+                            const lightboxImg = document.getElementById('lightbox-img');
+                            const lightboxCounter = document.getElementById('lightbox-counter');
+                            const lightboxAnalysis = document.getElementById('lightbox-analysis');
+
+                            lightboxImg.src = images[index].url;
+                            lightboxCounter.textContent = (index + 1) + ' / ' + images.length;
+                            lightboxAnalysis.textContent = images[index].analysis || '';
+                            lightbox.classList.remove('hidden');
+                            document.body.style.overflow = 'hidden';
+                        }
+
+                        function closeLightbox() {
+                            document.getElementById('lightbox').classList.add('hidden');
+                            document.body.style.overflow = '';
+                        }
+
+                        function lightboxPrev() {
+                            changeImage((currentIndex - 1 + images.length) % images.length);
+                            openLightbox(currentIndex);
+                        }
+
+                        function lightboxNext() {
+                            changeImage((currentIndex + 1) % images.length);
+                            openLightbox(currentIndex);
+                        }
+
+                        // Keyboard navigation
+                        document.addEventListener('keydown', (e) => {
+                            if (document.getElementById('lightbox').classList.contains('hidden')) return;
+                            if (e.key === 'Escape') closeLightbox();
+                            if (e.key === 'ArrowLeft') lightboxPrev();
+                            if (e.key === 'ArrowRight') lightboxNext();
+                        });
+                        </script>
+
                     @else
-                        <p class="text-gray-500">কোনো ইমেজ নেই</p>
+                        <div class="text-center py-12 text-gray-400">
+                            <svg class="mx-auto h-16 w-16 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            <p>কোনো ইমেজ নেই</p>
+                            <a href="{{ route('inventory.products.edit', $product) }}" class="text-purple-600 text-sm hover:underline">এডিটে ইমেজ যোগ করুন</a>
+                        </div>
                     @endif
+                </div>
+
+                {{-- Lightbox --}}
+                <div id="lightbox" class="hidden fixed inset-0 z-50 bg-black/90 flex items-center justify-center">
+                    <button type="button" onclick="closeLightbox()" class="absolute top-4 right-4 text-white/80 hover:text-white z-10">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+
+                    <button type="button" onclick="lightboxPrev()" class="absolute left-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white bg-white/10 rounded-full p-2">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                    </button>
+
+                    <div class="max-w-4xl max-h-[85vh] px-16">
+                        <img id="lightbox-img" src="" class="max-h-[80vh] mx-auto object-contain rounded-lg">
+                        <div class="text-center mt-3">
+                            <span id="lightbox-counter" class="text-white/80 text-sm"></span>
+                            <p id="lightbox-analysis" class="text-white/60 text-xs mt-1"></p>
+                        </div>
+                    </div>
+
+                    <button type="button" onclick="lightboxNext()" class="absolute right-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white bg-white/10 rounded-full p-2">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    </button>
                 </div>
 
                 {{-- Description --}}
@@ -58,7 +192,6 @@
                 <div class="bg-white rounded-2xl p-6 shadow-sm">
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-lg font-bold text-gray-900">ভ্যারিয়েন্ট ({{ $product->variants->count() }})</h2>
-                        <button type="button" onclick="openVariantModal()" class="px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700 transition">+ ভ্যারিয়েন্ট যোগ করুন</button>
                     </div>
 
                     @if($product->variants->count())
@@ -88,7 +221,6 @@
                                     </td>
                                     <td class="px-4 py-2">
                                         <div class="flex items-center space-x-2">
-                                            <button type="button" onclick='editVariant(@json($variant))' class="text-blue-600 hover:text-blue-800 text-xs font-medium">এডিট</button>
                                             <form action="{{ route('inventory.products.variants.destroy', [$product, $variant]) }}" method="POST" class="inline" onsubmit="return confirm('এই ভ্যারিয়েন্ট ডিলিট করতে চান?')">
                                                 @csrf @method('DELETE')
                                                 <button type="submit" class="text-red-600 hover:text-red-800 text-xs font-medium">ডিলিট</button>
@@ -101,58 +233,8 @@
                         </table>
                     </div>
                     @else
-                    <p class="text-gray-500 text-sm">কোনো ভ্যারিয়েন্ট নেই। উপরের বাটনে ক্লিক করে যোগ করুন।</p>
+                    <p class="text-gray-500 text-sm">কোনো ভ্যারিয়েন্ট নেই।</p>
                     @endif
-                </div>
-
-                {{-- Variant Modal --}}
-                <div id="variant-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-                    <div class="bg-white rounded-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 id="variant-modal-title" class="text-lg font-bold text-gray-900">ভ্যারিয়েন্ট যোগ করুন</h3>
-                            <button type="button" onclick="closeVariantModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
-                        </div>
-
-                        <form id="variant-form" method="POST">
-                            @csrf
-                            <div id="variant-method-field"></div>
-
-                            <div class="space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">ভ্যারিয়েন্ট নাম</label>
-                                    <input type="text" name="name" id="variant-name" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500" placeholder="যেমন: Medium / Black">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">SKU *</label>
-                                    <input type="text" name="sku" id="variant-sku" required class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">মূল্য (৳)</label>
-                                    <input type="number" name="price" id="variant-price" step="0.01" min="0" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                                    <p class="text-xs text-gray-500 mt-1">খালি রাখলে মূল মূল্য ব্যবহার হবে</p>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">স্টক পরিমাণ *</label>
-                                    <input type="number" name="stock_quantity" id="variant-stock" required min="0" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">বারকোড</label>
-                                    <input type="text" name="barcode" id="variant-barcode" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">অ্যাট্রিবিউট *</label>
-                                    <div id="variant-attributes-fields" class="space-y-2">
-                                        <p class="text-xs text-gray-500">লোড হচ্ছে...</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="flex justify-end space-x-3 mt-6">
-                                <button type="button" onclick="closeVariantModal()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition">বাতিল</button>
-                                <button type="submit" id="variant-submit-btn" class="px-6 py-2 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition">সংরক্ষণ</button>
-                            </div>
-                        </form>
-                    </div>
                 </div>
             </div>
 
@@ -272,71 +354,6 @@
 
 @push('scripts')
 <script>
-const variantModal = document.getElementById('variant-modal');
-const variantForm = document.getElementById('variant-form');
-const variantMethodField = document.getElementById('variant-method-field');
-const variantModalTitle = document.getElementById('variant-modal-title');
-const variantSubmitBtn = document.getElementById('variant-submit-btn');
-const variantAttributesFields = document.getElementById('variant-attributes-fields');
-const categoryId = {{ $product->category_id }};
-
-function openVariantModal() {
-    variantForm.reset();
-    variantMethodField.innerHTML = '';
-    variantModalTitle.textContent = 'ভ্যারিয়েন্ট যোগ করুন';
-    variantSubmitBtn.textContent = 'সংরক্ষণ';
-    variantForm.action = '{{ route("inventory.products.variants.store", $product) }}';
-    loadVariantAttributes();
-    variantModal.classList.remove('hidden');
-    variantModal.classList.add('flex');
-}
-
-function editVariant(variant) {
-    variantForm.reset();
-    variantMethodField.innerHTML = '@method("PUT")';
-    variantModalTitle.textContent = 'ভ্যারিয়েন্ট এডিট করুন';
-    variantSubmitBtn.textContent = 'আপডেট করুন';
-    variantForm.action = '{{ route("inventory.products.variants.update", [$product, "__ID__"]) }}'.replace('__ID__', variant.id);
-
-    document.getElementById('variant-name').value = variant.name || '';
-    document.getElementById('variant-sku').value = variant.sku || '';
-    document.getElementById('variant-price').value = variant.price || '';
-    document.getElementById('variant-stock').value = variant.stock_quantity || 0;
-    document.getElementById('variant-barcode').value = variant.barcode || '';
-
-    loadVariantAttributes(variant.attributes);
-
-    variantModal.classList.remove('hidden');
-    variantModal.classList.add('flex');
-}
-
-function closeVariantModal() {
-    variantModal.classList.add('hidden');
-    variantModal.classList.remove('flex');
-}
-
-function loadVariantAttributes(selectedAttributes = {}) {
-    fetch('{{ route("inventory.products.attributes") }}?category_id=' + categoryId)
-        .then(r => r.json())
-        .then(attributes => {
-            if (!attributes.length) {
-                variantAttributesFields.innerHTML = '<p class="text-xs text-gray-500">এই ক্যাটাগরিতে কোনো অ্যাট্রিবিউট নেই</p>';
-                return;
-            }
-            variantAttributesFields.innerHTML = attributes.map(attr => {
-                const selectedVal = selectedAttributes[attr.slug] || '';
-                let input = '';
-                if (attr.type === 'select') {
-                    const options = (attr.options || []).map(o =>
-                        `<option value="${o}" ${selectedVal === o ? 'selected' : ''}>${o}</option>`
-                    ).join('');
-                    input = `<select name="attributes[${attr.slug}]" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500"><option value="">নির্বাচন করুন</option>${options}</select>`;
-                } else {
-                    input = `<input type="text" name="attributes[${attr.slug}]" value="${selectedVal}" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">`;
-                }
-                return `<div><label class="block text-xs font-medium text-gray-600 mb-1">${attr.name}</label>${input}</div>`;
-            }).join('');
-        });
-}
+// Variant modal removed - edit from edit page
 </script>
 @endpush
