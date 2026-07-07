@@ -106,8 +106,8 @@
                         <label class="block text-sm font-medium text-gray-700 mb-1">স্ট্যাটাস</label>
                         <select name="status" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
                             <option value="active" {{ old('status', 'active') === 'active' ? 'selected' : '' }}>সক্রিয়</option>
-                            <option value="inactive" {{ old('status') === 'inactive' ? 'selected' : '' }}>নিষ্ক্রিয়</option>
-                            <option value="out_of_stock" {{ old('status') === 'out_of_stock' ? 'selected' : '' }}>স্টক শেষ</option>
+                            <option value="inactive" {{ old('status', 'inactive') === 'inactive' ? 'selected' : '' }}>নিষ্ক্রিয়</option>
+                            <option value="out_of_stock" {{ old('status', 'out_of_stock') === 'out_of_stock' ? 'selected' : '' }}>স্টক শেষ</option>
                         </select>
                     </div>
                     <div>
@@ -124,7 +124,36 @@
             <div class="bg-white rounded-2xl p-6 shadow-sm" id="attributes-section" style="display: none;">
                 <h2 class="text-lg font-bold text-gray-900 mb-4">কাস্টম অ্যাট্রিবিউট</h2>
                 <div id="attributes-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {{-- Dynamic attributes will be loaded here --}}
+                </div>
+            </div>
+
+            {{-- Variant Toggle --}}
+            <div class="bg-white rounded-2xl p-6 shadow-sm">
+                <div class="flex items-center space-x-3">
+                    <input type="checkbox" id="has_variants" name="has_variants" value="1"
+                        class="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                        {{ old('has_variants') ? 'checked' : '' }}
+                        onchange="toggleVariantSection()">
+                    <div>
+                        <label for="has_variants" class="text-lg font-bold text-gray-900 cursor-pointer">ভ্যারিয়েন্ট আছে?</label>
+                        <p class="text-sm text-gray-500">যদি প্রোডাক্টে Size, Color ইত্যাদি variant থাকে, তাহলে চেক করুন</p>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Variant Section --}}
+            <div id="variant-section" class="hidden space-y-6">
+                <div class="bg-white rounded-2xl p-6 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-bold text-gray-900">ভ্যারিয়েন্ট তালিকা</h2>
+                        <button type="button" onclick="addVariantRow()" class="px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700 transition">+ ভ্যারিয়েন্ট যোগ করুন</button>
+                    </div>
+
+                    <div id="variant-rows" class="space-y-4">
+                        {{-- Variant rows will be added here --}}
+                    </div>
+
+                    <p id="no-variant-msg" class="text-gray-500 text-sm">কোনো ভ্যারিয়েন্ট নেই। উপরের বাটনে ক্লিক করে যোগ করুন।</p>
                 </div>
             </div>
 
@@ -170,9 +199,108 @@
         </form>
     </div>
 </div>
+@endsection
 
 @push('scripts')
 <script>
+let variantIndex = 0;
+
+function toggleVariantSection() {
+    const section = document.getElementById('variant-section');
+    const checkbox = document.getElementById('has_variants');
+    if (checkbox.checked) {
+        section.classList.remove('hidden');
+    } else {
+        section.classList.add('hidden');
+    }
+}
+
+function addVariantRow() {
+    variantIndex++;
+    const container = document.getElementById('variant-rows');
+    const noMsg = document.getElementById('no-variant-msg');
+    noMsg.style.display = 'none';
+
+    const row = document.createElement('div');
+    row.className = 'variant-row bg-gray-50 rounded-xl p-4 border border-gray-200';
+    row.id = 'variant-row-' + variantIndex;
+    row.innerHTML = `
+        <div class="flex items-center justify-between mb-3">
+            <span class="font-medium text-gray-700">ভ্যারিয়েন্ট #${variantIndex}</span>
+            <button type="button" onclick="removeVariantRow(${variantIndex})" class="text-red-500 hover:text-red-700 text-sm font-medium">✕ মুছুন</button>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">নাম</label>
+                <input type="text" name="variants[${variantIndex}][name]" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500" placeholder="যেমন: Medium / Black">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">SKU *</label>
+                <input type="text" name="variants[${variantIndex}][sku]" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500" placeholder="যেমন: TSHIRT-M-BL">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">মূল্য (৳)</label>
+                <input type="number" name="variants[${variantIndex}][price]" step="0.01" min="0" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500" placeholder="খালি রাখলে মূল মূল্য ব্যবহার হবে">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">স্টক *</label>
+                <input type="number" name="variants[${variantIndex}][stock_quantity]" required min="0" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500" placeholder="0">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">বারকোড</label>
+                <input type="text" name="variants[${variantIndex}][barcode]" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">
+            </div>
+            <div id="variant-attrs-${variantIndex}" class="md:col-span-3">
+                <label class="block text-xs font-medium text-gray-600 mb-1">অ্যাট্রিবিউট</label>
+                <div class="variant-attrs-container" data-index="${variantIndex}">
+                    <p class="text-xs text-gray-400">ক্যাটাগরি সিলেক্ট করলে অ্যাট্রিবিউট দেখা যাবে</p>
+                </div>
+            </div>
+        </div>
+    `;
+    container.appendChild(row);
+
+    loadVariantAttributesForIndex(variantIndex);
+}
+
+function removeVariantRow(index) {
+    const row = document.getElementById('variant-row-' + index);
+    if (row) {
+        row.remove();
+    }
+    const container = document.getElementById('variant-rows');
+    const noMsg = document.getElementById('no-variant-msg');
+    if (container.children.length === 0) {
+        noMsg.style.display = 'block';
+    }
+}
+
+function loadVariantAttributesForIndex(index) {
+    const categoryId = document.getElementById('category_id').value;
+    if (!categoryId) return;
+
+    fetch('{{ route("inventory.products.attributes") }}?category_id=' + categoryId)
+        .then(r => r.json())
+        .then(attributes => {
+            if (!attributes.length) return;
+
+            const container = document.querySelector(`#variant-attrs-${index} .variant-attrs-container`);
+            container.innerHTML = attributes.map(attr => {
+                let input = '';
+                if (attr.type === 'select') {
+                    const options = (attr.options || []).map(o => `<option value="${o}">${o}</option>`).join('');
+                    input = `<select name="variants[${index}][attributes][${attr.slug}]" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500"><option value="">নির্বাচন করুন</option>${options}</select>`;
+                } else if (attr.type === 'number') {
+                    input = `<input type="number" name="variants[${index}][attributes][${attr.slug}]" step="any" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">`;
+                } else {
+                    input = `<input type="text" name="variants[${index}][attributes][${attr.slug}]" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">`;
+                }
+                return `<div class="inline-block mr-2 mb-2"><label class="block text-xs text-gray-500 mb-0.5">${attr.name}</label>${input}</div>`;
+            }).join('');
+        });
+}
+
+// Category change -> reload all variant attribute dropdowns
 document.getElementById('category_id').addEventListener('change', function() {
     const categoryId = this.value;
     const section = document.getElementById('attributes-section');
@@ -184,6 +312,7 @@ document.getElementById('category_id').addEventListener('change', function() {
         return;
     }
 
+    // Load product attributes
     fetch('{{ route("inventory.products.attributes") }}?category_id=' + categoryId)
         .then(r => r.json())
         .then(attributes => {
@@ -192,20 +321,15 @@ document.getElementById('category_id').addEventListener('change', function() {
                 container.innerHTML = '';
                 return;
             }
-
             section.style.display = 'block';
             container.innerHTML = '';
-
             attributes.forEach(attr => {
                 let input = '';
                 if (attr.type === 'select') {
                     const options = (attr.options || []).map(o => `<option value="${o}">${o}</option>`).join('');
-                    input = `<select name="attribute[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                        <option value="">নির্বাচন করুন</option>${options}</select>`;
+                    input = `<select name="attribute[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500"><option value="">নির্বাচন করুন</option>${options}</select>`;
                 } else if (attr.type === 'boolean') {
-                    input = `<select name="attribute[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                        <option value="">নির্বাচন করুন</option>
-                        <option value="1">হ্যাঁ</option><option value="0">না</option></select>`;
+                    input = `<select name="attribute[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500"><option value="">নির্বাচন করুন</option><option value="1">হ্যাঁ</option><option value="0">না</option></select>`;
                 } else if (attr.type === 'date') {
                     input = `<input type="date" name="attribute[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">`;
                 } else if (attr.type === 'number') {
@@ -213,65 +337,36 @@ document.getElementById('category_id').addEventListener('change', function() {
                 } else {
                     input = `<input type="text" name="attribute[${attr.id}]" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">`;
                 }
+                container.innerHTML += `<div><label class="block text-sm font-medium text-gray-700 mb-1">${attr.name} ${attr.is_required ? '*' : ''}</label>${input}</div>`;
+            });
 
-                container.innerHTML += `
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">${attr.name} ${attr.is_required ? '*' : ''}</label>
-                        ${input}
-                    </div>`;
+            // Reload variant attribute rows
+            document.querySelectorAll('.variant-row').forEach((row, i) => {
+                const idx = row.id.replace('variant-row-', '');
+                loadVariantAttributesForIndex(idx);
             });
         });
 });
 
+// Image dropzone
 const imageDropzone = document.getElementById('image-dropzone');
 const imageInput = document.getElementById('image-input');
 const imagePreview = document.getElementById('image-preview');
 let selectedFiles = [];
 
 imageDropzone.addEventListener('click', () => imageInput.click());
-
-imageDropzone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    imageDropzone.classList.add('border-purple-500', 'bg-purple-50');
-});
-
-imageDropzone.addEventListener('dragleave', () => {
-    imageDropzone.classList.remove('border-purple-500', 'bg-purple-50');
-});
-
-imageDropzone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    imageDropzone.classList.remove('border-purple-500', 'bg-purple-50');
-    const files = Array.from(e.target.files || e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-    addFiles(files);
-});
-
-imageInput.addEventListener('change', (e) => {
-    addFiles(Array.from(e.target.files));
-});
+imageDropzone.addEventListener('dragover', (e) => { e.preventDefault(); imageDropzone.classList.add('border-purple-500', 'bg-purple-50'); });
+imageDropzone.addEventListener('dragleave', () => { imageDropzone.classList.remove('border-purple-500', 'bg-purple-50'); });
+imageDropzone.addEventListener('drop', (e) => { e.preventDefault(); imageDropzone.classList.remove('border-purple-500', 'bg-purple-50'); addFiles(Array.from(e.target.files || e.dataTransfer.files).filter(f => f.type.startsWith('image/'))); });
+imageInput.addEventListener('change', (e) => { addFiles(Array.from(e.target.files)); });
 
 function addFiles(files) {
-    files.forEach(file => {
-        if (!selectedFiles.find(f => f.name === file.name && f.size === file.size)) {
-            selectedFiles.push(file);
-        }
-    });
+    files.forEach(file => { if (!selectedFiles.find(f => f.name === file.name && f.size === file.size)) { selectedFiles.push(file); } });
     updatePreview();
     updateInputFiles();
 }
-
-function removeFile(index) {
-    selectedFiles.splice(index, 1);
-    updatePreview();
-    updateInputFiles();
-}
-
-function updateInputFiles() {
-    const dt = new DataTransfer();
-    selectedFiles.forEach(f => dt.items.add(f));
-    imageInput.files = dt.files;
-}
-
+function removeFile(index) { selectedFiles.splice(index, 1); updatePreview(); updateInputFiles(); }
+function updateInputFiles() { const dt = new DataTransfer(); selectedFiles.forEach(f => dt.items.add(f)); imageInput.files = dt.files; }
 function updatePreview() {
     imagePreview.innerHTML = '';
     selectedFiles.forEach((file, i) => {
@@ -279,10 +374,7 @@ function updatePreview() {
         reader.onload = function(ev) {
             const div = document.createElement('div');
             div.className = 'relative group';
-            div.innerHTML = `
-                <img src="${ev.target.result}" class="w-full h-24 object-cover rounded-lg">
-                <button type="button" onclick="removeFile(${i})" class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition">✕</button>
-                <div class="absolute bottom-1 left-1 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded">AI বিশ্লেষণ</div>`;
+            div.innerHTML = `<img src="${ev.target.result}" class="w-full h-24 object-cover rounded-lg"><button type="button" onclick="removeFile(${i})" class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition">✕</button><div class="absolute bottom-1 left-1 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded">AI বিশ্লেষণ</div>`;
             imagePreview.appendChild(div);
         };
         reader.readAsDataURL(file);
@@ -290,4 +382,3 @@ function updatePreview() {
 }
 </script>
 @endpush
-@endsection

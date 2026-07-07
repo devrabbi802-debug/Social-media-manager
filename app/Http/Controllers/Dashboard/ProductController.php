@@ -1,4 +1,4 @@
-<?php
+`<?php
 
 namespace App\Http\Controllers\Dashboard;
 
@@ -75,6 +75,14 @@ class ProductController extends Controller
             'images' => 'nullable|array',
             'images.*' => 'image|max:5120',
             'attribute.*' => 'nullable|string',
+            'has_variants' => 'nullable|boolean',
+            'variants' => 'nullable|array',
+            'variants.*.name' => 'nullable|string|max:255',
+            'variants.*.sku' => 'required_with:variants|string|max:255|unique:product_variants,sku',
+            'variants.*.price' => 'nullable|numeric|min:0',
+            'variants.*.stock_quantity' => 'required_with:variants|integer|min:0',
+            'variants.*.barcode' => 'nullable|string|max:255',
+            'variants.*.attributes' => 'nullable|array',
         ]);
 
         $validated['is_featured'] = $request->boolean('is_featured');
@@ -103,6 +111,31 @@ class ProductController extends Controller
             }
         }
 
+        // Handle variants
+        $hasVariants = $request->boolean('has_variants');
+        if ($hasVariants && $request->filled('variants')) {
+            $totalVariantStock = 0;
+            foreach ($request->variants as $variantData) {
+                if (empty($variantData['sku'])) continue;
+
+                $variantStock = (int) ($variantData['stock_quantity'] ?? 0);
+                $totalVariantStock += $variantStock;
+
+                ProductVariant::create([
+                    'product_id' => $product->id,
+                    'name' => $variantData['name'] ?? null,
+                    'sku' => $variantData['sku'],
+                    'price' => $variantData['price'] ?? null,
+                    'stock_quantity' => $variantStock,
+                    'barcode' => $variantData['barcode'] ?? null,
+                    'attributes' => $variantData['attributes'] ?? [],
+                    'is_active' => true,
+                ]);
+            }
+            // Update product stock to sum of variants
+            $product->update(['stock_quantity' => $totalVariantStock]);
+        }
+
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $index => $imageFile) {
                 $imagePath = $imageFile->store('products', 'public');
@@ -116,7 +149,7 @@ class ProductController extends Controller
             }
         }
 
-        return redirect()->route('inventory.products.index')
+        return redirect()->route('inventory.products.edit', $product)
             ->with('success', 'প্রোডাক্ট সফলভাবে তৈরি হয়েছে!');
     }
 
@@ -237,5 +270,86 @@ class ProductController extends Controller
             ->get();
 
         return response()->json($attributes);
+    }
+
+    public function storeVariant(Request $request, Product $product)
+    {
+        $validated = $request->validate([
+            'sku' => 'required|string|max:255|unique:product_variants,sku',
+            'name' => 'nullable|string|max:255',
+            'price' => 'nullable|numeric|min:0',
+            'stock_quantity' => 'required|integer|min:0',
+            'attributes' => 'required|array',
+            'barcode' => 'nullable|string|max:255',
+        ]);
+
+        $variant = ProductVariant::create(array_merge($validated, [
+            'product_id' => $product->id,
+            'is_active' => true,
+        ]));
+
+        $this->recalculateProductStock($product);
+
+        if ($request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'ভ্যারিয়েন্ট যোগ হয়েছে!',
+                'variant' => $variant,
+            ]);
+        }
+
+        return redirect()->route('inventory.products.edit', $product)
+            ->with('success', 'ভ্যারিয়েন্ট যোগ হয়েছে!');
+    }
+
+    public function updateVariant(Request $request, Product $product, ProductVariant $variant)
+    {
+        $validated = $request->validate([
+            'sku' => 'required|string|max:255|unique:product_variants,sku,' . $variant->id,
+            'name' => 'nullable|string|max:255',
+            'price' => 'nullable|numeric|min:0',
+            'stock_quantity' => 'required|integer|min:0',
+            'attributes' => 'required|array',
+            'barcode' => 'nullable|string|max:255',
+            'is_active' => 'boolean',
+        ]);
+
+        $variant->update($validated);
+
+        $this->recalculateProductStock($product);
+
+        if ($request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'ভ্যারিয়েন্ট আপডেট হয়েছে!',
+                'variant' => $variant,
+            ]);
+        }
+
+        return redirect()->route('inventory.products.edit', $product)
+            ->with('success', 'ভ্যারিয়েন্ট আপডেট হয়েছে!');
+    }
+
+    public function destroyVariant(Request $request, Product $product, ProductVariant $variant)
+    {
+        $variant->delete();
+
+        $this->recalculateProductStock($product);
+
+        if ($request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'ভ্যারিয়েন্ট ডিলিট হয়েছে!',
+            ]);
+        }
+
+        return redirect()->route('inventory.products.edit', $product)
+            ->with('success', 'ভ্যারিয়েন্ট ডিলিট হয়েছে!');
+    }
+
+    private function recalculateProductStock(Product $product): void
+    {
+        $totalStock = $product->variants()->sum('stock_quantity');
+        $product->update(['stock_quantity' => $totalStock]);
     }
 }

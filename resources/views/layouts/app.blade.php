@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'SocialBoost AI - সোশ্যাল মিডিয়া ম্যানেজমেন্ট প্ল্যাটফর্ম')</title>
     <meta name="description" content="AI-চালিত সোশ্যাল মিডিয়া ম্যানেজমেন্ট এবং ইনভেন্টরি ম্যানেজমেন্ট প্ল্যাটফর্ম">
     <script src="https://cdn.tailwindcss.com"></script>

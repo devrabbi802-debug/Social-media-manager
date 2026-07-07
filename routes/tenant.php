@@ -88,6 +88,11 @@ Route::middleware([
             Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
             Route::get('/products/attributes', [ProductController::class, 'getAttributes'])->name('products.attributes');
 
+            // Product Variants
+            Route::post('/products/{product}/variants', [ProductController::class, 'storeVariant'])->name('products.variants.store');
+            Route::put('/products/{product}/variants/{variant}', [ProductController::class, 'updateVariant'])->name('products.variants.update');
+            Route::delete('/products/{product}/variants/{variant}', [ProductController::class, 'destroyVariant'])->name('products.variants.destroy');
+
             // Categories
             Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
             Route::get('/categories/create', [CategoryController::class, 'create'])->name('categories.create');

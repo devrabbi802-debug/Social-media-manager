@@ -11,8 +11,12 @@ class DatabaseSeeder extends Seeder
 
     public function run(): void
     {
-        // Users are now in tenant databases, not landlord
-        // Only seed admin data in landlord
-        $this->call(AdminSeeder::class);
+        $isTenant = tenant() !== null;
+
+        if ($isTenant) {
+            $this->call(ClothingInventorySeeder::class);
+        } else {
+            $this->call(AdminSeeder::class);
+        }
     }
 }
