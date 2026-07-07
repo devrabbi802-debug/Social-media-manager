@@ -135,6 +135,12 @@
                 </div>
                 <p class="text-sm text-gray-500 mb-4 ml-11">নতুন অপশন যোগ করলে নতুন ভ্যারিয়েন্ট জেনারেট হবে। বিদ্যমান ভ্যারিয়েন্ট ডিলিট হবে না।</p>
 
+                {{-- Existing options from DB (category theke) --}}
+                <div id="existing-options-section" class="hidden mb-4 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                    <label class="block text-sm font-medium text-blue-800 mb-2">বিদ্যমান অপশন থেকে নির্বাচন করুন:</label>
+                    <div class="flex flex-wrap gap-2" id="existing-options-list"></div>
+                </div>
+
                 <div id="options-container" class="space-y-4">
                     @foreach($existingOptions as $opt)
                         <div class="option-group border border-gray-200 rounded-xl p-4 bg-gray-50" id="option-existing-{{ $opt->id }}">
@@ -324,6 +330,44 @@
 let optionIndex = 100;
 const existingOptions = @json($existingOptions->map(fn($o) => ['name' => $o->name, 'values' => $o->options ?? []])->values());
 
+// Category select hole existing variant options fetch korbo
+document.getElementById('category_id').addEventListener('change', function() {
+    const categoryId = this.value;
+    const section = document.getElementById('existing-options-section');
+    const list = document.getElementById('existing-options-list');
+
+    if (!categoryId) {
+        section.classList.add('hidden');
+        return;
+    }
+
+    fetch(`{{ route('inventory.products.variant-options') }}?category_id=${categoryId}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.length === 0) {
+                section.classList.add('hidden');
+                return;
+            }
+
+            list.innerHTML = '';
+            data.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'px-3 py-1.5 bg-white border border-blue-300 rounded-lg text-sm text-blue-700 hover:bg-blue-100 hover:border-blue-400 transition font-medium';
+                btn.textContent = `${opt.name} (${Array.isArray(opt.options) ? opt.options.length : 0} values)`;
+                btn.onclick = () => addExistingOption(opt);
+                list.appendChild(btn);
+            });
+
+            section.classList.remove('hidden');
+        });
+});
+
+function addExistingOption(opt) {
+    const values = Array.isArray(opt.options) ? opt.options : [];
+    addOption(opt.name, values);
+}
+
 function addOption(name = '', values = []) {
     optionIndex++;
     const idx = optionIndex;
@@ -355,6 +399,7 @@ function addOption(name = '', values = []) {
         </div>
     `;
     container.appendChild(div);
+    generateMatrix();
 }
 
 function removeOption(idx) {

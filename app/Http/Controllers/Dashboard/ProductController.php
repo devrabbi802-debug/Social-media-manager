@@ -115,16 +115,20 @@ class ProductController extends Controller
                 $values = array_map('trim', explode(',', $valuesStr));
                 $values = array_filter($values);
 
-                AttributeTemplate::create([
-                    'category_id' => $product->category_id,
-                    'name' => $name,
-                    'slug' => \Str::slug($name),
-                    'type' => 'option',
-                    'options' => $values,
-                    'is_required' => false,
-                    'is_global' => false,
-                    'is_variant_option' => true,
-                ]);
+                AttributeTemplate::updateOrCreate(
+                    [
+                        'category_id' => $product->category_id,
+                        'slug' => \Str::slug($name),
+                        'is_global' => false,
+                    ],
+                    [
+                        'name' => $name,
+                        'type' => 'select',
+                        'options' => $values,
+                        'is_required' => false,
+                        'is_variant_option' => true,
+                    ]
+                );
             }
         }
 
@@ -151,7 +155,7 @@ class ProductController extends Controller
                 $variantStock = (int) ($variantData['stock_quantity'] ?? 0);
                 $totalVariantStock += $variantStock;
 
-                ProductVariant::create([
+                $variant = ProductVariant::create([
                     'product_id' => $product->id,
                     'name' => null,
                     'sku' => $variantData['sku'],
@@ -161,6 +165,27 @@ class ProductController extends Controller
                     'attributes' => $variantData['attributes'] ?? [],
                     'is_active' => true,
                 ]);
+
+                // Save to relational table (variant_attribute_values)
+                if (!empty($variantData['attributes'])) {
+                    foreach ($variantData['attributes'] as $attrName => $attrValue) {
+                        // AttributeTemplate lookup by name + category
+                        $attrTemplate = AttributeTemplate::where('name', $attrName)
+                            ->where(function ($q) use ($product) {
+                                $q->where('category_id', $product->category_id)
+                                  ->orWhere('is_global', true);
+                            })
+                            ->first();
+
+                        if ($attrTemplate) {
+                            \App\Models\VariantAttributeValue::create([
+                                'variant_id' => $variant->id,
+                                'attribute_template_id' => $attrTemplate->id,
+                                'value' => $attrValue,
+                            ]);
+                        }
+                    }
+                }
             }
             $product->update(['stock_quantity' => $totalVariantStock]);
         }
@@ -191,7 +216,7 @@ class ProductController extends Controller
 
     public function edit(Product $product)
     {
-        $product->load(['attributeValues.attributeTemplate', 'images', 'variants']);
+        $product->load(['attributeValues.attributeTemplate', 'images', 'variants.attributeValues.attributeTemplate']);
         $categories = Category::where('is_active', true)
             ->with('children')
             ->orderBy('name')
@@ -288,11 +313,22 @@ class ProductController extends Controller
 
     public function destroy(Product $product)
     {
-        foreach ($product->images as $image) {
-            \Storage::disk('public')->delete($image->image_path);
-        }
+        \DB::transaction(function () use ($product) {
+            // Purono images delete koro storage theke
+            foreach ($product->images as $image) {
+                \Storage::disk('public')->delete($image->image_path);
+            }
 
-        $product->delete();
+            // Related records delete koro (FK constraint ase)
+            $product->stockMovements()->delete();
+            $product->inventoryAlert()->delete();
+            $product->attributeValues()->delete();
+            $product->variants()->delete();
+            $product->images()->delete();
+
+            // Product delete
+            $product->delete();
+        });
 
         return redirect()->route('inventory.products.index')
             ->with('success', 'প্রোডাক্ট ডিলিট হয়েছে!');
@@ -307,6 +343,27 @@ class ProductController extends Controller
             ->get();
 
         return response()->json($attributes);
+    }
+
+    /**
+     * Category select korle shei category te existing variant options fetch kore
+     */
+    public function getVariantOptions(Request $request)
+    {
+        $categoryId = $request->category_id;
+        if (!$categoryId) {
+            return response()->json([]);
+        }
+
+        $options = AttributeTemplate::where('is_variant_option', true)
+            ->where(function ($q) use ($categoryId) {
+                $q->where('category_id', $categoryId)
+                  ->orWhere('is_global', true);
+            })
+            ->orderBy('name')
+            ->get(['id', 'name', 'options']);
+
+        return response()->json($options);
     }
 
     public function storeVariant(Request $request, Product $product)
