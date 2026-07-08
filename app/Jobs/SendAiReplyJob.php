@@ -64,13 +64,7 @@ class SendAiReplyJob implements ShouldQueue
         ]);
 
         if (empty($this->imageUrls)) {
-            Log::info('SendAiReplyJob: text-only job, sleeping 5s to wait for image', [
-                'sender_id' => $this->senderId,
-            ]);
-            sleep(5);
-            Log::info('SendAiReplyJob: sleep done, checking recent messages', [
-                'sender_id' => $this->senderId,
-            ]);
+            sleep(3);
 
             $conversation = Conversation::where('sender_id', $this->senderId)->first();
 
@@ -78,7 +72,7 @@ class SendAiReplyJob implements ShouldQueue
                 $recentImages = Message::where('conversation_id', $conversation->id)
                     ->where('direction', 'incoming')
                     ->where('type', 'image')
-                    ->where('created_at', '>=', now()->subSeconds(15))
+                    ->where('created_at', '>=', now()->subSeconds(10))
                     ->pluck('image_path')
                     ->toArray();
 
@@ -88,31 +82,19 @@ class SendAiReplyJob implements ShouldQueue
                         'image_count' => count($recentImages),
                     ]);
                     $this->imageUrls = $recentImages;
-                }
-
-                for ($i = 0; $i < 15; $i++) {
-                    $recentReply = Message::where('conversation_id', $conversation->id)
+                } else {
+                    $hasRecentReply = Message::where('conversation_id', $conversation->id)
                         ->where('direction', 'outgoing')
                         ->where('created_at', '>=', now()->subSeconds(5))
                         ->exists();
 
-                    if ($recentReply) {
-                        Log::info('SendAiReplyJob: SKIPPED text job - another reply already sent', [
-                            'tenant_id' => $this->tenantId,
+                    if ($hasRecentReply) {
+                        Log::info('SendAiReplyJob: SKIPPED text job - reply already sent', [
                             'sender_id' => $this->senderId,
-                            'wait_seconds' => $i + 5,
                         ]);
                         return;
                     }
-
-                    if ($i < 14) {
-                        sleep(1);
-                    }
                 }
-
-                Log::info('SendAiReplyJob: text job polling complete, no recent reply found, proceeding', [
-                    'sender_id' => $this->senderId,
-                ]);
             }
         }
 
@@ -530,16 +512,51 @@ class SendAiReplyJob implements ShouldQueue
             return [];
         }
 
-        return Message::where('conversation_id', $conversation->id)
+        $messages = Message::where('conversation_id', $conversation->id)
             ->orderBy('created_at', 'desc')
-            ->limit(10)
+            ->limit(20)
             ->get()
             ->reverse()
-            ->map(fn (Message $msg) => [
-                'role' => $msg->direction === 'outgoing' ? 'assistant' : 'user',
-                'content' => $msg->content,
-            ])
-            ->toArray();
+            ->values();
+
+        $history = [];
+
+        foreach ($messages as $msg) {
+            if ($msg->direction === 'outgoing' && $msg->image_analysis && !empty($msg->image_analysis['matched_products'])) {
+                $productLines = [];
+                foreach ($msg->image_analysis['matched_products'] as $product) {
+                    $details = $product['full_details'] ?? [];
+                    $name = $details['name'] ?? 'N/A';
+                    $sku = $details['sku'] ?? 'N/A';
+                    $price = $details['price'] ?? 0;
+                    $line = "- {$name} (SKU: {$sku}, মূল্য: ৳" . number_format($price, 2) . ")";
+                    if (isset($details['stock'])) {
+                        $stockText = $details['stock'] > 0 ? "{$details['stock']}টি স্টকে" : "স্টক শেষ";
+                        $line .= " [স্টক: {$stockText}]";
+                    }
+                    if (isset($details['category'])) {
+                        $line .= " [ক্যাটাগরি: {$details['category']}]";
+                    }
+                    if (isset($details['brand'])) {
+                        $line .= " [ব্র্যান্ড: {$details['brand']}]";
+                    }
+                    $productLines[] = $line;
+                }
+
+                $productInfo = implode("\n", $productLines);
+                $history[] = [
+                    'role' => 'assistant',
+                    'content' => "আমি আগে এই প্রোডাক্টগুলো সম্পর্কে জানিয়েছি:\n{$productInfo}\n\nআমার উত্তর: {$msg->content}",
+                ];
+            } else {
+                $history[] = [
+                    'role' => $msg->direction === 'outgoing' ? 'assistant' : 'user',
+                    'content' => $msg->content,
+                ];
+            }
+        }
+
+        return $history;
     }
 
     private function buildSystemPrompt(Tenant $tenant): string

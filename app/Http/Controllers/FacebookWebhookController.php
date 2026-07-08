@@ -205,8 +205,18 @@ class FacebookWebhookController extends Controller
             $finalText = $text;
             $delay = 0;
 
+            $dispatchKey = "job_dispatched:{$senderId}";
+            $alreadyDispatched = \Illuminate\Support\Facades\Cache::get($dispatchKey);
+
+            if ($alreadyDispatched) {
+                Log::info('Webhook debounce: skipping duplicate dispatch', [
+                    'sender_id' => $senderId,
+                    'has_images' => !empty($imageUrls),
+                ]);
+                return;
+            }
+
             if (! empty($imageUrls)) {
-                // Image arrived - check for recent text (last 5 sec)
                 $recentText = Message::where('conversation_id', $conversation->id)
                     ->where('direction', 'incoming')
                     ->where('type', 'text')
@@ -223,7 +233,6 @@ class FacebookWebhookController extends Controller
                     ]);
                 }
             } elseif ($text) {
-                // Text only - check for recent images (last 5 sec)
                 $recentImages = Message::where('conversation_id', $conversation->id)
                     ->where('direction', 'incoming')
                     ->where('type', 'image')
@@ -238,10 +247,10 @@ class FacebookWebhookController extends Controller
                         'sender_id' => $senderId,
                         'image_count' => count($recentImages),
                     ]);
-                } else {
-                    $delay = 0;
                 }
             }
+
+            \Illuminate\Support\Facades\Cache::put($dispatchKey, true, now()->addSeconds(8));
 
             SendAiReplyJob::dispatch(
                 tenantId: $tenant->id,
