@@ -16,6 +16,7 @@ use App\Http\Controllers\Dashboard\BrandController;
 use App\Http\Controllers\Dashboard\AttributeTemplateController;
 use App\Http\Controllers\Dashboard\WarehouseController;
 use App\Http\Controllers\Dashboard\InventoryController;
+use App\Http\Controllers\Dashboard\ImageMatchController;
 
 /*
 |--------------------------------------------------------------------------
@@ -94,6 +95,9 @@ Route::middleware([
             Route::put('/products/{product}/variants/{variant}', [ProductController::class, 'updateVariant'])->name('products.variants.update');
             Route::delete('/products/{product}/variants/{variant}', [ProductController::class, 'destroyVariant'])->name('products.variants.destroy');
 
+            // Product Embeddings
+            Route::post('/products/{product}/generate-embeddings', [ProductController::class, 'generateEmbeddings'])->name('products.generate-embeddings');
+
             // Categories
             Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
             Route::get('/categories/create', [CategoryController::class, 'create'])->name('categories.create');
@@ -170,5 +174,10 @@ Route::middleware([
         Route::get('/facebook/callback', [FacebookOAuthController::class, 'callback'])->name('facebook.callback');
         Route::get('/facebook/select-page', [FacebookOAuthController::class, 'selectPage'])->name('facebook.select.page');
         Route::post('/facebook/connect-page', [FacebookOAuthController::class, 'connectSelectedPage'])->name('facebook.connect.page');
+
+        // Image Matching (CLIP)
+        Route::get('/image-match', [ImageMatchController::class, 'index'])->name('image-match.index');
+        Route::post('/image-match', [ImageMatchController::class, 'match'])->name('image-match.match');
+        Route::post('/image-match/url', [ImageMatchController::class, 'matchUrl'])->name('image-match.url');
     });
 });

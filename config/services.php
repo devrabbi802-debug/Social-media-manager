@@ -13,4 +13,10 @@ return [
     'gemini' => [
         'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
     ],
+
+    'clip' => [
+        'server_url' => env('CLIP_SERVER_URL', 'http://localhost:8089'),
+        'threshold' => env('CLIP_THRESHOLD', 0.7),
+        'timeout' => env('CLIP_TIMEOUT', 30),
+    ],
 ];

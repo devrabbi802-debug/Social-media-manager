@@ -233,6 +233,46 @@ class ProductController extends Controller
         return view('dashboard.products.show', compact('product'));
     }
 
+    /**
+     * Generate CLIP embeddings for all product images.
+     */
+    public function generateEmbeddings(Product $product)
+    {
+        $images = $product->images;
+        $variantImages = $product->variants->flatMap->images;
+
+        $processed = 0;
+        $errors = 0;
+
+        // Process product images
+        foreach ($images as $image) {
+            try {
+                \App\Jobs\AnalyzeProductImageJob::dispatch($image, auth()->id());
+                $processed++;
+            } catch (\Exception $e) {
+                $errors++;
+            }
+        }
+
+        // Process variant images
+        foreach ($variantImages as $image) {
+            try {
+                \App\Jobs\AnalyzeVariantImageJob::dispatch($image, auth()->id());
+                $processed++;
+            } catch (\Exception $e) {
+                $errors++;
+            }
+        }
+
+        $message = "{$processed}টি ছবি AI দিয়ে চেনানোর জন্য পাঠানো হয়েছে।";
+        if ($errors > 0) {
+            $message .= " {$errors}টি ছবিতে সমস্যা হয়েছে।";
+        }
+
+        return redirect()->route('inventory.products.show', $product)
+            ->with('success', $message);
+    }
+
     public function edit(Product $product)
     {
         $product->load(['attributeValues.attributeTemplate', 'images', 'variants.attributeValues.attributeTemplate', 'variants.images']);

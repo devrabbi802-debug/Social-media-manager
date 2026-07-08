@@ -27,9 +27,22 @@
                 <div class="bg-white rounded-2xl p-6 shadow-sm">
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-lg font-bold text-gray-900">প্রোডাক্ট ইমেজ</h2>
-                        @if($product->images->count())
-                            <span class="text-sm text-gray-500">{{ $product->images->count() }}টি ইমেজ</span>
-                        @endif
+                        <div class="flex items-center space-x-3">
+                            @if($product->images->count())
+                                <span class="text-sm text-gray-500">{{ $product->images->count() }}টি ইমেজ</span>
+                            @endif
+                            @if($product->images->count() > 0)
+                                <form action="{{ route('inventory.products.generate-embeddings', $product) }}" method="POST" class="inline" onsubmit="return confirm('এই প্রোডাক্টের সব ছবি AI দিয়ে চেনা হবে। চালিয়ে যেতে চান?')">
+                                    @csrf
+                                    <button type="submit" class="inline-flex items-center px-3 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition">
+                                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                                        </svg>
+                                        AI দিয়ে ছবি চেনান
+                                    </button>
+                                </form>
+                            @endif
+                        </div>
                     </div>
 
                     @if($product->images->count())
@@ -317,13 +330,37 @@
                 @endif
 
                 {{-- AI Image Analysis --}}
-                @if($product->images->where('image_analysis', '!=', null)->count())
+                @if($product->images->where('image_analysis', '!=', null)->count() || $product->images->where('embedding', '!=', null)->count())
                 <div class="bg-white rounded-2xl p-6 shadow-sm">
                     <h2 class="text-lg font-bold text-gray-900 mb-4">AI ইমেজ বিশ্লেষণ</h2>
                     <div class="space-y-4">
-                        @foreach($product->images->where('image_analysis', '!=', null) as $image)
+                        @foreach($product->images as $image)
                         <div class="border border-gray-200 rounded-xl p-3">
-                            <img src="{{ asset('storage/' . $image->image_path) }}" class="w-full h-24 object-cover rounded-lg mb-2">
+                            <div class="flex items-center justify-between mb-2">
+                                <img src="{{ asset('storage/' . $image->image_path) }}" class="w-full h-24 object-cover rounded-lg">
+                            </div>
+                            
+                            {{-- Embedding Status --}}
+                            <div class="mb-2">
+                                @if(!empty($image->embedding))
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        ছবি চেনা হয়েছে
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        ছবি চেনা হয়নি
+                                    </span>
+                                @endif
+                            </div>
+
+                            {{-- Image Analysis --}}
+                            @if($image->image_analysis)
                             <div class="space-y-1">
                                 @foreach($image->image_analysis as $key => $value)
                                     @if($value)
@@ -334,6 +371,7 @@
                                     @endif
                                 @endforeach
                             </div>
+                            @endif
                         </div>
                         @endforeach
                     </div>
@@ -343,17 +381,23 @@
                 {{-- AI Variant Image Analysis --}}
                 @php
                     $variantImagesWithAnalysis = collect();
+                    $variantImagesWithEmbedding = collect();
                     foreach($product->variants as $variant) {
-                        foreach($variant->images->where('image_analysis', '!=', null) as $img) {
-                            $variantImagesWithAnalysis->push($img);
+                        foreach($variant->images as $img) {
+                            if($img->image_analysis) {
+                                $variantImagesWithAnalysis->push($img);
+                            }
+                            if(!empty($img->embedding)) {
+                                $variantImagesWithEmbedding->push($img);
+                            }
                         }
                     }
                 @endphp
-                @if($variantImagesWithAnalysis->count())
+                @if($variantImagesWithAnalysis->count() || $variantImagesWithEmbedding->count())
                 <div class="bg-white rounded-2xl p-6 shadow-sm">
                     <h2 class="text-lg font-bold text-gray-900 mb-4">AI ভ্যারিয়েন্ট ইমেজ বিশ্লেষণ</h2>
                     <div class="space-y-4">
-                        @foreach($variantImagesWithAnalysis as $image)
+                        @foreach($product->variants->flatMap->images as $image)
                         <div class="border border-gray-200 rounded-xl p-3">
                             <div class="flex items-center gap-2 mb-2">
                                 <img src="{{ asset('storage/' . $image->image_path) }}" class="w-16 h-16 object-cover rounded-lg">
@@ -362,6 +406,28 @@
                                     <p class="text-xs text-gray-500">{{ $image->variant->display ?? '' }}</p>
                                 </div>
                             </div>
+
+                            {{-- Embedding Status --}}
+                            <div class="mb-2">
+                                @if(!empty($image->embedding))
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        ছবি চেনা হয়েছে
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        ছবি চেনা হয়নি
+                                    </span>
+                                @endif
+                            </div>
+                            
+                            {{-- Image Analysis --}}
+                            @if($image->image_analysis)
                             <div class="space-y-1">
                                 @foreach($image->image_analysis as $key => $value)
                                     @if($value)
@@ -372,6 +438,7 @@
                                     @endif
                                 @endforeach
                             </div>
+                            @endif
                         </div>
                         @endforeach
                     </div>

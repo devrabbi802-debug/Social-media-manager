@@ -9,7 +9,7 @@ use App\Models\FacebookSetting;
 use App\Models\Message;
 use App\Models\Tenant;
 use App\Services\AiChatService;
-use App\Services\GeminiKeyManager;
+use App\Services\ClipService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -204,17 +204,69 @@ class SendAiReplyJob implements ShouldQueue
             return null;
         }
 
-        $keyManager = new GeminiKeyManager($facebookSetting->user_id);
-        $keyStats = $keyManager->getKeyStats();
-
-        if ($keyStats['total'] === 0) {
-            Log::warning('No Gemini keys available', [
-                'user_id' => $facebookSetting->user_id,
-            ]);
+        // Check CLIP server health
+        $clipService = new ClipService();
+        $health = $clipService->healthCheck();
+        
+        if ($health['status'] !== 'healthy') {
+            Log::warning('CLIP server is not healthy', ['health' => $health]);
             return $this->getFallbackReply();
         }
 
-        $allDescriptions = $this->processImagesInBatches($facebookSetting->user_id);
+        // Get catalog embeddings for matching
+        $catalogEmbeddings = $clipService->getCatalogEmbeddings();
+        
+        if (empty($catalogEmbeddings)) {
+            Log::warning('No catalog embeddings found', ['user_id' => $facebookSetting->user_id]);
+            return $this->getFallbackReply();
+        }
+
+        $allDescriptions = [];
+        
+        // Process each image
+        foreach ($this->imageUrls as $index => $imageUrl) {
+            try {
+                // Get customer image embedding
+                $customerEmbedding = $clipService->getEmbeddingFromUrl($imageUrl);
+                
+                if (!$customerEmbedding || !isset($customerEmbedding['embedding'])) {
+                    $allDescriptions[] = "ছবি " . ($index + 1) . ": ছবি বিশ্লেষণ করা যায়নি।";
+                    continue;
+                }
+
+                // Match against catalog
+                $matchResult = $clipService->matchImage(
+                    base64_encode(file_get_contents($imageUrl)),
+                    $catalogEmbeddings,
+                    5,
+                    config('services.clip.threshold', 0.7)
+                );
+
+                if ($matchResult && isset($matchResult['best_match'])) {
+                    $bestMatch = $matchResult['best_match'];
+                    $score = round($bestMatch['score'] * 100, 1);
+                    
+                    $description = "প্রোডাক্ট ম্যাচ: {$bestMatch['product_name']} (স্কোর: {$score}%)";
+                    
+                    // Add alternative matches if any
+                    if (count($matchResult['matches']) > 1) {
+                        $alternatives = array_slice($matchResult['matches'], 1, 3);
+                        $altNames = array_column($alternatives, 'product_name');
+                        $description .= "\nঅন্যান্য সম্ভাব্য: " . implode(', ', $altNames);
+                    }
+                    
+                    $allDescriptions[] = "ছবি " . ($index + 1) . ": " . $description;
+                } else {
+                    $allDescriptions[] = "ছবি " . ($index + 1) . ": এই ছবির সাথে কোনো প্রোডাক্ট ম্যাচ করা যায়নি।";
+                }
+            } catch (\Exception $e) {
+                Log::error('Image processing failed', [
+                    'image_url' => $imageUrl,
+                    'error' => $e->getMessage(),
+                ]);
+                $allDescriptions[] = "ছবি " . ($index + 1) . ": ছবি প্রক্রিয়াকরণে সমস্যা হয়েছে।";
+            }
+        }
 
         if (empty($allDescriptions)) {
             return $this->getFallbackReply();
@@ -243,71 +295,6 @@ class SendAiReplyJob implements ShouldQueue
                 'image_count' => $imageCount,
             ],
         ] : null;
-    }
-
-    private function processImagesInBatches(string $userId): array
-    {
-        $allDescriptions = [];
-        $batchSize = 10;
-        $imageChunks = array_chunk($this->imageUrls, $batchSize);
-
-        foreach ($imageChunks as $chunkIndex => $chunk) {
-            $batchId = uniqid('batch_', true);
-            $totalImages = count($chunk);
-
-            cache()->put("batch_{$batchId}_results", [], 300);
-            cache()->put("batch_{$batchId}_errors", [], 300);
-            cache()->put("batch_{$batchId}_total", $totalImages, 300);
-            cache()->put("batch_{$batchId}_done", false, 300);
-
-            $jobs = [];
-            foreach ($chunk as $index => $imageUrl) {
-                $globalIndex = ($chunkIndex * $batchSize) + $index;
-                $jobs[] = new ProcessImageBatch(
-                    userId: $userId,
-                    imageUrl: $imageUrl,
-                    imageIndex: $globalIndex,
-                    trackingId: $batchId,
-                );
-            }
-
-            \Bus::batch($jobs)->onQueue('facebook')->dispatch();
-
-            $startTime = now();
-            $timeout = 90;
-
-            while (true) {
-                if (now()->diffInSeconds($startTime) > $timeout) {
-                    Log::warning('Batch processing timeout', [
-                        'batch_id' => $batchId,
-                        'elapsed' => now()->diffInSeconds($startTime),
-                    ]);
-                    break;
-                }
-
-                $done = cache()->get("batch_{$batchId}_done", false);
-                if ($done) {
-                    break;
-                }
-
-                usleep(500000);
-            }
-
-            $results = cache()->get("batch_{$batchId}_results", []);
-            $errors = cache()->get("batch_{$batchId}_errors", []);
-
-            usort($results, fn ($a, $b) => $a['index'] <=> $b['index']);
-
-            foreach ($results as $result) {
-                $allDescriptions[] = "ছবি " . ($result['index'] + 1) . ": " . $result['description'];
-            }
-
-            if ($chunkIndex < count($imageChunks) - 1) {
-                sleep(2);
-            }
-        }
-
-        return $allDescriptions;
     }
 
     private function getFallbackReply(): ?array

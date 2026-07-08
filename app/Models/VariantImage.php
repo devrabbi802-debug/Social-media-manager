@@ -13,10 +13,12 @@ class VariantImage extends Model
         'alt_text',
         'sort_order',
         'image_analysis',
+        'embedding',
     ];
 
     protected $casts = [
         'image_analysis' => 'array',
+        'embedding' => 'array',
     ];
 
     public function variant(): BelongsTo

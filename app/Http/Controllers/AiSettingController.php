@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AiSetting;
-use App\Services\GeminiApiService;
+use App\Services\ClipService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -24,7 +24,11 @@ class AiSettingController extends Controller
 
         $activeTab = request('tab', 'message');
 
-        return view('dashboard.ai-setup', compact('messageKeys', 'imageKeys', 'activeTab'));
+        // Check CLIP server status
+        $clipService = new ClipService();
+        $clipStatus = $clipService->healthCheck();
+
+        return view('dashboard.ai-setup', compact('messageKeys', 'imageKeys', 'activeTab', 'clipStatus'));
     }
 
     public function store(Request $request)
@@ -90,15 +94,27 @@ class AiSettingController extends Controller
         $tab = $aiSetting->type;
 
         if ($tab === 'image') {
-            $result = GeminiApiService::testConnection($aiSetting->api_key);
+            // Test CLIP server instead of Gemini
+            $clipService = new ClipService();
+            $result = $clipService->healthCheck();
+            
+            if ($result['status'] === 'healthy') {
+                $status = 'success';
+                $message = 'CLIP Server স্বাস্থ্য সঠিক! মডেল: ' . ($result['details']['model'] ?? 'ViT-B/32') . 
+                           ', ডিভাইস: ' . ($result['details']['device'] ?? 'unknown') .
+                           ', এমбедিং ডাইমেনশন: ' . ($result['details']['embedding_dimension'] ?? 512);
+            } else {
+                $status = 'error';
+                $message = 'CLIP Server সংযোগ করা যায়নি: ' . ($result['details']['error'] ?? 'Unknown error');
+            }
         } else {
             $result = $this->testGroqKey($aiSetting->api_key);
+            $status = $result['success'] ? 'success' : 'error';
+            $message = $result['message'];
         }
 
-        $status = $result['success'] ? 'success' : 'error';
-
         return redirect()->route('ai.setup', ['tab' => $tab])
-            ->with($status, $result['message']);
+            ->with($status, $message);
     }
 
     private function testGroqKey(string $apiKey): array

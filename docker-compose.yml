@@ -109,8 +109,22 @@ services:
     networks:
       - laravel-net
 
+  clip-server:
+    build:
+      context: ./clip-server
+      dockerfile: Dockerfile
+    container_name: clip-server
+    restart: unless-stopped
+    ports:
+      - "8089:8089"
+    volumes:
+      - clip-models:/root/.cache/clip
+    networks:
+      - laravel-net
+
 volumes:
   mysql-data:
+  clip-models:
 
 networks:
   laravel-net:

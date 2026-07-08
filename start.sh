@@ -10,6 +10,45 @@ cd "$PROJECT_DIR"
 docker compose up -d
 echo "[OK] Docker containers started"
 
+# CLIP Server start (Python FastAPI)
+CLIP_DIR="$PROJECT_DIR/clip-server"
+if [ -d "$CLIP_DIR" ]; then
+    # Check if CLIP server is already running
+    if ! pgrep -f "python.*main.py" > /dev/null 2>&1; then
+        echo "[INFO] Starting CLIP Image Recognition Server..."
+        cd "$CLIP_DIR"
+        
+        # Check if venv exists, if not create it
+        if [ ! -d "venv" ]; then
+            echo "[INFO] Creating Python virtual environment..."
+            python3 -m venv venv
+            source venv/bin/activate
+            pip install -r requirements.txt
+        else
+            source venv/bin/activate
+        fi
+        
+        # Start CLIP server in background
+        nohup python main.py > /tmp/clip-server.log 2>&1 &
+        CLIP_PID=$!
+        
+        # Wait for server to start
+        sleep 5
+        
+        if kill -0 $CLIP_PID 2>/dev/null; then
+            echo "[OK] CLIP Server started (PID: $CLIP_PID)"
+        else
+            echo "[WARN] CLIP Server start hoyni. Check /tmp/clip-server.log"
+        fi
+        
+        cd "$PROJECT_DIR"
+    else
+        echo "[OK] CLIP Server already running"
+    fi
+else
+    echo "[WARN] CLIP Server directory not found"
+fi
+
 # DNS fix (systemd-resolved reboot er por change kore)
 if grep -q "nameserver 127.0.0.53" /etc/resolv.conf 2>/dev/null; then
     sudo sed -i 's/nameserver 127.0.0.53/nameserver 127.0.0.1/' /etc/resolv.conf
@@ -29,6 +68,9 @@ fi
 echo ""
 echo "========================================="
 echo "  DONE! Visit: http://smm.test"
+echo "========================================="
+echo ""
+echo "  CLIP Server: http://localhost:8089"
 echo "========================================="
 
 # Ngrok tunnel start (Facebook webhook er jonno)

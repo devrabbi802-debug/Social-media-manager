@@ -2,10 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Models\AiSetting;
-use App\Models\AiImagePrompt;
-use App\Services\GeminiApiService;
-use App\Services\GeminiKeyManager;
+use App\Services\ClipService;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -58,33 +55,48 @@ class ProcessImageBatch implements ShouldQueue
 
     public function handle(): void
     {
-        $keyManager = new GeminiKeyManager($this->userId);
-        $key = $keyManager->getAvailableKey();
-
-        if (! $key) {
-            $key = $keyManager->getActiveKeys()->first();
-        }
-
-        if (! $key) {
-            throw new \Exception('No Gemini API key available');
-        }
-
-        $imageData = $this->downloadImage($this->imageUrl);
-
-        if (! $imageData) {
-            throw new \Exception('Failed to download image');
-        }
-
-        $geminiService = new GeminiApiService($key->api_key);
-
-        $prompt = AiImagePrompt::getActive()->prompt_text;
-
         try {
-            $description = $geminiService->analyzeImage($imageData, $prompt);
+            $clipService = new ClipService();
+            
+            // Check CLIP server health first
+            $health = $clipService->healthCheck();
+            if ($health['status'] !== 'healthy') {
+                throw new \Exception('CLIP server is not healthy: ' . ($health['details']['error'] ?? 'Unknown error'));
+            }
 
-            if ($description !== null) {
-                if (mb_strlen($description) > 800) {
-                    $description = mb_substr($description, 0, 800) . '...';
+            // Generate embedding for customer image
+            $result = $clipService->getEmbeddingFromUrl($this->imageUrl);
+
+            if ($result && isset($result['embedding'])) {
+                // Get catalog embeddings for matching
+                $catalogEmbeddings = $clipService->getCatalogEmbeddings();
+                
+                if (empty($catalogEmbeddings)) {
+                    $description = "কোনো প্রোডাক্ট ক্যাটালগ পাওয়া যায়নি।";
+                } else {
+                    // Match customer image against catalog
+                    $matchResult = $clipService->matchImage(
+                        base64_encode(file_get_contents($this->imageUrl)),
+                        $catalogEmbeddings,
+                        5,
+                        config('services.clip.threshold', 0.7)
+                    );
+
+                    if ($matchResult && isset($matchResult['best_match'])) {
+                        $bestMatch = $matchResult['best_match'];
+                        $score = round($bestMatch['score'] * 100, 1);
+                        
+                        $description = "প্রোডাক্ট ম্যাচ: {$bestMatch['product_name']} (স্কোর: {$score}%)";
+                        
+                        // Add alternative matches if any
+                        if (count($matchResult['matches']) > 1) {
+                            $alternatives = array_slice($matchResult['matches'], 1, 3);
+                            $altNames = array_column($alternatives, 'product_name');
+                            $description .= "\nঅন্যান্য সম্ভাব্য: " . implode(', ', $altNames);
+                        }
+                    } else {
+                        $description = "দুঃখিত, এই ছবির সাথে কোনো প্রোডাক্ট ম্যাচ করা যায়নি।";
+                    }
                 }
 
                 cache()->push("batch_{$this->trackingId}_results", [
@@ -102,35 +114,15 @@ class ProcessImageBatch implements ShouldQueue
 
                 $this->checkBatchCompletion();
             } else {
-                throw new \Exception('Gemini returned null');
+                throw new \Exception('CLIP returned empty embedding');
             }
         } catch (\Exception $e) {
-            if (str_contains($e->getMessage(), '429')) {
-                $keyManager->markKeyRateLimited($key->id, 60);
-                throw $e;
-            }
-
-            throw $e;
-        }
-    }
-
-    private function downloadImage(string $url): ?string
-    {
-        try {
-            $response = Http::timeout(30)->get($url);
-
-            if ($response->failed()) {
-                Log::error('Failed to download image', ['url' => $url]);
-                return null;
-            }
-
-            return base64_encode($response->body());
-        } catch (\Exception $e) {
-            Log::error('Image download exception', [
-                'url' => $url,
+            Log::error('ProcessImageBatch failed', [
+                'user_id' => $this->userId,
+                'image_index' => $this->imageIndex,
                 'error' => $e->getMessage(),
             ]);
-            return null;
+            throw $e;
         }
     }
 

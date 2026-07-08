@@ -43,16 +43,15 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 ### AI Integration
 
 - **Groq API** (Llama 3.3 70B) for auto-reply on Facebook Messenger
-- **Gemini API** (Gemini 2.5 Flash) for image analysis
+- **CLIP Server** (Local, Offline, Free) for image recognition and product matching
 - **`AiSystemPrompt`** — landlord-level table (`ai_system_prompts`), global default prompt with `{company_name}` placeholder
-- **`AiImagePrompt`** — landlord-level table (`ai_image_prompts`), Gemini image analysis prompt (editable from admin panel)
+- **`AiImagePrompt`** — landlord-level table (`ai_image_prompts`), image analysis prompt (editable from admin panel)
 - **`AiSetting`** — tenant-level table (`ai_settings`), per-user `api_key` and optional `system_prompt`
 - **`AiChatService`** (`app/Services/`) — Groq API wrapper, 15s timeout, handles 429 rate limiting, key rotation
-- **`GeminiApiService`** (`app/Services/`) — Gemini API wrapper for image analysis/generation, 60s timeout
-- **`GeminiKeyManager`** (`app/Services/`) — Round-robin key rotation with Cache-based rate limiting
+- **`ClipService`** (`app/Services/`) — CLIP server wrapper for image embedding and matching
 - **`SendAiReplyJob`** — queued on `facebook` queue, 3 tries, 45s backoff, `WithoutOverlapping` per tenant+sender. Sends typing indicators during AI processing
-- **`ProcessImageBatch`** — Batch image analysis via Gemini API
-- **`AnalyzeProductImageJob`** — Product image analysis via Gemini API, queued on `facebook` queue, stores analysis in `product_images.image_analysis` JSON column
+- **`ProcessImageBatch`** — Batch image analysis via CLIP server
+- **`AnalyzeProductImageJob`** — Product image embedding via CLIP server, queued on `facebook` queue, stores embedding in `product_images.embedding` JSON column
 - **Queue**: Redis, queue name `facebook`, Horizon supervisor (1-10 processes, 256MB memory)
 
 ### Facebook Integration
@@ -76,7 +75,8 @@ docker compose logs -f
 docker exec laravel-app php artisan <command>
 ```
 
-- **6 services**: app, mysql (port 3307), node (port 5173), redis, phpmyadmin (port 8080), worker
+- **7 services**: app, mysql (port 3307), node (port 5173), redis, phpmyadmin (port 8080), worker, clip-server (port 8089)
+- **CLIP Server**: Python FastAPI server for image embedding and matching (local, offline, free)
 - **Worker container**: Supervisor → `php artisan horizon` (not direct — see `docker/supervisord.conf`)
 - **Entrypoint** (`docker-entrypoint.sh`): waits for MySQL → composer install → npm install → key:generate → migrate → serve
 - `.env` uses `DB_HOST=mysql` (Docker service name), `.env.example` defaults to PostgreSQL
@@ -97,7 +97,7 @@ docker exec laravel-app php artisan <command>
 - **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/admin/layouts/app.blade.php` (admin)
 - **Menu config**: `config/menu.php` — add admin sidebar menu groups here
 - **Tenancy config**: `config/tenancy.php` — central domains, DB suffix, tenant model
-- **Services config**: `config/services.php` — Facebook OAuth + Groq + Gemini model
+- **Services config**: `config/services.php` — Facebook OAuth + Groq + Gemini model + CLIP server
 - **Landlord migrations**: `database/migrations/`
 - **Tenant migrations**: `database/migrations/tenant/`
 
@@ -131,13 +131,14 @@ Visiting these routes throws `ViewNotFoundException`.
 9. `products` — id, category_id (FK), brand_id (FK nullable), name, slug, sku, description, base_price, discount_price, stock_quantity, unit, barcode, status, is_featured, meta_title, meta_description, sort_order, timestamps
 10. `product_attribute_values` — id, product_id (FK), attribute_template_id (FK), value, timestamps (unique on product_id + attribute_template_id)
 11. `product_variants` — id, product_id (FK), sku, name, price, stock_quantity, attributes (JSON), barcode, is_active, timestamps
-12. `product_images` — id, product_id (FK), image_path, alt_text, sort_order, image_analysis (JSON), timestamps
-13. `warehouses` — id, name, address, phone, is_active, timestamps
-14. `stock_movements` — id, product_id (FK), variant_id (FK nullable), warehouse_id (FK), type (in/out/adjustment), quantity, reference, notes, created_by (FK nullable), timestamps
-15. `inventory_alerts` — id, product_id (FK unique), threshold, is_active, timestamps
-16. `attribute_options` — id, attribute_template_id (FK), value, slug, sort_order, is_active, timestamps (unique on attribute_template_id + slug)
-17. `stock_transfers` — id, product_id (FK), variant_id (FK nullable), from_warehouse_id (FK), to_warehouse_id (FK), quantity, status (pending/completed/cancelled), notes, created_by (FK nullable), timestamps
-18. `password_reset_tokens`, `sessions` — Standard Laravel tables
+12. `product_images` — id, product_id (FK), image_path, alt_text, sort_order, image_analysis (JSON), embedding (JSON), timestamps
+13. `variant_images` — id, variant_id (FK), image_path, alt_text, sort_order, image_analysis (JSON), embedding (JSON), timestamps
+14. `warehouses` — id, name, address, phone, is_active, timestamps
+15. `stock_movements` — id, product_id (FK), variant_id (FK nullable), warehouse_id (FK), type (in/out/adjustment), quantity, reference, notes, created_by (FK nullable), timestamps
+16. `inventory_alerts` — id, product_id (FK unique), threshold, is_active, timestamps
+17. `attribute_options` — id, attribute_template_id (FK), value, slug, sort_order, is_active, timestamps (unique on attribute_template_id + slug)
+18. `stock_transfers` — id, product_id (FK), variant_id (FK nullable), from_warehouse_id (FK), to_warehouse_id (FK), quantity, status (pending/completed/cancelled), notes, created_by (FK nullable), timestamps
+19. `password_reset_tokens`, `sessions` — Standard Laravel tables
 
 ### Seeder
 - `AdminSeeder` creates `admin@socialboost.com` / `Admin@123456`, role `super_admin` (idempotent via `updateOrCreate`)
