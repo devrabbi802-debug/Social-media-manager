@@ -273,6 +273,33 @@ class ProductController extends Controller
             ->with('success', $message);
     }
 
+    /**
+     * Generate CLIP embeddings for variant images only.
+     */
+    public function generateVariantEmbeddings(Product $product)
+    {
+        $variantImages = $product->variants->flatMap->images;
+        $processed = 0;
+        $errors = 0;
+
+        foreach ($variantImages as $image) {
+            try {
+                \App\Jobs\AnalyzeVariantImageJob::dispatch($image, auth()->id());
+                $processed++;
+            } catch (\Exception $e) {
+                $errors++;
+            }
+        }
+
+        $message = "{$processed}টি ভ্যারিয়েন্ট ছবি AI দিয়ে চেনানোর জন্য পাঠানো হয়েছে।";
+        if ($errors > 0) {
+            $message .= " {$errors}টি ছবিতে সমস্যা হয়েছে।";
+        }
+
+        return redirect()->route('inventory.products.show', $product)
+            ->with('success', $message);
+    }
+
     public function edit(Product $product)
     {
         $product->load(['attributeValues.attributeTemplate', 'images', 'variants.attributeValues.attributeTemplate', 'variants.images']);

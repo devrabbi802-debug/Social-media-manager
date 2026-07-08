@@ -205,6 +205,23 @@
                 <div class="bg-white rounded-2xl p-6 shadow-sm">
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-lg font-bold text-gray-900">ভ্যারিয়েন্ট ({{ $product->variants->count() }})</h2>
+                        @php
+                            $variantImagesCount = 0;
+                            foreach($product->variants as $variant) {
+                                $variantImagesCount += $variant->images->count();
+                            }
+                        @endphp
+                        @if($variantImagesCount > 0)
+                            <form action="{{ route('inventory.products.generate-variant-embeddings', $product) }}" method="POST" class="inline" onsubmit="return confirm('এই প্রোডাক্টের সব ভ্যারিয়েন্টের ছবি AI দিয়ে চেনা হবে। চালিয়ে যেতে চান?')">
+                                @csrf
+                                <button type="submit" class="inline-flex items-center px-3 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition">
+                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                                    </svg>
+                                    AI দিয়ে ভ্যারিয়েন্ট ছবি চেনান
+                                </button>
+                            </form>
+                        @endif
                     </div>
 
                     @if($product->variants->count())

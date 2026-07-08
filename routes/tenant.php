@@ -97,6 +97,7 @@ Route::middleware([
 
             // Product Embeddings
             Route::post('/products/{product}/generate-embeddings', [ProductController::class, 'generateEmbeddings'])->name('products.generate-embeddings');
+            Route::post('/products/{product}/generate-variant-embeddings', [ProductController::class, 'generateVariantEmbeddings'])->name('products.generate-variant-embeddings');
 
             // Categories
             Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
