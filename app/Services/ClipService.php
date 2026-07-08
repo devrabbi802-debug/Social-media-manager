@@ -251,16 +251,21 @@ class ClipService
 
         // Get product image embeddings
         $productImages = \App\Models\ProductImage::whereNotNull('embedding')
-            ->with('product:id,name,sku,slug')
+            ->with('product:id,name,sku,slug,base_price,discount_price')
             ->get();
 
         foreach ($productImages as $image) {
+            $product = $image->product;
+            $price = $product->discount_price ?? $product->base_price;
             $embeddings[] = [
                 'id' => $image->id,
                 'product_id' => $image->product_id,
-                'product_name' => $image->product->name ?? 'Unknown',
-                'product_sku' => $image->product->sku ?? '',
-                'product_slug' => $image->product->slug ?? '',
+                'product_name' => $product->name ?? 'Unknown',
+                'product_sku' => $product->sku ?? '',
+                'product_slug' => $product->slug ?? '',
+                'product_price' => $price,
+                'product_base_price' => $product->base_price,
+                'product_discount_price' => $product->discount_price,
                 'embedding' => $image->embedding,
                 'type' => 'product',
                 'image_type' => 'product_image',
@@ -269,11 +274,13 @@ class ClipService
 
         // Get variant image embeddings
         $variantImages = \App\Models\VariantImage::whereNotNull('embedding')
-            ->with('variant:id,product_id,name,sku,attributes')
+            ->with('variant:id,product_id,name,sku,attributes,price')
             ->get();
 
         foreach ($variantImages as $image) {
             $variant = $image->variant;
+            $product = $variant->product ?? null;
+            $price = $variant->price ?? $product->discount_price ?? $product->base_price ?? 0;
             $embeddings[] = [
                 'id' => $image->id,
                 'variant_id' => $image->variant_id,
@@ -281,6 +288,7 @@ class ClipService
                 'product_name' => $variant->name ?? $variant->sku ?? 'Unknown',
                 'product_sku' => $variant->sku ?? '',
                 'product_slug' => '',
+                'product_price' => $price,
                 'variant_attributes' => $variant->attributes ?? [],
                 'embedding' => $image->embedding,
                 'type' => 'variant',

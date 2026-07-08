@@ -190,7 +190,6 @@ class FacebookWebhookController extends Controller
 
         if (! $facebookSetting) {
             Log::warning('No Facebook setting found for tenant', ['tenant_id' => $tenant->id]);
-
             return;
         }
 
@@ -202,18 +201,61 @@ class FacebookWebhookController extends Controller
         }
 
         try {
+            $finalImageUrls = $imageUrls;
+            $finalText = $text;
+            $delay = 0;
+
+            if (! empty($imageUrls)) {
+                // Image arrived - check for recent text (last 5 sec)
+                $recentText = Message::where('conversation_id', $conversation->id)
+                    ->where('direction', 'incoming')
+                    ->where('type', 'text')
+                    ->where('created_at', '>=', now()->subSeconds(5))
+                    ->where('facebook_mid', '!=', $mid)
+                    ->latest()
+                    ->value('content');
+
+                if ($recentText) {
+                    $finalText = $recentText;
+                    Log::info('Combined image with recent text', [
+                        'sender_id' => $senderId,
+                        'text' => $recentText,
+                    ]);
+                }
+            } elseif ($text) {
+                // Text only - check for recent images (last 5 sec)
+                $recentImages = Message::where('conversation_id', $conversation->id)
+                    ->where('direction', 'incoming')
+                    ->where('type', 'image')
+                    ->where('created_at', '>=', now()->subSeconds(5))
+                    ->where('facebook_mid', '!=', $mid)
+                    ->pluck('image_path')
+                    ->toArray();
+
+                if (!empty($recentImages)) {
+                    $finalImageUrls = $recentImages;
+                    Log::info('Combined text with recent images', [
+                        'sender_id' => $senderId,
+                        'image_count' => count($recentImages),
+                    ]);
+                } else {
+                    $delay = 0;
+                }
+            }
+
             SendAiReplyJob::dispatch(
                 tenantId: $tenant->id,
                 senderId: $senderId,
-                messageText: $text ?? '',
+                messageText: $finalText ?? '',
                 pageAccessToken: $facebookSetting->page_access_token,
-                imageUrls: $imageUrls,
-            );
+                imageUrls: $finalImageUrls,
+            )->delay(now()->addSeconds($delay));
 
             Log::info('AI reply job dispatched', [
                 'tenant_id' => $tenant->id,
                 'sender_id' => $senderId,
-                'image_count' => count($imageUrls),
+                'image_count' => count($finalImageUrls),
+                'delay' => $delay,
             ]);
         } catch (\Throwable $e) {
             Log::error('Failed to dispatch AI reply job', [

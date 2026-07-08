@@ -27,7 +27,7 @@ class SendAiReplyJob implements ShouldQueue
 
     public int $backoff = 15;
 
-    public int $timeout = 90;
+    public int $timeout = 180;
 
     public function retryUntil(): \DateTimeInterface
     {
@@ -59,8 +59,68 @@ class SendAiReplyJob implements ShouldQueue
         Log::info('SendAiReplyJob: handle() called', [
             'tenant_id' => $this->tenantId,
             'sender_id' => $this->senderId,
+            'has_images' => !empty($this->imageUrls),
+            'image_urls_count' => count($this->imageUrls ?? []),
         ]);
 
+        if (empty($this->imageUrls)) {
+            Log::info('SendAiReplyJob: text-only job, sleeping 5s to wait for image', [
+                'sender_id' => $this->senderId,
+            ]);
+            sleep(5);
+            Log::info('SendAiReplyJob: sleep done, checking recent messages', [
+                'sender_id' => $this->senderId,
+            ]);
+
+            $conversation = Conversation::where('sender_id', $this->senderId)->first();
+
+            if ($conversation) {
+                $recentImages = Message::where('conversation_id', $conversation->id)
+                    ->where('direction', 'incoming')
+                    ->where('type', 'image')
+                    ->where('created_at', '>=', now()->subSeconds(15))
+                    ->pluck('image_path')
+                    ->toArray();
+
+                if (!empty($recentImages)) {
+                    Log::info('SendAiReplyJob: text job found recent images after wait', [
+                        'sender_id' => $this->senderId,
+                        'image_count' => count($recentImages),
+                    ]);
+                    $this->imageUrls = $recentImages;
+                }
+
+                for ($i = 0; $i < 15; $i++) {
+                    $recentReply = Message::where('conversation_id', $conversation->id)
+                        ->where('direction', 'outgoing')
+                        ->where('created_at', '>=', now()->subSeconds(5))
+                        ->exists();
+
+                    if ($recentReply) {
+                        Log::info('SendAiReplyJob: SKIPPED text job - another reply already sent', [
+                            'tenant_id' => $this->tenantId,
+                            'sender_id' => $this->senderId,
+                            'wait_seconds' => $i + 5,
+                        ]);
+                        return;
+                    }
+
+                    if ($i < 14) {
+                        sleep(1);
+                    }
+                }
+
+                Log::info('SendAiReplyJob: text job polling complete, no recent reply found, proceeding', [
+                    'sender_id' => $this->senderId,
+                ]);
+            }
+        }
+
+        $this->processReply();
+    }
+
+    private function processReply(): void
+    {
         $tenant = Tenant::find($this->tenantId);
 
         if (! $tenant) {
@@ -182,6 +242,26 @@ class SendAiReplyJob implements ShouldQueue
             return null;
         }
 
+        // Check if there are recent images (text + image scenario)
+        $conversation = Conversation::where('sender_id', $this->senderId)->first();
+        if ($conversation) {
+            $recentImages = Message::where('conversation_id', $conversation->id)
+                ->where('direction', 'incoming')
+                ->where('type', 'image')
+                ->where('created_at', '>=', now()->subSeconds(10))
+                ->pluck('image_path')
+                ->toArray();
+
+            if (!empty($recentImages)) {
+                Log::info('SendAiReplyJob: text job found recent images, switching to image handler', [
+                    'sender_id' => $this->senderId,
+                    'image_count' => count($recentImages),
+                ]);
+                $this->imageUrls = $recentImages;
+                return $this->handleImageMessage($facebookSetting, $systemPrompt);
+            }
+        }
+
         $history = $this->getConversationHistory();
         $aiService = new AiChatService($systemPrompt);
         $reply = $aiService->chatWithHistory($this->messageText, $aiKeys, $history);
@@ -191,6 +271,22 @@ class SendAiReplyJob implements ShouldQueue
 
     private function handleImageMessage(FacebookSetting $facebookSetting, string $systemPrompt): ?array
     {
+        // Check if a reply was already sent recently (within 10 sec) to avoid duplicate
+        $conversation = Conversation::where('sender_id', $this->senderId)->first();
+        if ($conversation) {
+            $recentReply = Message::where('conversation_id', $conversation->id)
+                ->where('direction', 'outgoing')
+                ->where('created_at', '>=', now()->subSeconds(10))
+                ->exists();
+
+            if ($recentReply) {
+                Log::info('SendAiReplyJob: skipping image job - reply already sent recently', [
+                    'sender_id' => $this->senderId,
+                ]);
+                return null;
+            }
+        }
+
         $groqKeys = AiSetting::where('user_id', $facebookSetting->user_id)
             ->active()
             ->byType('message')
@@ -221,20 +317,23 @@ class SendAiReplyJob implements ShouldQueue
             return $this->getFallbackReply();
         }
 
-        $allDescriptions = [];
+        // Step 1: Process all images and collect matched products
+        $matchedProducts = [];
+        $processedImages = [];
         
-        // Process each image
         foreach ($this->imageUrls as $index => $imageUrl) {
             try {
-                // Get customer image embedding
                 $customerEmbedding = $clipService->getEmbeddingFromUrl($imageUrl);
                 
                 if (!$customerEmbedding || !isset($customerEmbedding['embedding'])) {
-                    $allDescriptions[] = "ছবি " . ($index + 1) . ": ছবি বিশ্লেষণ করা যায়নি।";
+                    $processedImages[] = [
+                        'index' => $index + 1,
+                        'status' => 'error',
+                        'message' => 'ছবি বিশ্লেষণ করা যায়নি',
+                    ];
                     continue;
                 }
 
-                // Match against catalog
                 $matchResult = $clipService->matchImage(
                     base64_encode(file_get_contents($imageUrl)),
                     $catalogEmbeddings,
@@ -246,42 +345,73 @@ class SendAiReplyJob implements ShouldQueue
                     $bestMatch = $matchResult['best_match'];
                     $score = round($bestMatch['score'] * 100, 1);
                     
-                    $description = "প্রোডাক্ট ম্যাচ: {$bestMatch['product_name']} (স্কোর: {$score}%)";
+                    // Find full catalog item details
+                    $catalogItem = collect($catalogEmbeddings)->first(function ($item) use ($bestMatch) {
+                        return $item['id'] == $bestMatch['id'] && $item['product_name'] == $bestMatch['product_name'];
+                    });
                     
-                    // Add alternative matches if any
-                    if (count($matchResult['matches']) > 1) {
-                        $alternatives = array_slice($matchResult['matches'], 1, 3);
-                        $altNames = array_column($alternatives, 'product_name');
-                        $description .= "\nঅন্যান্য সম্ভাব্য: " . implode(', ', $altNames);
+                    if ($catalogItem) {
+                        // Get full product/variant details from database
+                        $fullDetails = $this->getFullProductDetails($catalogItem);
+                        
+                        $matchedProducts[] = [
+                            'image_index' => $index + 1,
+                            'match_score' => $score,
+                            'product_id' => $catalogItem['product_id'],
+                            'variant_id' => $catalogItem['variant_id'] ?? null,
+                            'product_name' => $catalogItem['product_name'],
+                            'product_sku' => $catalogItem['product_sku'],
+                            'product_price' => $catalogItem['product_price'],
+                            'variant_attributes' => $catalogItem['variant_attributes'] ?? [],
+                            'full_details' => $fullDetails,
+                            'alternatives' => array_slice($matchResult['matches'] ?? [], 1, 3),
+                        ];
+                        
+                        $processedImages[] = [
+                            'index' => $index + 1,
+                            'status' => 'matched',
+                            'product' => $catalogItem['product_name'],
+                            'score' => $score,
+                        ];
                     }
-                    
-                    $allDescriptions[] = "ছবি " . ($index + 1) . ": " . $description;
                 } else {
-                    $allDescriptions[] = "ছবি " . ($index + 1) . ": এই ছবির সাথে কোনো প্রোডাক্ট ম্যাচ করা যায়নি।";
+                    $processedImages[] = [
+                        'index' => $index + 1,
+                        'status' => 'no_match',
+                        'message' => 'কোনো প্রোডাক্ট ম্যাচ করা যায়নি',
+                    ];
                 }
             } catch (\Exception $e) {
                 Log::error('Image processing failed', [
                     'image_url' => $imageUrl,
                     'error' => $e->getMessage(),
                 ]);
-                $allDescriptions[] = "ছবি " . ($index + 1) . ": ছবি প্রক্রিয়াকরণে সমস্যা হয়েছে।";
+                $processedImages[] = [
+                    'index' => $index + 1,
+                    'status' => 'error',
+                    'message' => 'ছবি প্রক্রিয়াকরণে সমস্যা',
+                ];
             }
         }
 
-        if (empty($allDescriptions)) {
+        if (empty($matchedProducts)) {
             return $this->getFallbackReply();
         }
 
-        $combinedDescriptions = implode("\n\n", $allDescriptions);
+        // Step 2: Create grouped product context
+        $productContext = $this->buildProductContext($matchedProducts);
 
-        $imageCount = count($allDescriptions);
+        // Step 3: Build message for AI
+        $imageCount = count($processedImages);
+        $matchedCount = count($matchedProducts);
         $imageWord = $imageCount > 1 ? "{$imageCount}টি ইমেজ" : 'একটি ইমেজ';
+        $productWord = $matchedCount > 1 ? "{$matchedCount}টি প্রোডাক্ট" : 'একটি প্রোডাক্ট';
 
         $userMessage = $this->messageText
             ? "কাস্টমারের বার্তা: {$this->messageText}"
             : "কাস্টমার {$imageWord} পাঠিয়েছে।";
 
-        $combinedMessage = "{$userMessage}\n\nইমেজ বিশ্লেষণ:\n{$combinedDescriptions}";
+        $combinedMessage = "{$userMessage}\n\nইমেজ বিশ্লেষণ:\n{$productContext}";
 
         $history = $this->getConversationHistory();
         $aiService = new AiChatService($systemPrompt);
@@ -290,11 +420,97 @@ class SendAiReplyJob implements ShouldQueue
         return $reply ? [
             'reply' => $reply,
             'image_analysis' => [
-                'descriptions' => $allDescriptions,
-                'image_urls' => $this->imageUrls,
+                'matched_products' => $matchedProducts,
+                'processed_images' => $processedImages,
                 'image_count' => $imageCount,
+                'matched_count' => $matchedCount,
             ],
         ] : null;
+    }
+
+    private function getFullProductDetails(array $catalogItem): array
+    {
+        $details = [
+            'name' => $catalogItem['product_name'],
+            'sku' => $catalogItem['product_sku'],
+            'price' => $catalogItem['product_price'],
+        ];
+
+        if ($catalogItem['type'] === 'product' && isset($catalogItem['product_id'])) {
+            $product = \App\Models\Product::with(['category', 'brand'])->find($catalogItem['product_id']);
+            if ($product) {
+                $details['description'] = $product->description;
+                $details['category'] = $product->category->name ?? null;
+                $details['brand'] = $product->brand->name ?? null;
+                $details['stock'] = $product->stock_quantity;
+                $details['status'] = $product->status;
+                $details['base_price'] = $product->base_price;
+                $details['discount_price'] = $product->discount_price;
+            }
+        } elseif (isset($catalogItem['variant_id'])) {
+            $variant = \App\Models\ProductVariant::with('product')->find($catalogItem['variant_id']);
+            if ($variant) {
+                $product = $variant->product;
+                $details['description'] = $product->description ?? null;
+                $details['category'] = $product->category->name ?? null;
+                $details['brand'] = $product->brand->name ?? null;
+                $details['stock'] = $variant->stock_quantity;
+                $details['status'] = $product->status;
+                $details['attributes'] = $variant->attributes;
+                $details['base_price'] = $product->base_price;
+                $details['discount_price'] = $product->discount_price;
+                $details['variant_price'] = $variant->price;
+            }
+        }
+
+        return $details;
+    }
+
+    private function buildProductContext(array $matchedProducts): string
+    {
+        $context = "ম্যাচ করা প্রোডাক্টসমূহ:\n\n";
+        
+        foreach ($matchedProducts as $index => $product) {
+            $details = $product['full_details'];
+            $context .= "**প্রোডাক্ট " . ($index + 1) . ":**\n";
+            $context .= "- নাম: {$details['name']}\n";
+            $context .= "- SKU: {$details['sku']}\n";
+            $context .= "- মূল্য: ৳" . number_format($details['price'], 2) . "\n";
+            
+            if (isset($details['description']) && $details['description']) {
+                $context .= "- বিবরণ: {$details['description']}\n";
+            }
+            if (isset($details['category']) && $details['category']) {
+                $context .= "- ক্যাটাগরি: {$details['category']}\n";
+            }
+            if (isset($details['brand']) && $details['brand']) {
+                $context .= "- ব্র্যান্ড: {$details['brand']}\n";
+            }
+            if (isset($details['stock'])) {
+                $stockText = $details['stock'] > 0 ? "{$details['stock']}টি স্টকে আছে" : "স্টক শেষ";
+                $context .= "- স্টক: {$stockText}\n";
+            }
+            if (isset($details['attributes']) && !empty($details['attributes'])) {
+                $attrs = collect($details['attributes'])->map(fn($v, $k) => "{$k}: {$v}")->implode(', ');
+                $context .= "- বিকল্প: {$attrs}\n";
+            }
+            if (isset($details['variant_price']) && $details['variant_price']) {
+                $context .= "- ভ্যারিয়েন্ট মূল্য: ৳" . number_format($details['variant_price'], 2) . "\n";
+            }
+            
+            $context .= "- ম্যাচ স্কোর: {$product['match_score']}%\n";
+            
+            if (!empty($product['alternatives'])) {
+                $altNames = collect($product['alternatives'])->pluck('product_name')->implode(', ');
+                $context .= "- অন্যান্য সম্ভাব্য: {$altNames}\n";
+            }
+            
+            $context .= "\n";
+        }
+        
+        $context .= "কাস্টমারকে এই প্রোডাক্টগুলো সম্পর্কে জানাতে বলুন। মূল্য, স্টক, বিবরণ ইত্যাদি তথ্য দিন।";
+        
+        return $context;
     }
 
     private function getFallbackReply(): ?array
