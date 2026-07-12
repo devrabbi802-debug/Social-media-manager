@@ -157,7 +157,6 @@ Route::middleware([
         Route::post('/ai-setup', [AiSettingController::class, 'store'])->name('ai.setup.store');
         Route::delete('/ai-setup/{aiSetting}', [AiSettingController::class, 'destroy'])->name('ai.setup.destroy');
         Route::post('/ai-setup/{aiSetting}/toggle', [AiSettingController::class, 'toggle'])->name('ai.setup.toggle');
-        Route::put('/ai-setup/{aiSetting}/priority', [AiSettingController::class, 'updatePriority'])->name('ai.setup.priority');
         Route::get('/ai-setup/{aiSetting}/test', [AiSettingController::class, 'test'])->name('ai.setup.test');
 
         // Facebook Settings

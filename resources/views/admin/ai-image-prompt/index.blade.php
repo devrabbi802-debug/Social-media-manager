@@ -7,7 +7,7 @@
     <div class="max-w-4xl">
         <div class="mb-6">
             <h1 class="text-2xl font-bold text-gray-900">AI Image Prompt</h1>
-            <p class="text-gray-500 mt-1">Facebook Messenger এ কাস্টমার যখন ছবি পাঠাবে, Gemini এই প্রম্পট ব্যবহার করে ছবি বিশ্লেষণ করবে।</p>
+            <p class="text-gray-500 mt-1">Facebook Messenger এ কাস্টমার যখন ছবি পাঠাবে, CLIP Server এই প্রম্পট ব্যবহার করে ছবি বিশ্লেষণ করবে।</p>
         </div>
 
         @if(session('success'))
@@ -56,7 +56,7 @@
         <div class="mt-6 bg-amber-50 rounded-xl border border-amber-200 p-6">
             <h3 class="text-lg font-bold text-amber-800 mb-3">কিভাবে কাজ করে?</h3>
             <ul class="text-sm text-amber-700 space-y-2">
-                <li>• কাস্টমার যখন Facebook Messenger এ ছবি পাঠাবে, এই প্রম্পট দিয়ে Gemini API ছবি বিশ্লেষণ করবে।</li>
+                <li>• কাস্টমার যখন Facebook Messenger এ ছবি পাঠাবে, CLIP Server এই প্রম্পট দিয়ে ছবি বিশ্লেষণ করবে।</li>
                 <li>• বিশ্লেষণের ফলাফল AI চ্যাটে ব্যবহার হবে কাস্টমারকে উত্তর দেওয়ার জন্য।</li>
                 <li>• প্রম্পট পরিবর্তন করলে নতুন ছবি থেকেই নতুন প্রম্পট ব্যবহার হবে।</li>
             </ul>

@@ -19,7 +19,7 @@ class AiChatService
         return $this->chatWithHistory($message, $keys, []);
     }
 
-    public function chatWithHistory(string $message, $keys, array $history = []): ?string
+    public function chatWithHistory(string $message, $keys, array $history = [], ?string $fallbackProvider = null, $fallbackKeys = null): ?string
     {
         $lastException = null;
         $allRateLimited = true;
@@ -35,7 +35,7 @@ class AiChatService
                 $allRateLimited = false;
 
                 Log::warning('AI key returned null, trying next key', [
-                    'key_label' => $key->label,
+                    'key_label' => $key->label ?? $key->id,
                     'key_id' => $key->id,
                 ]);
             } catch (\Exception $e) {
@@ -46,23 +46,137 @@ class AiChatService
                 }
 
                 Log::warning('AI key failed, trying next key', [
-                    'key_label' => $key->label,
+                    'key_label' => $key->label ?? $key->id,
                     'key_id' => $key->id,
                     'error' => $e->getMessage(),
                 ]);
             }
         }
 
-        Log::error('All AI keys exhausted or failed', [
+        Log::error('All primary AI keys exhausted', [
             'keys_tried' => count($keys),
             'last_error' => $lastException?->getMessage(),
         ]);
+
+        if ($fallbackProvider && $fallbackKeys && $fallbackKeys->isNotEmpty()) {
+            Log::info('Trying Gemini fallback keys', ['count' => $fallbackKeys->count()]);
+            return $this->chatWithGeminiFallback($message, $fallbackKeys, $history);
+        }
 
         if ($allRateLimited && $lastException) {
             throw $lastException;
         }
 
         return null;
+    }
+
+    public function chatWithGeminiFallback(string $message, $fallbackKeys, array $history = []): ?string
+    {
+        foreach ($fallbackKeys as $key) {
+            try {
+                $result = $this->chatWithGemini($message, $key->api_key, $history);
+
+                if ($result !== null) {
+                    Log::info('Gemini fallback succeeded', [
+                        'key_id' => $key->id,
+                    ]);
+                    return $result;
+                }
+
+                Log::warning('Gemini fallback key returned null', [
+                    'key_id' => $key->id,
+                ]);
+            } catch (\Exception $e) {
+                Log::warning('Gemini fallback key failed', [
+                    'key_id' => $key->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        Log::error('All Gemini fallback keys exhausted');
+        return null;
+    }
+
+    private function chatWithGemini(string $message, string $apiKey, array $history = []): ?string
+    {
+        try {
+            $contents = [];
+
+            foreach ($history as $msg) {
+                $role = $msg['role'] === 'assistant' ? 'model' : 'user';
+                $contents[] = [
+                    'role' => $role,
+                    'parts' => [['text' => $msg['content']]],
+                ];
+            }
+
+            $userMessage = "System Prompt:\n{$this->systemPrompt}\n\n{$message}";
+
+            $contents[] = [
+                'role' => 'user',
+                'parts' => [['text' => $userMessage]],
+            ];
+
+            $model = config('services.gemini.model', 'gemini-2.5-flash');
+
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json',
+            ])->timeout(30)->post(
+                "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}",
+                [
+                    'contents' => $contents,
+                    'generationConfig' => [
+                        'temperature' => 0.7,
+                        'maxOutputTokens' => 512,
+                    ],
+                ]
+            );
+
+            if ($response->status() === 429) {
+                Log::warning('Gemini 429 rate limited');
+                throw new \Exception('Gemini API rate limited (429)');
+            }
+
+            if ($response->status() === 503) {
+                throw new \Exception('Gemini API overloaded (503)');
+            }
+
+            if ($response->failed()) {
+                Log::error('Gemini API error', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                return null;
+            }
+
+            $body = $response->json();
+            $candidates = $body['candidates'] ?? [];
+
+            if (empty($candidates)) {
+                return null;
+            }
+
+            $parts = $candidates[0]['content']['parts'] ?? [];
+
+            foreach ($parts as $part) {
+                if (isset($part['text'])) {
+                    return $part['text'];
+                }
+            }
+
+            return null;
+        } catch (\Exception $e) {
+            if (str_contains($e->getMessage(), '429') || str_contains($e->getMessage(), '503')) {
+                throw $e;
+            }
+
+            Log::error('Gemini chat exception', [
+                'message' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     public function chat(string $message, string $apiKey): ?string
@@ -190,6 +304,47 @@ class AiChatService
             $reply = $body['choices'][0]['message']['content'] ?? null;
 
             return ['success' => true, 'message' => 'Connected! AI replied: '.substr($reply, 0, 50)];
+        } catch (\Exception $e) {
+            return ['success' => false, 'message' => 'Error: '.$e->getMessage()];
+        }
+    }
+
+    public static function testGeminiConnection(string $apiKey): array
+    {
+        try {
+            $model = config('services.gemini.model', 'gemini-2.5-flash');
+
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json',
+            ])->timeout(15)->post(
+                "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}",
+                [
+                    'contents' => [
+                        [
+                            'parts' => [
+                                ['text' => 'Hello, just testing connection. Reply with one word.'],
+                            ],
+                        ],
+                    ],
+                ]
+            );
+
+            if ($response->status() === 401 || $response->status() === 403) {
+                return ['success' => false, 'message' => 'API key invalid'];
+            }
+
+            if ($response->status() === 429) {
+                return ['success' => true, 'message' => 'Connected! (Rate limited but key is valid)'];
+            }
+
+            if ($response->failed()) {
+                return ['success' => false, 'message' => 'API error: '.$response->status()];
+            }
+
+            $body = $response->json();
+            $text = $body['candidates'][0]['content']['parts'][0]['text'] ?? null;
+
+            return ['success' => true, 'message' => 'Connected! Gemini replied: '.substr($text ?? '', 0, 50)];
         } catch (\Exception $e) {
             return ['success' => false, 'message' => 'Error: '.$e->getMessage()];
         }

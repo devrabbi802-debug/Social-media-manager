@@ -113,13 +113,13 @@
                                     @if(isset($message->image_analysis['descriptions']))
                                     @foreach($message->image_analysis['descriptions'] as $desc)
                                     <p class="text-xs {{ $message->direction === 'outgoing' ? 'text-blue-100' : 'text-gray-600' }} mb-2">
-                                        <span class="font-semibold">Gemini বিশ্লেষণ:</span><br>
+                                        <span class="font-semibold">ইমেজ বিশ্লেষণ:</span><br>
                                         {{ $desc }}
                                     </p>
                                     @endforeach
                                     @elseif(isset($message->image_analysis['description']))
                                     <p class="text-xs {{ $message->direction === 'outgoing' ? 'text-blue-100' : 'text-gray-600' }}">
-                                        <span class="font-semibold">Gemini বিশ্লেষণ:</span><br>
+                                        <span class="font-semibold">ইমেজ বিশ্লেষণ:</span><br>
                                         {{ $message->image_analysis['description'] }}
                                     </p>
                                     @endif

@@ -213,14 +213,22 @@ class SendAiReplyJob implements ShouldQueue
             ->byPriority()
             ->get();
 
+        $geminiKeys = AiSetting::where('user_id', $facebookSetting->user_id)
+            ->active()
+            ->byType('image')
+            ->byPriority()
+            ->get();
+
         Log::info('SendAiReplyJob: handleTextMessage', [
             'user_id' => $facebookSetting->user_id,
-            'ai_keys_count' => $aiKeys->count(),
+            'groq_keys_count' => $aiKeys->count(),
+            'gemini_keys_count' => $geminiKeys->count(),
             'message_text' => mb_substr($this->messageText, 0, 50),
         ]);
 
-        if ($aiKeys->isEmpty()) {
-            Log::warning('SendAiReplyJob: no AI keys for text message', ['user_id' => $facebookSetting->user_id]);
+        // Groq key nai + Gemini o nai = kono reply jabe na
+        if ($aiKeys->isEmpty() && $geminiKeys->isEmpty()) {
+            Log::warning('SendAiReplyJob: no AI keys (groq or gemini) for text message', ['user_id' => $facebookSetting->user_id]);
             return null;
         }
 
@@ -245,8 +253,17 @@ class SendAiReplyJob implements ShouldQueue
         }
 
         $history = $this->getConversationHistory();
-        $aiService = new AiChatService($systemPrompt);
-        $reply = $aiService->chatWithHistory($this->messageText, $aiKeys, $history);
+
+        // Jodi Groq key thake → Groq try koro, Gemini fallback
+        // Jodi Groq na thake → directly Gemini diye reply koro
+        if ($aiKeys->isNotEmpty()) {
+            $aiService = new AiChatService($systemPrompt);
+            $reply = $aiService->chatWithHistory($this->messageText, $aiKeys, $history, 'gemini', $geminiKeys);
+        } else {
+            Log::info('SendAiReplyJob: no Groq keys, using Gemini directly', ['user_id' => $facebookSetting->user_id]);
+            $aiService = new AiChatService($systemPrompt);
+            $reply = $aiService->chatWithGeminiFallback($this->messageText, $geminiKeys, $history);
+        }
 
         return $reply ? ['reply' => $reply] : null;
     }
@@ -275,8 +292,14 @@ class SendAiReplyJob implements ShouldQueue
             ->byPriority()
             ->get();
 
-        if ($groqKeys->isEmpty()) {
-            Log::warning('No message AI keys available for image reply', [
+        $geminiKeys = AiSetting::where('user_id', $facebookSetting->user_id)
+            ->active()
+            ->byType('image')
+            ->byPriority()
+            ->get();
+
+        if ($groqKeys->isEmpty() && $geminiKeys->isEmpty()) {
+            Log::warning('No AI keys (groq or gemini) available for image reply', [
                 'user_id' => $facebookSetting->user_id,
             ]);
             return null;
@@ -397,7 +420,13 @@ class SendAiReplyJob implements ShouldQueue
 
         $history = $this->getConversationHistory();
         $aiService = new AiChatService($systemPrompt);
-        $reply = $aiService->chatWithHistory($combinedMessage, $groqKeys, $history);
+
+        if ($groqKeys->isNotEmpty()) {
+            $reply = $aiService->chatWithHistory($combinedMessage, $groqKeys, $history, 'gemini', $geminiKeys);
+        } else {
+            Log::info('SendAiReplyJob: no Groq keys for image reply, using Gemini directly');
+            $reply = $aiService->chatWithGeminiFallback($combinedMessage, $geminiKeys, $history);
+        }
 
         return $reply ? [
             'reply' => $reply,

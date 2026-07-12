@@ -12,23 +12,18 @@ class AiSettingController extends Controller
 {
     public function index()
     {
-        $messageKeys = AiSetting::where('user_id', Auth::id())
+        $groqKey = AiSetting::where('user_id', Auth::id())
             ->byType('message')
-            ->byPriority()
-            ->get();
+            ->first();
 
-        $imageKeys = AiSetting::where('user_id', Auth::id())
+        $geminiKey = AiSetting::where('user_id', Auth::id())
             ->byType('image')
-            ->byPriority()
-            ->get();
+            ->first();
 
-        $activeTab = request('tab', 'message');
-
-        // Check CLIP server status
         $clipService = new ClipService();
         $clipStatus = $clipService->healthCheck();
 
-        return view('dashboard.ai-setup', compact('messageKeys', 'imageKeys', 'activeTab', 'clipStatus'));
+        return view('dashboard.ai-setup', compact('groqKey', 'geminiKey', 'clipStatus'));
     }
 
     public function store(Request $request)
@@ -38,23 +33,33 @@ class AiSettingController extends Controller
             'type' => 'required|in:message,image',
         ]);
 
-        $maxPriority = AiSetting::where('user_id', Auth::id())
+        $existing = AiSetting::where('user_id', Auth::id())
             ->where('type', $validated['type'])
-            ->max('priority') ?? 0;
+            ->first();
 
-        AiSetting::create([
-            'user_id' => Auth::id(),
-            'api_key' => $validated['api_key'],
-            'type' => $validated['type'],
-            'is_active' => true,
-            'priority' => $maxPriority + 1,
-        ]);
+        if ($existing) {
+            $existing->update([
+                'api_key' => $validated['api_key'],
+                'is_active' => true,
+            ]);
+            $message = $validated['type'] === 'message'
+                ? 'Groq API Key আপডেট করা হয়েছে!'
+                : 'Gemini API Key আপডেট করা হয়েছে!';
+        } else {
+            AiSetting::create([
+                'user_id' => Auth::id(),
+                'api_key' => $validated['api_key'],
+                'type' => $validated['type'],
+                'is_active' => true,
+                'priority' => 1,
+            ]);
+            $message = $validated['type'] === 'message'
+                ? 'Groq API Key সফলভাবে যোগ করা হয়েছে!'
+                : 'Gemini API Key সফলভাবে যোগ করা হয়েছে!';
+        }
 
-        $tab = $validated['type'];
-        $typeName = $tab === 'message' ? 'Message AI' : 'Image AI';
-
-        return redirect()->route('ai.setup', ['tab' => $tab])
-            ->with('success', "{$typeName} Key সফলভাবে যোগ করা হয়েছে!");
+        return redirect()->route('ai.setup')
+            ->with('success', $message);
     }
 
     public function destroy(AiSetting $aiSetting)
@@ -63,10 +68,9 @@ class AiSettingController extends Controller
             abort(403);
         }
 
-        $tab = $aiSetting->type;
         $aiSetting->delete();
 
-        return redirect()->route('ai.setup', ['tab' => $tab])
+        return redirect()->route('ai.setup')
             ->with('success', 'API Key মুছে ফেলা হয়েছে।');
     }
 
@@ -78,10 +82,9 @@ class AiSettingController extends Controller
 
         $aiSetting->update(['is_active' => ! $aiSetting->is_active]);
 
-        $tab = $aiSetting->type;
         $status = $aiSetting->is_active ? 'সক্রিয়' : 'নিষ্ক্রিয়';
 
-        return redirect()->route('ai.setup', ['tab' => $tab])
+        return redirect()->route('ai.setup')
             ->with('success', "API Key {$status} করা হয়েছে।");
     }
 
@@ -91,29 +94,16 @@ class AiSettingController extends Controller
             abort(403);
         }
 
-        $tab = $aiSetting->type;
-
-        if ($tab === 'image') {
-            // Test CLIP server instead of Gemini
-            $clipService = new ClipService();
-            $result = $clipService->healthCheck();
-            
-            if ($result['status'] === 'healthy') {
-                $status = 'success';
-                $message = 'CLIP Server স্বাস্থ্য সঠিক! মডেল: ' . ($result['details']['model'] ?? 'ViT-B/32') . 
-                           ', ডিভাইস: ' . ($result['details']['device'] ?? 'unknown') .
-                           ', এমбедিং ডাইমেনশন: ' . ($result['details']['embedding_dimension'] ?? 512);
-            } else {
-                $status = 'error';
-                $message = 'CLIP Server সংযোগ করা যায়নি: ' . ($result['details']['error'] ?? 'Unknown error');
-            }
+        if ($aiSetting->type === 'image') {
+            $result = \App\Services\AiChatService::testGeminiConnection($aiSetting->api_key);
         } else {
             $result = $this->testGroqKey($aiSetting->api_key);
-            $status = $result['success'] ? 'success' : 'error';
-            $message = $result['message'];
         }
 
-        return redirect()->route('ai.setup', ['tab' => $tab])
+        $status = $result['success'] ? 'success' : 'error';
+        $message = $result['message'];
+
+        return redirect()->route('ai.setup')
             ->with($status, $message);
     }
 
