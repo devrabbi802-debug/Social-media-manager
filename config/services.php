@@ -11,7 +11,7 @@ return [
     ],
 
     'gemini' => [
-        'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
+        'model' => env('GEMINI_MODEL', 'gemini-3.1-flash-lite'),
     ],
 
     'clip' => [

@@ -103,22 +103,21 @@ class AiChatService
         try {
             $contents = [];
 
-            foreach ($history as $msg) {
-                $role = $msg['role'] === 'assistant' ? 'model' : 'user';
+            $normalizedHistory = $this->normalizeHistory($history);
+
+            foreach ($normalizedHistory as $msg) {
                 $contents[] = [
-                    'role' => $role,
-                    'parts' => [['text' => $msg['content']]],
+                    'role' => $msg['role'],
+                    'parts' => $msg['parts'],
                 ];
             }
 
-            $userMessage = "System Prompt:\n{$this->systemPrompt}\n\n{$message}";
-
             $contents[] = [
                 'role' => 'user',
-                'parts' => [['text' => $userMessage]],
+                'parts' => [['text' => $message]],
             ];
 
-            $model = config('services.gemini.model', 'gemini-2.5-flash');
+            $model = config('services.gemini.model', 'gemini-3.1-flash-lite');
 
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
@@ -126,9 +125,13 @@ class AiChatService
                 "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}",
                 [
                     'contents' => $contents,
+                    'systemInstruction' => [
+                        'parts' => [['text' => $this->systemPrompt]],
+                    ],
                     'generationConfig' => [
                         'temperature' => 0.7,
                         'maxOutputTokens' => 512,
+                        'topP' => 0.9,
                     ],
                 ]
             );
@@ -177,6 +180,37 @@ class AiChatService
 
             return null;
         }
+    }
+
+    private function normalizeHistory(array $history): array
+    {
+        if (empty($history)) {
+            return [];
+        }
+
+        $normalized = [];
+        $lastRole = null;
+
+        foreach ($history as $msg) {
+            $role = $msg['role'] === 'assistant' ? 'model' : 'user';
+
+            if ($role === $lastRole) {
+                $lastIndex = count($normalized) - 1;
+                $normalized[$lastIndex]['parts'][] = ['text' => $msg['content']];
+            } else {
+                $normalized[] = [
+                    'role' => $role,
+                    'parts' => [['text' => $msg['content']]],
+                ];
+                $lastRole = $role;
+            }
+        }
+
+        while (!empty($normalized) && $normalized[0]['role'] === 'model') {
+            array_shift($normalized);
+        }
+
+        return $normalized;
     }
 
     public function chat(string $message, string $apiKey): ?string
@@ -312,7 +346,7 @@ class AiChatService
     public static function testGeminiConnection(string $apiKey): array
     {
         try {
-            $model = config('services.gemini.model', 'gemini-2.5-flash');
+            $model = config('services.gemini.model', 'gemini-3.1-flash-lite');
 
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
@@ -321,6 +355,7 @@ class AiChatService
                 [
                     'contents' => [
                         [
+                            'role' => 'user',
                             'parts' => [
                                 ['text' => 'Hello, just testing connection. Reply with one word.'],
                             ],
