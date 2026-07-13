@@ -126,8 +126,15 @@ class FacebookWebhookController extends Controller
         $messageType = $messageData['type'] ?? $data['type'] ?? 'text';
         $attachments = $messageData['attachments'] ?? $data['attachments'] ?? $data['media'] ?? [];
 
-        if (! $accountId || ! $messageText) {
-            Log::warning('Zernio webhook: missing required fields', ['data' => $data, 'accountId' => $accountId, 'messageText' => $messageText]);
+        if (! $accountId) {
+            Log::warning('Zernio webhook: missing accountId', ['data' => $data]);
+
+            return;
+        }
+
+        // Allow image-only messages (messageText can be null)
+        if (! $messageText && empty($attachments)) {
+            Log::warning('Zernio webhook: no message text and no attachments', ['data' => $data]);
 
             return;
         }

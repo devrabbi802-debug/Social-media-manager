@@ -353,6 +353,23 @@ class ZernioService
     }
 
     /**
+     * Mark a conversation as seen/read by the business.
+     */
+    public function markSeen(string $conversationId, string $accountId): void
+    {
+        try {
+            Http::withHeaders($this->headers())
+                ->timeout(10)
+                ->post("{$this->baseUrl}/inbox/conversations/{$conversationId}/seen", [
+                    'accountId' => $accountId,
+                ]);
+        } catch (\Exception $e) {
+            // Mark seen failure is non-critical
+            Log::debug('Zernio mark seen failed', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
      * Disconnect a social account.
      */
     public function disconnectAccount(string $accountId): bool

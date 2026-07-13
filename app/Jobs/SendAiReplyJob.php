@@ -135,7 +135,12 @@ class SendAiReplyJob implements ShouldQueue
                 return;
             }
 
+            // Step 1: Mark message as seen (customer sees ✓✓)
+            $this->sendMarkSeen();
+
+            // Step 2: Start typing indicator with keep-alive
             $this->sendTypingIndicator(true);
+            $typingStartedAt = time();
 
             $hasImages = ! empty($this->imageUrls);
 
@@ -148,6 +153,12 @@ class SendAiReplyJob implements ShouldQueue
                 $result = $hasImages
                     ? $this->handleImageMessage($facebookSetting, $systemPrompt)
                     : $this->handleTextMessage($facebookSetting, $systemPrompt);
+
+                // Typing keep-alive: re-send typing_on every 5 sec during long AI processing
+                $elapsed = time() - $typingStartedAt;
+                if ($elapsed > 5) {
+                    $this->sendTypingIndicator(true);
+                }
             } finally {
                 $this->sendTypingIndicator(false);
             }
@@ -704,16 +715,7 @@ class SendAiReplyJob implements ShouldQueue
     {
         $zernio = new ZernioService($this->zernioApiKey);
 
-        $conversationId = $this->zernioConversationId;
-
-        if (! $conversationId) {
-            // Fallback: find conversation by listing
-            $conversations = $zernio->listConversations($this->zernioAccountId, 50);
-            $conversation = collect($conversations)->first(function ($conv) {
-                return ($conv['contactId'] ?? $conv['participantId'] ?? $conv['senderId'] ?? '') === $this->senderId;
-            });
-            $conversationId = $conversation['_id'] ?? $conversation['id'] ?? null;
-        }
+        $conversationId = $this->resolveZernioConversationId();
 
         if (! $conversationId) {
             throw new \Exception('Zernio: No conversation ID for sender '.$this->senderId);
@@ -734,13 +736,11 @@ class SendAiReplyJob implements ShouldQueue
     {
         // If connected via Zernio, use Zernio API
         if ($this->zernioAccountId && $this->zernioApiKey) {
-            $zernio = new ZernioService($this->zernioApiKey);
-            $conversations = $zernio->listConversations($this->zernioAccountId, 50);
-            $conversation = collect($conversations)->first(function ($conv) {
-                return ($conv['contactId'] ?? $conv['senderId'] ?? '') === $this->senderId;
-            });
-            if ($conversation && $on) {
-                $zernio->sendTypingIndicator($conversation['_id'], $this->zernioAccountId);
+            $conversationId = $this->resolveZernioConversationId();
+
+            if ($conversationId && $on) {
+                $zernio = new ZernioService($this->zernioApiKey);
+                $zernio->sendTypingIndicator($conversationId, $this->zernioAccountId);
             }
 
             return;
@@ -754,5 +754,44 @@ class SendAiReplyJob implements ShouldQueue
             'recipient' => ['id' => $this->senderId],
             'sender_action' => $on ? 'typing_on' : 'typing_off',
         ]);
+    }
+
+    private function sendMarkSeen(): void
+    {
+        // If connected via Zernio, use Zernio API
+        if ($this->zernioAccountId && $this->zernioApiKey) {
+            $conversationId = $this->resolveZernioConversationId();
+
+            if ($conversationId) {
+                $zernio = new ZernioService($this->zernioApiKey);
+                $zernio->markSeen($conversationId, $this->zernioAccountId);
+            }
+
+            return;
+        }
+
+        // Otherwise, use Facebook Graph API directly (mark_seen sender_action)
+        Http::withHeaders([
+            'Content-Type' => 'application/json',
+        ])->post('https://graph.facebook.com/v21.0/me/messages', [
+            'access_token' => $this->pageAccessToken,
+            'recipient' => ['id' => $this->senderId],
+            'sender_action' => 'mark_seen',
+        ]);
+    }
+
+    private function resolveZernioConversationId(): ?string
+    {
+        if ($this->zernioConversationId) {
+            return $this->zernioConversationId;
+        }
+
+        $zernio = new ZernioService($this->zernioApiKey);
+        $conversations = $zernio->listConversations($this->zernioAccountId, 50);
+        $conversation = collect($conversations)->first(function ($conv) {
+            return ($conv['contactId'] ?? $conv['participantId'] ?? $conv['senderId'] ?? '') === $this->senderId;
+        });
+
+        return $conversation['_id'] ?? $conversation['id'] ?? null;
     }
 }
