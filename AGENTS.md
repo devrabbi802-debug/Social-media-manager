@@ -61,15 +61,42 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 
 ### Facebook Integration
 
+- **Dual connection modes**: Facebook App (direct) OR Zernio (third-party API)
 - **Webhook route** in `routes/web.php` (central, NOT tenant) — Facebook calls via ngrok tunnel URL
 - **CSRF exemption**: `webhook/*` excluded in `bootstrap/app.php`
-- **OAuth flow**: redirect → callback → auto-fetch page_id + page_access_token → save to `facebook_settings`
+- **OAuth flow (Facebook App)**: redirect → callback → auto-fetch page_id + page_access_token → save to `facebook_settings`
+- **OAuth flow (Zernio)**: API key save → profile create → `GET /v1/connect/facebook` → user authorizes → callback with tempToken → `GET /v1/connect/facebook/select-page` → page select → `POST /v1/connect/facebook/select-page` → save to `facebook_settings`
 - **Verify token**: `socialboost_verify_token_2026` (hardcoded in `FacebookOAuthController`)
-- **Multi-tenant webhook**: `FacebookWebhookController` iterates ALL tenants to find matching `page_id` (O(n), won't scale well)
+- **Multi-tenant webhook**: `FacebookWebhookController` iterates ALL tenants to find matching `page_id` or `zernio_account_id` (O(n), won't scale well)
 - **Ngrok URL check**: `wget -qO- http://127.0.0.1:4040/api/tunnels`
 - **Facebook App ID**: `703674879507719`, permissions: `pages_show_list`, `pages_messaging`, `pages_read_engagement`
 - **Duplicate message handling**: Checks `facebook_mid` before saving incoming messages
-- **Sender name fetching**: Uses Facebook Graph API to fetch sender's first_name + last_name
+- **Sender name fetching**: Uses Facebook Graph API to fetch sender's first_name + last_name (Facebook App) or `senderName` from Zernio webhook payload
+
+### Zernio Integration (Third-Party Social Media API)
+
+- **Purpose**: Connect Facebook Pages without creating a Facebook App — per-tenant Zernio accounts
+- **API Base**: `https://zernio.com/api/v1` (configured in `config/services.php` → `zernio.base_url`)
+- **Auth**: Per-tenant `zernio_api_key` stored in `facebook_settings` table
+- **Connection type**: `facebook_settings.connection_type` — enum `facebook_app` (direct) or `zernio`
+- **Flow**: Tenant saves API key → creates/uses Zernio profile → OAuth Facebook → selects page → done
+- **Facebook OAuth via Zernio**: `GET /v1/connect/facebook?profileId={id}&redirect_url={url}` → returns `authUrl` + `state`
+- **Page selection**: `GET /v1/connect/facebook/select-page?profileId={id}&tempToken={token}` → returns pages list
+- **Page confirm**: `POST /v1/connect/facebook/select-page` with `{ profileId, pageId, tempToken }`
+- **Send reply**: `POST /v1/inbox/conversations/{conversationId}/messages` with `{ accountId, message }`
+- **Typing indicator**: `POST /v1/inbox/conversations/{conversationId}/typing` with `{ accountId }`
+- **Webhook**: `POST /webhook/zernio` — handles `message.received`, `conversation.started`, `account.connected`, `account.disconnected`
+- **Fallback**: If Zernio connection, `SendAiReplyJob` uses Zernio API; otherwise Facebook Graph API directly
+- **Key files**:
+  - `app/Services/ZernioService.php` — API wrapper (verify, profiles, accounts, pages, messages, posts)
+  - `app/Http/Controllers/ZernioOAuthController.php` — OAuth flow (storeApiKey, connectFacebook, facebookCallback, selectPage, connectSelectedPage, disconnect)
+  - `app/Http/Controllers/FacebookWebhookController.php` — `handleZernio()` for Zernio webhooks
+  - `app/Jobs/SendAiReplyJob.php` — dual send: Zernio API or Facebook Graph API based on `zernioAccountId`/`zernioApiKey`
+- **Dashboard UI**: `resources/views/dashboard/facebook-settings.blade.php` — shows two connection options (Zernio recommended, Facebook App fallback)
+- **Page select view**: `resources/views/dashboard/facebook-select-page.blade.php` — handles both `_id`/`id`/`pageId` keys from Zernio
+- **Zernio pricing**: First 2 social accounts free, then $6/account/month (1-10), $3/account/month (11-100)
+- **Gotcha**: Zernio profile names must be unique — controller appends `time()` to avoid conflicts
+- **Gotcha**: `tempToken` from OAuth callback is required for page selection — stored in session
 
 ### Docker
 
@@ -102,7 +129,7 @@ docker exec laravel-app php artisan <command>
 - **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/admin/layouts/app.blade.php` (admin)
 - **Menu config**: `config/menu.php` — add admin sidebar menu groups here
 - **Tenancy config**: `config/tenancy.php` — central domains, DB suffix, tenant model
-- **Services config**: `config/services.php` — Facebook OAuth + Groq + Gemini model + CLIP server
+- **Services config**: `config/services.php` — Facebook OAuth + Groq + Gemini model + CLIP server + Zernio base URL
 - **Landlord migrations**: `database/migrations/`
 - **Tenant migrations**: `database/migrations/tenant/`
 
@@ -126,7 +153,7 @@ Visiting these routes throws `ViewNotFoundException`.
 
 ### Tenant DB Tables
 1. `users` — id, name, email, phone, company, password, timestamps
-2. `facebook_settings` — id, user_id (FK), app_id, app_secret, verify_token, page_id, page_access_token, ai_auto_reply_enabled, timestamps
+2. `facebook_settings` — id, user_id (FK), connection_type (enum: facebook_app/zernio), app_id (nullable), app_secret (nullable), verify_token (nullable), page_id (nullable), page_name (nullable), page_access_token (nullable), ai_auto_reply_enabled, zernio_api_key (nullable), zernio_account_id (nullable), zernio_profile_id (nullable), timestamps
 3. `ai_settings` — id, user_id (FK), api_key, type, is_active, priority, timestamps
 4. `conversations` — id, sender_id, sender_name, status, last_message_at, timestamps
 5. `messages` — id, facebook_mid, conversation_id (FK), direction, type, content, image_path, image_analysis, timestamps
@@ -170,6 +197,8 @@ Visiting these routes throws `ViewNotFoundException`.
 - **Registration validation** does NOT use `unique:users,email` (users are per-tenant)
 - **Facebook OAuth**: HTTP not allowed — use ngrok HTTPS URL
 - **Facebook test users**: Dev mode only testers/admins trigger webhooks
+- **Zernio profile names must be unique** — controller appends `time()` to avoid conflicts
+- **Zernio `tempToken`** from OAuth callback is required for page selection — stored in session
 - **Horizon**: runs inside Docker worker container via Supervisor, not directly
 - **Redis**: queue + cache driver in `.env` (`QUEUE_CONNECTION=redis`, `CACHE_STORE=redis`)
 
