@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use App\Models\Tenant;
 use App\Http\Controllers\FacebookSettingController;
 use App\Http\Controllers\FacebookWebhookController;
@@ -129,7 +130,35 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/settings', function () {
         return view('tenant.settings');
     })->name('settings');
-    
+
+    Route::put('/settings/profile', function (Request $request) {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|max:255',
+            'phone' => 'nullable|string|max:50',
+            'company' => 'nullable|string|max:255',
+        ]);
+
+        auth()->user()->update($validated);
+
+        return redirect()->route('settings')->with('success', 'প্রোফাইল আপডেট হয়েছে!');
+    });
+
+    Route::put('/settings/password', function (Request $request) {
+        $validated = $request->validate([
+            'current_password' => 'required',
+            'password' => 'required|min:6|confirmed',
+        ]);
+
+        if (!Hash::check($validated['current_password'], auth()->user()->password)) {
+            return back()->withErrors(['current_password' => 'বর্তমান পাসওয়ার্ড সঠিক নয়।']);
+        }
+
+        auth()->user()->update(['password' => $validated['password']]);
+
+        return redirect()->route('settings')->with('success', 'পাসওয়ার্ড আপডেট হয়েছে!');
+    });
+
     Route::get('/leads', function () {
         return view('tenant.leads');
     })->name('leads');
