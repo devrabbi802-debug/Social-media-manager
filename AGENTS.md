@@ -2,7 +2,7 @@
 
 ## Project
 
-SocialBoost AI — Laravel 13 multi-tenant SaaS for social media management. Bengali UI, MySQL production, SQLite in-memory tests. `stancl/tenancy` v3.10 (database-per-tenant, subdomain-based).
+SocialBoost AI — Laravel 13 multi-tenant SaaS for social media management. Multi-language UI (Bengali/English), MySQL production, SQLite in-memory tests. `stancl/tenancy` v3.10 (database-per-tenant, subdomain-based).
 
 **Local Dev URL**: `http://smm.test/`
 
@@ -40,8 +40,23 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 - **Admin permissions**: `super_admin` bypasses all. Defined in `config/menu.php`, stored in `admin_user_permissions`
 - **Admin routes loaded via** `then:` callback in `bootstrap/app.php`, NOT through `withRouting()`
 - **`admin` middleware alias** registered in `bootstrap/app.php`
+- **`locale` middleware alias** registered in `bootstrap/app.php` — sets `app()->setLocale()` from user's `locale` column
 - **User model** uses Laravel 11+ `#[Fillable]`/`#[Hidden]` PHP attributes. **Admin model** uses traditional `$fillable`/`$hidden` arrays — style differs between the two
 - **`Admin::getAllPermissions()`** references `\App\Services\Menu::class` which **does not exist** — will error if called by non-super_admin
+
+### Localization (Multi-Language)
+
+- **Languages**: Bengali (`bn`) — default, English (`en`)
+- **Storage**: User's `locale` column in tenant DB `users` table (persistent across sessions)
+- **Middleware**: `SetLocale` (`app/Http/Middleware/SetLocale.php`) — reads `$request->user()->locale`, sets `app()->setLocale()`. Registered as `locale` alias in `bootstrap/app.php`
+- **Route**: `POST /language/switch` (`LanguageController@switch`) — updates user locale, redirects back
+- **Switcher UI**: Topbar — dedicated language dropdown ( globe icon + "বাংলা/English") + profile dropdown toggle
+- **Translation files**: `lang/bn/` and `lang/en/` (18 files each)
+  - `sidebar.php`, `common.php`, `tenant.php`, `nav.php`, `dashboard.php`, `settings.php`, `integration.php`, `conversations.php`, `facebook.php`, `ai.php`, `image_match.php`, `products.php`, `categories.php`, `brands.php`, `warehouses.php`, `inventory.php`, `attributes.php`, `auth.php`
+- **Usage in Blade**: `@lang('file.key')` or `__('file.key')`. For dynamic text: `__('file.key', ['var' => $value])`
+- **Default locale**: `bn` (Bengali) — new users get Bengali by default, existing unaffected
+- **`<html lang>`** attribute set dynamically: `<html lang="{{ app()->getLocale() }}">`
+- **Route registration**: `locale` middleware added to tenant route group in `routes/tenant.php`
 
 ### AI Integration
 
@@ -115,13 +130,21 @@ docker exec laravel-app php artisan <command>
 - **Services config**: `config/services.php` — Facebook OAuth + Groq + Cerebras + Gemini + CLIP server + Zernio base URL
 - **Landlord migrations**: `database/migrations/`
 - **Tenant migrations**: `database/migrations/tenant/`
+- **Translation files**: `lang/bn/` and `lang/en/` (18 files each — sidebar, common, tenant, nav, dashboard, settings, integration, conversations, facebook, ai, image_match, products, categories, brands, warehouses, inventory, attributes, auth)
+- **Localization middleware**: `app/Http/Middleware/SetLocale.php`
+- **Language controller**: `app/Http/Controllers/Tenant/LanguageController.php`
 
 ## Missing Views (routes exist, views don't)
 
-These views are referenced in `routes/web.php` and `routes/tenant.php` but **do not exist on disk**:
-`tenant.settings`, `tenant.leads`, `tenant.reports`, `tenant.whatsapp`, `tenant.facebook`, `tenant.inventory-add`
+These views are referenced in `routes/web.php` but **do not exist on disk**:
+`tenant.facebook`
 
-Visiting these routes throws `ViewNotFoundException`.
+These views now exist (placeholder pages):
+`tenant.leads`, `tenant.reports`, `tenant.whatsapp`
+
+`tenant.settings` exists at `resources/views/tenant/settings.blade.php`.
+
+Visiting missing routes throws `ViewNotFoundException`.
 
 ## Database
 
@@ -136,7 +159,7 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 - `cache`, `jobs`, `sessions` — Standard Laravel tables
 
 ### Tenant DB Tables
-- `users` — tenant users (uses `#[Fillable]`/`#[Hidden]` PHP attributes, NOT `$fillable` array)
+- `users` — tenant users (uses `#[Fillable]`/`#[Hidden]` PHP attributes, NOT `$fillable` array). Has `locale` column (default: `bn`) for language preference
 - `facebook_settings` — per-user Facebook/Zernio connection config (connection_type enum: `facebook_app`/`zernio`)
 - `ai_settings` — per-user AI API keys (type: `message`/`cerebras`/`image`)
 - `conversations`, `messages` — chat history
