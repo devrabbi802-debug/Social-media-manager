@@ -1,0 +1,20 @@
+<?php
+return [
+    'title' => 'Settings',
+    'subtitle' => 'Manage your account settings',
+    'profile_info' => 'Profile Info',
+    'change_password' => 'Change Password',
+    'current_password' => 'Current Password',
+    'new_password' => 'New Password',
+    'confirm_password' => 'Confirm Password',
+    'update_password' => 'Update Password',
+    'account_info' => 'Account Info',
+    'username' => 'Username',
+    'email_verification' => 'Email Verification',
+    'verified' => 'Verified',
+    'unverified' => 'Unverified',
+    'member_since' => 'Member Since',
+    'danger_zone' => 'Danger Zone',
+    'delete_account_warning' => 'Deleting your account will delete all data.',
+    'delete_account' => 'Delete Account',
+];

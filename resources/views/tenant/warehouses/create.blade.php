@@ -1,40 +1,42 @@
 @extends('layouts.tenant')
 
-@section('title', 'নতুন গুদম - SocialBoost AI')
+@section('title', __('warehouses.create_title').' - SocialBoost AI')
 
 @section('content')
 <div class="min-h-screen bg-gray-50">
     <div class="bg-white shadow-sm border-b">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <h1 class="text-2xl font-bold text-gray-900">নতুন গুদম তৈরি করুন</h1>
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">@lang('warehouses.create_title')</h1>
+                    <p class="text-gray-600">@lang('warehouses.create_subtitle')</p>
+                </div>
+                <a href="{{ route('inventory.warehouses.index') }}" class="text-gray-600 hover:text-purple-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                </a>
+            </div>
         </div>
     </div>
-    <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <form action="{{ route('inventory.warehouses.store') }}" method="POST" class="space-y-6">
+
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <form action="{{ route('inventory.warehouses.store') }}" method="POST">
             @csrf
             <div class="bg-white rounded-2xl p-6 shadow-sm space-y-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">গুদমের নাম *</label>
-                    <input type="text" name="name" value="{{ old('name') }}" required class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                    @error('name') <p class="text-red-500 text-sm mt-1">{{ $message }}</p> @enderror
+                    <label class="block text-sm font-medium text-gray-700 mb-1">@lang('warehouses.name') *</label>
+                    <input type="text" name="name" value="{{ old('name') }}" required class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    @error('name') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">ঠিকানা</label>
-                    <textarea name="address" rows="2" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">{{ old('address') }}</textarea>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">ফোন</label>
-                    <input type="text" name="phone" value="{{ old('phone') }}" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                </div>
-                <div class="flex items-center">
-                    <input type="hidden" name="is_active" value="0">
-                    <input type="checkbox" name="is_active" value="1" checked class="rounded border-gray-300 text-purple-600 focus:ring-purple-500">
-                    <label class="ml-2 text-sm text-gray-700">সক্রিয়</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">@lang('warehouses.address')</label>
+                    <input type="text" name="address" value="{{ old('address') }}" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
                 </div>
             </div>
-            <div class="flex justify-end space-x-4">
-                <a href="{{ route('inventory.warehouses.index') }}" class="px-6 py-2 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50">বাতিল</a>
-                <button type="submit" class="px-6 py-2 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700">সংরক্ষণ করুন</button>
+            <div class="mt-6 flex space-x-3">
+                <button type="submit" class="bg-purple-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-purple-700 transition">@lang('warehouses.create_btn')</button>
+                <a href="{{ route('inventory.warehouses.index') }}" class="bg-gray-100 text-gray-700 px-6 py-3 rounded-xl font-medium hover:bg-gray-200 transition">@lang('common.cancel')</a>
             </div>
         </form>
     </div>

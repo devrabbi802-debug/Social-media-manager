@@ -1,99 +1,59 @@
 @extends('layouts.tenant')
 
-@section('title', 'এডিট - ' . $attribute->name . ' - SocialBoost AI')
+@section('title', __('attributes.edit_title', ['name' => $template->name]).' - SocialBoost AI')
 
 @section('content')
 <div class="min-h-screen bg-gray-50">
     <div class="bg-white shadow-sm border-b">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <h1 class="text-2xl font-bold text-gray-900">অ্যাট্রিবিউট এডিট করুন</h1>
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">@lang('attributes.edit_title', ['name' => $template->name])</h1>
+                </div>
+                <a href="{{ route('inventory.attributes.index') }}" class="text-gray-600 hover:text-purple-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                </a>
+            </div>
         </div>
     </div>
-    <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <form action="{{ route('inventory.attributes.update', $attribute) }}" method="POST" class="space-y-6">
-            @csrf @method('PUT')
+
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <form action="{{ route('inventory.attributes.update', $template) }}" method="POST">
+            @csrf
+            @method('PUT')
             <div class="bg-white rounded-2xl p-6 shadow-sm space-y-4">
-                {{-- Global Toggle --}}
-                <div class="flex items-center space-x-3 p-3 bg-purple-50 rounded-xl">
-                    <input type="hidden" name="is_global" value="0">
-                    <input type="checkbox" name="is_global" value="1" id="is_global"
-                        {{ old('is_global', $attribute->is_global) ? 'checked' : '' }}
-                        class="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                        onchange="toggleCategoryField()">
-                    <div>
-                        <label for="is_global" class="text-sm font-bold text-gray-900 cursor-pointer">গ্লোবাল অ্যাট্রিবিউট</label>
-                        <p class="text-xs text-gray-500">চেক করলে এই অ্যাট্রিবিউট সব ক্যাটাগরিতে দেখা যাবে</p>
-                    </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">@lang('attributes.name') *</label>
+                    <input type="text" name="name" value="{{ old('name', $template->name) }}" required class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    @error('name') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                 </div>
-
-                {{-- Category (hidden when global) --}}
-                <div id="category-field" {{ old('is_global', $attribute->is_global) ? 'style="display: none;"' : '' }}>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">ক্যাটাগরি *</label>
-                    <select name="category_id" id="category_id" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                        @foreach($categories as $cat)
-                            <option value="{{ $cat->id }}" {{ old('category_id', $attribute->category_id) == $cat->id ? 'selected' : '' }}>{{ $cat->name }}</option>
-                        @endforeach
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">@lang('attributes.type')</label>
+                    <select name="type" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                        <option value="text" {{ old('type', $template->type) === 'text' ? 'selected' : '' }}>Text</option>
+                        <option value="number" {{ old('type', $template->type) === 'number' ? 'selected' : '' }}>Number</option>
+                        <option value="select" {{ old('type', $template->type) === 'select' ? 'selected' : '' }}>Select</option>
                     </select>
                 </div>
-
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">অ্যাট্রিবিউটের নাম *</label>
-                    <input type="text" name="name" value="{{ old('name', $attribute->name) }}" required class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">ধরন *</label>
-                    <select name="type" id="attr_type" required class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                        <option value="text" {{ old('type', $attribute->type) === 'text' ? 'selected' : '' }}>টেক্সট</option>
-                        <option value="number" {{ old('type', $attribute->type) === 'number' ? 'selected' : '' }}>নাম্বার</option>
-                        <option value="select" {{ old('type', $attribute->type) === 'select' ? 'selected' : '' }}>সিলেক্ট</option>
-                        <option value="boolean" {{ old('type', $attribute->type) === 'boolean' ? 'selected' : '' }}>হ্যাঁ/না</option>
-                        <option value="date" {{ old('type', $attribute->type) === 'date' ? 'selected' : '' }}>তারিখ</option>
-                    </select>
-                </div>
-                <div id="options_field" {{ old('type', $attribute->type) !== 'select' ? 'style="display: none;"' : '' }}>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">অপশন (কমা দিয়ে আলাদা)</label>
-                    <input type="text" name="options" value="{{ old('options', $attribute->options ? implode(', ', $attribute->options) : '') }}" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                </div>
-                <div class="flex items-center">
-                    <input type="hidden" name="is_required" value="0">
-                    <input type="checkbox" name="is_required" value="1" {{ old('is_required', $attribute->is_required) ? 'checked' : '' }} class="rounded border-gray-300 text-purple-600 focus:ring-purple-500">
-                    <label class="ml-2 text-sm text-gray-700">আবশ্যিক</label>
+                    <label class="flex items-center space-x-3">
+                        <input type="checkbox" name="is_variant_option" value="1" {{ old('is_variant_option', $template->is_variant_option) ? 'checked' : '' }} class="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500">
+                        <span class="text-sm text-gray-700">@lang('attributes.mark_variant')</span>
+                    </label>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">সাজানোর ক্রম</label>
-                    <input type="number" name="sort_order" value="{{ old('sort_order', $attribute->sort_order) }}" min="0" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">@lang('attributes.options')</label>
+                    <textarea name="options" rows="3" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">{{ old('options', $template->options) }}</textarea>
+                    <p class="text-xs text-gray-500 mt-1">@lang('attributes.options_help')</p>
                 </div>
             </div>
-            <div class="flex justify-end space-x-4">
-                <a href="{{ route('inventory.attributes.index') }}" class="px-6 py-2 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50">বাতিল</a>
-                <button type="submit" class="px-6 py-2 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700">আপডেট করুন</button>
+            <div class="mt-6 flex space-x-3">
+                <button type="submit" class="bg-purple-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-purple-700 transition">@lang('attributes.update_btn')</button>
+                <a href="{{ route('inventory.attributes.index') }}" class="bg-gray-100 text-gray-700 px-6 py-3 rounded-xl font-medium hover:bg-gray-200 transition">@lang('common.cancel')</a>
             </div>
         </form>
     </div>
 </div>
-
-@push('scripts')
-<script>
-document.getElementById('attr_type').addEventListener('change', function() {
-    document.getElementById('options_field').style.display = this.value === 'select' ? 'block' : 'none';
-});
-
-function toggleCategoryField() {
-    const isGlobal = document.getElementById('is_global').checked;
-    const categoryField = document.getElementById('category-field');
-    const categoryIdSelect = document.getElementById('category_id');
-
-    if (isGlobal) {
-        categoryField.style.display = 'none';
-        categoryIdSelect.removeAttribute('required');
-    } else {
-        categoryField.style.display = 'block';
-        categoryIdSelect.setAttribute('required', 'required');
-    }
-}
-
-// Init on load
-toggleCategoryField();
-</script>
-@endpush
 @endsection

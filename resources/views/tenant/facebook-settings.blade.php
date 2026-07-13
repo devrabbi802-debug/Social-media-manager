@@ -1,6 +1,6 @@
 @extends('layouts.tenant')
 
-@section('title', 'ফেসবুক সেটিংস - SocialBoost AI')
+@section('title', __('facebook.settings_title').' - SocialBoost AI')
 
 @section('content')
 <div class="min-h-screen bg-gray-50">
@@ -9,19 +9,19 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-2xl font-bold text-gray-900">ফেসবুক সেটিংস</h1>
-                    <p class="text-gray-600">আপনার ফেসবুক অ্যাপ কনফিগারেশন সেট করুন</p>
+                    <h1 class="text-2xl font-bold text-gray-900">@lang('facebook.settings_title')</h1>
+                    <p class="text-gray-600">@lang('facebook.settings_subtitle')</p>
                 </div>
                 <div class="flex items-center space-x-4">
                     @if($facebookSetting)
                         <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
                             <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                            সংযুক্ত
+                            @lang('common.connected')
                         </span>
                     @else
                         <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
                             <span class="w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>
-                            অসংযুক্ত
+                            @lang('common.disconnected')
                         </span>
                     @endif
                     <a href="{{ url('/integration') }}" class="text-gray-600 hover:text-purple-600">
@@ -62,8 +62,8 @@
                                 </svg>
                             </div>
                             <div>
-                                <h2 class="text-lg font-bold text-gray-900">Zernio দিয়ে সংযুক্ত</h2>
-                                <p class="text-sm text-gray-500">Facebook Page Zernio এর মাধ্যমে সংযুক্ত আছে</p>
+                                <h2 class="text-lg font-bold text-gray-900">@lang('facebook.zernio_connected')</h2>
+                                <p class="text-sm text-gray-500">@lang('facebook.zernio_desc')</p>
                             </div>
                         </div>
 
@@ -83,7 +83,7 @@
                                 </div>
                                 <div>
                                     <p class="text-xs font-semibold text-gray-500 uppercase">Status</p>
-                                    <p class="text-sm text-green-600 mt-1 font-medium">সংযুক্ত</p>
+                                    <p class="text-sm text-green-600 mt-1 font-medium">@lang('common.connected')</p>
                                 </div>
                             </div>
                         </div>
@@ -98,12 +98,12 @@
                                         </svg>
                                     </div>
                                     <div>
-                                        <h3 class="text-lg font-bold text-gray-900">AI অটো রিপ্লাই</h3>
+                                        <h3 class="text-lg font-bold text-gray-900">@lang('facebook.ai_auto_reply')</h3>
                                         <p class="text-sm text-gray-500">
                                             @if($facebookSetting->ai_auto_reply_enabled)
-                                                <span class="text-green-600 font-medium">চালু আছে</span> — কাস্টমারদের অটোমেটিক রিপ্লাই যাচ্ছে
+                                                <span class="text-green-600 font-medium">@lang('facebook.active')</span> — @lang('facebook.active_desc')
                                             @else
-                                                <span class="text-gray-500 font-medium">বন্ধ আছে</span> — কোনো অটো রিপ্লাই যাচ্ছে না
+                                                <span class="text-gray-500 font-medium">@lang('facebook.inactive')</span> — @lang('facebook.inactive_desc')
                                             @endif
                                         </p>
                                     </div>
@@ -112,7 +112,7 @@
                                 <form action="{{ route('facebook.settings.toggle.ai.reply') }}" method="POST">
                                     @csrf
                                     <button type="submit" class="relative inline-flex h-12 w-24 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 {{ $facebookSetting->ai_auto_reply_enabled ? 'bg-green-500' : 'bg-gray-300' }}" role="switch" aria-checked="{{ $facebookSetting->ai_auto_reply_enabled ? 'true' : 'false' }}">
-                                        <span class="sr-only">AI অটো রিপ্লাই টগল করুন</span>
+                                        <span class="sr-only">@lang('facebook.toggle_sr')</span>
                                         <span aria-hidden="true" class="pointer-events-none inline-block h-10 w-10 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out {{ $facebookSetting->ai_auto_reply_enabled ? 'translate-x-12' : 'translate-x-1' }}"></span>
                                     </button>
                                 </form>
@@ -125,7 +125,7 @@
                                 <svg class="w-5 h-5 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
                                     <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388,10.954,10.125,11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007,1.792-4.669,4.533-4.669 1.312,0,2.686.235,2.686.235v2.953H15.83c-1.491,0-1.956.925-1.956,1.874v2.25h3.328l-.532,3.47h-2.796v8.385C19.612,23.027,24,18.062,24,12.073z"/>
                                 </svg>
-                                Facebook পরিবর্তন করুন
+                                @lang('facebook.change_facebook')
                             </a>
                         </div>
                     </div>
@@ -140,8 +140,8 @@
                                 </svg>
                             </div>
                             <div>
-                                <h2 class="text-lg font-bold text-gray-900">ফেসবুক সংযুক্ত আছে (Direct App)</h2>
-                                <p class="text-sm text-gray-500">Facebook App দিয়ে সংযুক্ত আছে</p>
+                                <h2 class="text-lg font-bold text-gray-900">@lang('facebook.facebook_app_connected')</h2>
+                                <p class="text-sm text-gray-500">@lang('facebook.connected_via_app')</p>
                             </div>
                         </div>
 
@@ -168,12 +168,12 @@
                                         </svg>
                                     </div>
                                     <div>
-                                        <h3 class="text-lg font-bold text-gray-900">AI অটো রিপ্লাই</h3>
+                                        <h3 class="text-lg font-bold text-gray-900">@lang('facebook.ai_auto_reply')</h3>
                                         <p class="text-sm text-gray-500">
                                             @if($facebookSetting->ai_auto_reply_enabled)
-                                                <span class="text-green-600 font-medium">চালু আছে</span>
+                                                <span class="text-green-600 font-medium">@lang('facebook.active')</span>
                                             @else
-                                                <span class="text-gray-500 font-medium">বন্ধ আছে</span>
+                                                <span class="text-gray-500 font-medium">@lang('facebook.inactive')</span>
                                             @endif
                                         </p>
                                     </div>
@@ -181,7 +181,7 @@
                                 <form action="{{ route('facebook.settings.toggle.ai.reply') }}" method="POST">
                                     @csrf
                                     <button type="submit" class="relative inline-flex h-12 w-24 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 {{ $facebookSetting->ai_auto_reply_enabled ? 'bg-green-500' : 'bg-gray-300' }}" role="switch" aria-checked="{{ $facebookSetting->ai_auto_reply_enabled ? 'true' : 'false' }}">
-                                        <span class="sr-only">AI অটো রিপ্লাই টগল করুন</span>
+                                        <span class="sr-only">@lang('facebook.toggle_sr')</span>
                                         <span aria-hidden="true" class="pointer-events-none inline-block h-10 w-10 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out {{ $facebookSetting->ai_auto_reply_enabled ? 'translate-x-12' : 'translate-x-1' }}"></span>
                                     </button>
                                 </form>
@@ -195,7 +195,7 @@
                         {{-- Option 1: Zernio (Recommended) --}}
                         <div class="bg-white rounded-2xl p-8 shadow-sm border-2 border-purple-200">
                             <div class="flex items-center mb-4">
-                                <span class="bg-purple-100 text-purple-800 text-xs font-bold px-3 py-1 rounded-full mr-3">সুপারিশকৃত</span>
+                                <span class="bg-purple-100 text-purple-800 text-xs font-bold px-3 py-1 rounded-full mr-3">@lang('facebook.recommended')</span>
                             </div>
                             <div class="flex items-center mb-6">
                                 <div class="w-14 h-14 bg-purple-100 rounded-2xl flex items-center justify-center mr-4">
@@ -204,8 +204,8 @@
                                     </svg>
                                 </div>
                                 <div>
-                                    <h2 class="text-xl font-bold text-gray-900">Zernio দিয়ে সংযুক্ত করুন</h2>
-                                    <p class="text-gray-500">একটি API key দিয়ে Facebook Page সংযুক্ত করুন</p>
+                                    <h2 class="text-xl font-bold text-gray-900">@lang('facebook.connect_via_zernio')</h2>
+                                    <p class="text-gray-500">@lang('facebook.zernio_desc_short')</p>
                                 </div>
                             </div>
 
@@ -222,25 +222,25 @@
                                         class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition font-mono text-sm"
                                     >
                                     <p class="mt-2 text-xs text-gray-500">
-                                        <a href="https://zernio.com/signup" target="_blank" class="text-purple-600 hover:underline">zernio.com</a> এ signup করে API key পান।
-                                        প্রথম ২টি account বিনামূল্যে!
+                                        @lang('facebook.zernio_signup_help')
+                                        @lang('facebook.first_two_free')
                                     </p>
                                 </div>
                                 <button type="submit" class="w-full inline-flex items-center justify-center px-8 py-4 bg-purple-600 text-white rounded-xl font-bold text-lg hover:bg-purple-700 transition shadow-lg shadow-purple-200">
                                     <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                                     </svg>
-                                    Zernio দিয়ে সংযুক্ত করুন
+                                    @lang('facebook.connect_zernio_btn')
                                 </button>
                             </form>
 
                             <div class="bg-purple-50 rounded-xl p-4 mt-4">
-                                <h4 class="text-sm font-bold text-purple-900 mb-2">কেন Zernio?</h4>
+                                <h4 class="text-sm font-bold text-purple-900 mb-2">@lang('facebook.why_zernio')</h4>
                                 <ul class="text-xs text-purple-700 space-y-1">
-                                    <li>✅ Facebook App তৈরি করার প্রয়োজন নেই</li>
-                                    <li>✅ একটি API key দিয়ে সব কাজ হয়</li>
-                                    <li>✅ ১৫+ প্ল্যাটফর্ম সাপোর্ট (Facebook, Instagram, TikTok...)</li>
-                                    <li>✅ প্রথম ২টি account বিনামূল্যে</li>
+                                    <li>✅ @lang('facebook.no_fb_app_needed')</li>
+                                    <li>✅ @lang('facebook.one_api_key')</li>
+                                    <li>✅ @lang('facebook.platform_support') (Facebook, Instagram, TikTok...)</li>
+                                    <li>✅ @lang('facebook.first_two_free_list')</li>
                                 </ul>
                             </div>
                         </div>
@@ -254,8 +254,8 @@
                                     </svg>
                                 </div>
                                 <div>
-                                    <h2 class="text-xl font-bold text-gray-900">Facebook App দিয়ে সংযুক্ত করুন</h2>
-                                    <p class="text-gray-500">নিজের Facebook App ব্যবহার করুন</p>
+                                    <h2 class="text-xl font-bold text-gray-900">@lang('facebook.connect_via_app')</h2>
+                                    <p class="text-gray-500">@lang('facebook.use_own_app')</p>
                                 </div>
                             </div>
 
@@ -263,10 +263,10 @@
                                 <svg class="w-6 h-6 mr-3" fill="currentColor" viewBox="0 0 24 24">
                                     <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388,10.954,10.125,11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007,1.792-4.669,4.533-4.669 1.312,0,2.686.235,2.686.235v2.953H15.83c-1.491,0-1.956.925-1.956,1.874v2.25h3.328l-.532,3.47h-2.796v8.385C19.612,23.027,24,18.062,24,12.073z"/>
                                 </svg>
-                                Facebook দিয়ে সংযুক্ত করুন
+                                @lang('facebook.connect_fb_btn')
                             </a>
 
-                            <p class="text-xs text-gray-400 mt-4 text-center">Facebook Login ব্যবহার করে নিরাপদভাবে সংযুক্ত হবে।</p>
+                            <p class="text-xs text-gray-400 mt-4 text-center">@lang('facebook.secure_login')</p>
                         </div>
                     </div>
                 @endif
@@ -277,7 +277,7 @@
                 @if($facebookSetting && $facebookSetting->isZernio())
                     {{-- Zernio Webhook Info --}}
                     <div class="bg-white rounded-2xl p-6 shadow-sm">
-                        <h3 class="text-lg font-bold text-gray-900 mb-4">Zernio Webhook</h3>
+                        <h3 class="text-lg font-bold text-gray-900 mb-4">@lang('facebook.zernio_webhook')</h3>
                         <div class="space-y-4">
                             <div class="bg-gray-50 rounded-xl p-4">
                                 <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Webhook URL</p>
@@ -285,8 +285,8 @@
                             </div>
                             <div class="bg-purple-50 rounded-xl p-4">
                                 <p class="text-xs text-purple-700">
-                                    Zernio Dashboard এ Webhooks সেটিংসে এই URL দিন।
-                                    <code class="font-mono text-xs">message.received</code> event subscribe করুন।
+                                    @lang('facebook.webhook_url_help')
+                                    <code class="font-mono text-xs">message.received</code> @lang('facebook.subscribe_event')
                                 </p>
                             </div>
 
@@ -296,16 +296,16 @@
                                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                                 </svg>
-                                Webhook Test করুন
+                                @lang('facebook.test_webhook')
                             </button>
                             <div id="testWebhookResult" class="text-sm text-center mt-2 hidden"></div>
-                            <p class="text-xs text-gray-400 text-center">Zernio থেকে test event পাঠায়</p>
+                            <p class="text-xs text-gray-400 text-center">@lang('facebook.webhook_test_desc')</p>
                         </div>
                     </div>
                 @elseif($facebookSetting && $facebookSetting->isFacebookApp())
                     {{-- Facebook App Webhook Info --}}
                     <div class="bg-white rounded-2xl p-6 shadow-sm">
-                        <h3 class="text-lg font-bold text-gray-900 mb-4">Webhook সেটআপ</h3>
+                        <h3 class="text-lg font-bold text-gray-900 mb-4">@lang('facebook.webhook_setup')</h3>
                         <div class="space-y-4">
                             <div class="bg-gray-50 rounded-xl p-4">
                                 <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Callback URL</p>
@@ -320,31 +320,31 @@
                 @else
                     {{-- Instructions --}}
                     <div class="bg-white rounded-2xl p-6 shadow-sm">
-                        <h3 class="text-lg font-bold text-gray-900 mb-4">কিভাবে পাবেন?</h3>
+                        <h3 class="text-lg font-bold text-gray-900 mb-4">@lang('facebook.how_to_get')</h3>
                         <div class="space-y-4">
                             <div class="flex items-start">
                                 <div class="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center mr-3 mt-0.5">
                                     <span class="text-xs font-bold text-purple-600">১</span>
                                 </div>
-                                <p class="text-sm text-gray-600"><a href="https://zernio.com/signup" target="_blank" class="text-purple-600 hover:underline">Zernio.com</a> এ signup করুন</p>
+                                <p class="text-sm text-gray-600"><a href="https://zernio.com/signup" target="_blank" class="text-purple-600 hover:underline">Zernio.com</a> @lang('facebook.step1')</p>
                             </div>
                             <div class="flex items-start">
                                 <div class="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center mr-3 mt-0.5">
                                     <span class="text-xs font-bold text-purple-600">২</span>
                                 </div>
-                                <p class="text-sm text-gray-600">Settings → API Keys থেকে API key কপি করুন</p>
+                                <p class="text-sm text-gray-600">@lang('facebook.step2')</p>
                             </div>
                             <div class="flex items-start">
                                 <div class="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center mr-3 mt-0.5">
                                     <span class="text-xs font-bold text-purple-600">৩</span>
                                 </div>
-                                <p class="text-sm text-gray-600">উপরের ফিল্ডে API key পেস্ট করুন</p>
+                                <p class="text-sm text-gray-600">@lang('facebook.step3')</p>
                             </div>
                             <div class="flex items-start">
                                 <div class="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center mr-3 mt-0.5">
                                     <span class="text-xs font-bold text-purple-600">৪</span>
                                 </div>
-                                <p class="text-sm text-gray-600">"Zernio দিয়ে সংযুক্ত করুন" ক্লিক করুন</p>
+                                <p class="text-sm text-gray-600">@lang('facebook.step4')</p>
                             </div>
                         </div>
                     </div>
@@ -353,21 +353,21 @@
                 {{-- Danger Zone --}}
                 @if($facebookSetting)
                     <div class="bg-white rounded-2xl p-6 shadow-sm border border-red-200">
-                        <h3 class="text-lg font-bold text-red-600 mb-2">বিপদ এলাকা</h3>
-                        <p class="text-sm text-gray-600 mb-4">সেটিংস মুছে ফেললে আপনার Facebook ইন্টিগ্রেশন কাজ করবে না।</p>
+                        <h3 class="text-lg font-bold text-red-600 mb-2">@lang('facebook.danger_zone')</h3>
+                        <p class="text-sm text-gray-600 mb-4">@lang('facebook.danger_desc')</p>
                         @if($facebookSetting->isZernio())
-                            <form action="{{ route('zernio.disconnect') }}" method="POST" onsubmit="return confirm('আপনি কি নিশ্চিত Zernio সংযোগ বিচ্ছিন্ন করতে চান?')">
+                            <form action="{{ route('zernio.disconnect') }}" method="POST" onsubmit="return confirm('{{ __('facebook.disconnect_zernio_confirm') }}')">
                                 @csrf
                                 <button type="submit" class="w-full bg-red-600 text-white px-4 py-2 rounded-xl font-medium hover:bg-red-700 transition">
-                                    সংযোগ বিচ্ছিন্ন করুন
+                                    @lang('facebook.disconnect')
                                 </button>
                             </form>
                         @else
-                            <form action="{{ route('facebook.settings.destroy') }}" method="POST" onsubmit="return confirm('আপনি কি নিশ্চিত এই সেটিংস মুছে ফেলতে চান?')">
+                            <form action="{{ route('facebook.settings.destroy') }}" method="POST" onsubmit="return confirm('{{ __('facebook.delete_settings_confirm') }}')">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="w-full bg-red-600 text-white px-4 py-2 rounded-xl font-medium hover:bg-red-700 transition">
-                                    সেটিংস মুছে ফেলুন
+                                    @lang('facebook.delete_settings')
                                 </button>
                             </form>
                         @endif
@@ -385,7 +385,7 @@ document.getElementById('testWebhookBtn')?.addEventListener('click', function() 
     const btn = this;
     const resultDiv = document.getElementById('testWebhookResult');
     btn.disabled = true;
-    btn.innerHTML = '<svg class="animate-spin w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> পাঠাচ্ছে...';
+    btn.innerHTML = '<svg class="animate-spin w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> @lang('facebook.sending')';
     resultDiv.classList.add('hidden');
     fetch('/facebook/zernio/test-webhook', {
         method: 'POST',
@@ -401,14 +401,14 @@ document.getElementById('testWebhookBtn')?.addEventListener('click', function() 
         resultDiv.classList.remove('hidden');
         resultDiv.className = 'text-sm text-center mt-2 ' + (data.success ? 'text-green-600' : 'text-red-600');
         resultDiv.textContent = data.message;
-        btn.innerHTML = 'Webhook Test করুন';
+        btn.innerHTML = '@lang('facebook.test_webhook')';
         btn.disabled = false;
     })
     .catch(() => {
         resultDiv.classList.remove('hidden');
         resultDiv.className = 'text-sm text-center mt-2 text-red-600';
         resultDiv.textContent = 'Network error';
-        btn.innerHTML = 'Webhook Test করুন';
+        btn.innerHTML = '@lang('facebook.test_webhook')';
         btn.disabled = false;
     });
 });

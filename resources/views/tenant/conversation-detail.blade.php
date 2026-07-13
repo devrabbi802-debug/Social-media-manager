@@ -1,6 +1,6 @@
 @extends('layouts.tenant')
 
-@section('title', 'কথোপকথন - '.$conversation->sender_name ?? $conversation->sender_id)
+@section('title', __('conversations.title').' - '.$conversation->sender_name ?? $conversation->sender_id)
 
 @section('content')
 <div class="min-h-screen bg-gray-50">
@@ -70,7 +70,7 @@
                 <div class="flex justify-start">
                     <div class="max-w-[75%]">
                         <div class="text-xs text-gray-500 mb-1 ml-1">
-                            {{ $conversation->sender_name ?? 'কাস্টমার' }}
+                            {{ $conversation->sender_name ?? __('conversations.customer') }}
                             · {{ $group['time']->format('d M, H:i') }}
                         </div>
                         <div class="bg-white shadow-sm border border-gray-100 rounded-2xl px-4 py-3">
@@ -88,7 +88,7 @@
                     <div class="max-w-[75%]">
                         @if($message->direction === 'incoming')
                         <div class="text-xs text-gray-500 mb-1 ml-1">
-                            {{ $message->sender_name ?? 'কাস্টমার' }}
+                            {{ $message->sender_name ?? __('conversations.customer') }}
                             · {{ $message->created_at->format('d M, H:i') }}
                         </div>
                         @endif
@@ -107,19 +107,19 @@
                             @if($message->image_analysis)
                             <div class="mt-2 pt-2 border-t {{ $message->direction === 'outgoing' ? 'border-blue-400' : 'border-gray-200' }}">
                                 <button onclick="this.nextElementSibling.classList.toggle('hidden')" class="text-xs {{ $message->direction === 'outgoing' ? 'text-blue-200' : 'text-purple-600' }} hover:underline">
-                                    ইমেজ বিশ্লেষণ দেখুন
+                                    @lang('conversations.view_image_analysis')
                                 </button>
                                 <div class="hidden mt-2 p-3 rounded-lg {{ $message->direction === 'outgoing' ? 'bg-blue-700' : 'bg-gray-50' }}">
                                     @if(isset($message->image_analysis['descriptions']))
                                     @foreach($message->image_analysis['descriptions'] as $desc)
                                     <p class="text-xs {{ $message->direction === 'outgoing' ? 'text-blue-100' : 'text-gray-600' }} mb-2">
-                                        <span class="font-semibold">ইমেজ বিশ্লেষণ:</span><br>
+                                        <span class="font-semibold">@lang('conversations.image_analysis_label')</span><br>
                                         {{ $desc }}
                                     </p>
                                     @endforeach
                                     @elseif(isset($message->image_analysis['description']))
                                     <p class="text-xs {{ $message->direction === 'outgoing' ? 'text-blue-100' : 'text-gray-600' }}">
-                                        <span class="font-semibold">ইমেজ বিশ্লেষণ:</span><br>
+                                        <span class="font-semibold">@lang('conversations.image_analysis_label')</span><br>
                                         {{ $message->image_analysis['description'] }}
                                     </p>
                                     @endif
@@ -139,7 +139,7 @@
 
                         @if($message->direction === 'outgoing')
                         <div class="text-xs text-gray-500 mb-1 mr-1 text-right">
-                            AI রিপ্লাই
+                            @lang('conversations.ai_reply')
                             · {{ $message->created_at->format('d M, H:i') }}
                         </div>
                         @endif
@@ -153,8 +153,8 @@
             <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
             </svg>
-            <h3 class="text-lg font-medium text-gray-900 mb-1">কোনো বার্তা নেই</h3>
-            <p class="text-gray-500">এই কথোপকথনে এখনো কোনো বার্তা নেই।</p>
+            <h3 class="text-lg font-medium text-gray-900 mb-1">@lang('conversations.no_messages')</h3>
+            <p class="text-gray-500">@lang('conversations.no_messages_desc')</p>
         </div>
         @endif
     </div>

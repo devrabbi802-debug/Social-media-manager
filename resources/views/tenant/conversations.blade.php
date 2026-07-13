@@ -1,6 +1,6 @@
 @extends('layouts.tenant')
 
-@section('title', 'কথোপকথন - SocialBoost AI')
+@section('title', __('conversations.title').' - SocialBoost AI')
 
 @section('content')
 <div class="min-h-screen bg-gray-50">
@@ -8,8 +8,8 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-2xl font-bold text-gray-900">কথোপকথন</h1>
-                    <p class="text-gray-600">Facebook Messenger কাস্টমারদের সাথে কথোপকথন</p>
+                    <h1 class="text-2xl font-bold text-gray-900">@lang('conversations.title')</h1>
+                    <p class="text-gray-600">@lang('conversations.subtitle')</p>
                 </div>
             </div>
         </div>
@@ -20,8 +20,8 @@
 
         <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
             <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-lg font-bold text-gray-900">সব কথোপকথন</h2>
-                <p class="text-sm text-gray-500">মোট {{ $conversations->total() }}টি কথোপকথন</p>
+                <h2 class="text-lg font-bold text-gray-900">@lang('conversations.all_conversations')</h2>
+                <p class="text-sm text-gray-500">{{ __('conversations.total_count', ['count' => $conversations->total() ]) }}</p>
             </div>
 
             @if($conversations->count())
@@ -72,8 +72,8 @@
                 <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
                 </svg>
-                <h3 class="text-lg font-medium text-gray-900 mb-1">কোনো কথোপকথন নেই</h3>
-                <p class="text-gray-500">Facebook Messenger এ কাস্টমার মেসেজ পাঠালে এখানে দেখা যাবে।</p>
+                <h3 class="text-lg font-medium text-gray-900 mb-1">@lang('conversations.no_conversations')</h3>
+                <p class="text-gray-500">@lang('conversations.no_conversations_desc')</p>
             </div>
             @endif
         </div>

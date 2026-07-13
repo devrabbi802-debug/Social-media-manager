@@ -18,6 +18,7 @@ use App\Http\Controllers\Dashboard\AttributeTemplateController;
 use App\Http\Controllers\Dashboard\WarehouseController;
 use App\Http\Controllers\Dashboard\InventoryController;
 use App\Http\Controllers\Dashboard\ImageMatchController;
+use App\Http\Controllers\Tenant\LanguageController;
 
 /*
 |--------------------------------------------------------------------------
@@ -35,7 +36,11 @@ Route::middleware([
     'web',
     InitializeTenancyByDomain::class,
     PreventAccessFromCentralDomains::class,
+    'locale',
 ])->group(function () {
+
+    // Language Switch
+    Route::post('/language/switch', [LanguageController::class, 'switch'])->name('language.switch');
 
     // Auth Routes
     Route::get('/login', function () {
@@ -57,7 +62,7 @@ Route::middleware([
         }
 
         return back()->withErrors([
-            'email' => 'ইমেইল বা পাসওয়ার্ড ভুল।',
+            'email' => __('auth.failed'),
         ])->onlyInput('email');
     });
 

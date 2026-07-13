@@ -1,6 +1,6 @@
 @extends('layouts.tenant')
 
-@section('title', 'সোশ্যাল মিডিয়া ইন্টিগ্রেশন - SocialBoost AI')
+@section('title', __('integration.title').' - SocialBoost AI')
 
 @section('content')
 <div class="min-h-screen bg-gray-50">
@@ -9,13 +9,13 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-2xl font-bold text-gray-900">সোশ্যাল মিডিয়া ইন্টিগ্রেশন</h1>
-                    <p class="text-gray-600">আপনার সোশ্যাল মিডিয়া একাউন্ট সংযুক্ত করুন</p>
+                    <h1 class="text-2xl font-bold text-gray-900">@lang('integration.title')</h1>
+                    <p class="text-gray-600">@lang('integration.subtitle')</p>
                 </div>
                 <div class="flex items-center space-x-4">
                     <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
                         <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                        সক্রিয়
+                        @lang('common.active')
                     </span>
                     <a href="{{ url('/settings') }}" class="text-gray-600 hover:text-purple-600">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -43,34 +43,34 @@
                         </div>
                         <div>
                             <h3 class="text-lg font-bold text-gray-900">Messenger</h3>
-                            <p class="text-sm text-green-600">সংযুক্ত</p>
+                            <p class="text-sm text-green-600">@lang('common.connected')</p>
                         </div>
                     </div>
                     <span class="w-3 h-3 bg-green-500 rounded-full"></span>
                 </div>
                 <div class="space-y-3 mb-6">
                     <div class="flex justify-between text-sm">
-                        <span class="text-gray-500">পেজ</span>
+                        <span class="text-gray-500">@lang('integration.page')</span>
                         <span class="font-medium text-gray-900">My Business Page</span>
                     </div>
                     <div class="flex justify-between text-sm">
-                        <span class="text-gray-500">আজকের মেসেজ</span>
+                        <span class="text-gray-500">@lang('integration.today_messages')</span>
                         <span class="font-medium text-gray-900">১৮টি</span>
                     </div>
                     <div class="flex justify-between text-sm">
-                        <span class="text-gray-500">AI রিপ্লাই</span>
-                        <span class="font-medium text-gray-900">সক্রিয়</span>
+                        <span class="text-gray-500">@lang('integration.ai_reply')</span>
+                        <span class="font-medium text-gray-900">@lang('common.active')</span>
                     </div>
                 </div>
                 <div class="flex space-x-3">
-                    <a href="{{ url('/facebook/post') }}" class="flex-1 text-center bg-blue-600 text-white px-4 py-2 rounded-xl font-medium hover:bg-blue-700 transition">মেসেজ দেখুন</a>
-                    <a href="{{ route('facebook.settings') }}" class="px-4 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition">সেটিংস</a>
+                    <a href="{{ url('/facebook/post') }}" class="flex-1 text-center bg-blue-600 text-white px-4 py-2 rounded-xl font-medium hover:bg-blue-700 transition">@lang('integration.view_messages')</a>
+                    <a href="{{ route('facebook.settings') }}" class="px-4 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition">@lang('settings.title')</a>
                 </div>
             </div>
 
             {{-- Instagram - Upcoming --}}
             <div class="bg-white rounded-2xl p-6 shadow-sm relative overflow-hidden">
-                <div class="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-xs font-bold px-3 py-1 rounded-bl-xl">আসছে শীঘ্রই</div>
+                <div class="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-xs font-bold px-3 py-1 rounded-bl-xl">@lang('integration.coming_soon_badge')</div>
                 <div class="flex items-center justify-between mb-6">
                     <div class="flex items-center">
                         <div class="w-12 h-12 bg-pink-100 rounded-xl flex items-center justify-center mr-4 opacity-50">
@@ -82,18 +82,18 @@
                         </div>
                         <div>
                             <h3 class="text-lg font-bold text-gray-900">Instagram</h3>
-                            <p class="text-sm text-yellow-600">শীঘ্রই আসছে</p>
+                            <p class="text-sm text-yellow-600">@lang('integration.coming_soon')</p>
                         </div>
                     </div>
                     <span class="w-3 h-3 bg-yellow-400 rounded-full"></span>
                 </div>
-                <p class="text-sm text-gray-500 mb-6">Instagram একাউন্ট সংযুক্ত করে AI রিপ্লাই এবং অটোমেশন ব্যবহার করুন।</p>
-                <button disabled class="w-full bg-gray-300 text-gray-500 px-4 py-2 rounded-xl font-medium cursor-not-allowed">শীঘ্রই আসছে</button>
+                <p class="text-sm text-gray-500 mb-6">@lang('integration.instagram_description')</p>
+                <button disabled class="w-full bg-gray-300 text-gray-500 px-4 py-2 rounded-xl font-medium cursor-not-allowed">@lang('integration.coming_soon')</button>
             </div>
 
             {{-- WhatsApp - Upcoming --}}
             <div class="bg-white rounded-2xl p-6 shadow-sm relative overflow-hidden">
-                <div class="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-xs font-bold px-3 py-1 rounded-bl-xl">আসছে শীঘ্রই</div>
+                <div class="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-xs font-bold px-3 py-1 rounded-bl-xl">@lang('integration.coming_soon_badge')</div>
                 <div class="flex items-center justify-between mb-6">
                     <div class="flex items-center">
                         <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mr-4 opacity-50">
@@ -103,13 +103,13 @@
                         </div>
                         <div>
                             <h3 class="text-lg font-bold text-gray-900">WhatsApp</h3>
-                            <p class="text-sm text-yellow-600">শীঘ্রই আসছে</p>
+                            <p class="text-sm text-yellow-600">@lang('integration.coming_soon')</p>
                         </div>
                     </div>
                     <span class="w-3 h-3 bg-yellow-400 rounded-full"></span>
                 </div>
-                <p class="text-sm text-gray-500 mb-6">WhatsApp Business API সংযুক্ত করে AI রিপ্লাই এবং অটোমেশন ব্যবহার করুন।</p>
-                <button disabled class="w-full bg-gray-300 text-gray-500 px-4 py-2 rounded-xl font-medium cursor-not-allowed">শীঘ্রই আসছে</button>
+                <p class="text-sm text-gray-500 mb-6">@lang('integration.whatsapp_description')</p>
+                <button disabled class="w-full bg-gray-300 text-gray-500 px-4 py-2 rounded-xl font-medium cursor-not-allowed">@lang('integration.coming_soon')</button>
             </div>
         </div>
     </div>

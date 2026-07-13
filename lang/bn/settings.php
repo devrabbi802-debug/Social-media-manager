@@ -1,0 +1,20 @@
+<?php
+return [
+    'title' => 'সেটিংস',
+    'subtitle' => 'আপনার অ্যাকাউন্ট সেটিংস পরিচালনা করুন',
+    'profile_info' => 'প্রোফাইল তথ্য',
+    'change_password' => 'পাসওয়ার্ড পরিবর্তন',
+    'current_password' => 'বর্তমান পাসওয়ার্ড',
+    'new_password' => 'নতুন পাসওয়ার্ড',
+    'confirm_password' => 'পাসওয়ার্ড নিশ্চিত করুন',
+    'update_password' => 'পাসওয়ার্ড আপডেট করুন',
+    'account_info' => 'অ্যাকাউন্ট তথ্য',
+    'username' => 'ইউজারনেম',
+    'email_verification' => 'ইমেইল যাচাই',
+    'verified' => 'যাচাইকৃত',
+    'unverified' => 'অযাচাইকৃত',
+    'member_since' => 'সদস্য হয়েছেন',
+    'danger_zone' => 'ঝুঁকিপূর্ণ এলাকা',
+    'delete_account_warning' => 'আপনার অ্যাকাউন্ট মুছে ফেললে সব ডাটা মুছে যাবে।',
+    'delete_account' => 'অ্যাকাউন্ট ডিলিট করুন',
+];

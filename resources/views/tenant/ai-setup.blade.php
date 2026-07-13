@@ -1,6 +1,6 @@
 @extends('layouts.tenant')
 
-@section('title', 'AI সেটআপ - SocialBoost AI')
+@section('title', __('ai.title').' - SocialBoost AI')
 
 @section('content')
 <div class="min-h-screen bg-gray-50">
@@ -9,8 +9,8 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-2xl font-bold text-gray-900">AI সেটআপ</h1>
-                    <p class="text-gray-600">Groq, Cerebras এবং Gemini API Key পরিচালনা করুন</p>
+                    <h1 class="text-2xl font-bold text-gray-900">@lang('ai.title')</h1>
+                    <p class="text-gray-600">@lang('ai.subtitle')</p>
                 </div>
                 <div class="flex items-center space-x-4">
                     @php
@@ -19,12 +19,12 @@
                     @if($totalActive > 0)
                         <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
                             <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                            {{ $totalActive }} সক্রিয়
+                            @lang('ai.active_count', ['count' => $totalActive])
                         </span>
                     @else
                         <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
                             <span class="w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>
-                            অসংযুক্ত
+                            @lang('common.disconnected')
                         </span>
                     @endif
                     <a href="{{ url('/integration') }}" class="text-gray-600 hover:text-purple-600">
@@ -76,7 +76,7 @@
                         </div>
                         <div>
                             <h2 class="text-lg font-bold text-gray-900">Groq API Key (Primary)</h2>
-                            <p class="text-sm text-gray-500">Facebook Messenger অটো রিপ্লাইর জন্য মূল AI</p>
+                            <p class="text-sm text-gray-500">@lang('ai.groq_desc')</p>
                         </div>
                     </div>
 
@@ -93,9 +93,9 @@
                                         <div class="flex items-center space-x-2">
                                             <span class="font-medium text-gray-900">Groq Key</span>
                                             @if($groqKey->is_active)
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">সক্রিয়</span>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">@lang('common.active')</span>
                                             @else
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">নিষ্ক্রিয়</span>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">@lang('common.inactive')</span>
                                             @endif
                                         </div>
                                         <p class="text-sm text-gray-500 font-mono mt-0.5">
@@ -107,7 +107,7 @@
                                 <div class="flex items-center space-x-2">
                                     <a href="{{ route('ai.setup.test', $groqKey) }}"
                                        class="inline-flex items-center px-3 py-2 text-sm text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition"
-                                       title="টেস্ট করুন">
+                                       title="@lang('ai.test')">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                                         </svg>
@@ -117,7 +117,7 @@
                                         @csrf
                                         <button type="submit"
                                                 class="inline-flex items-center px-3 py-2 text-sm {{ $groqKey->is_active ? 'text-green-600 hover:text-yellow-600' : 'text-gray-400 hover:text-green-600' }} hover:bg-gray-50 rounded-lg transition"
-                                                title="{{ $groqKey->is_active ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন' }}">
+                                                title="{{ $groqKey->is_active ? __('ai.deactivate') : __('ai.activate') }}">
                                             @if($groqKey->is_active)
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -132,12 +132,12 @@
                                     </form>
 
                                     <form action="{{ route('ai.setup.destroy', $groqKey) }}" method="POST"
-                                          onsubmit="return confirm('আপনি কি নিশ্চিত এই Key মুছে ফেলতে চান?');" class="inline">
+                                          onsubmit="return confirm('{{ __('ai.delete_key_confirm') }}');" class="inline">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit"
                                                 class="inline-flex items-center px-3 py-2 text-sm text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                                                title="মুছে ফেলুন">
+                                                title="@lang('ai.delete')">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                             </svg>
@@ -162,10 +162,10 @@
                                 placeholder="gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                                 required
                             >
-                            <p class="mt-2 text-xs text-gray-500"><a href="https://console.groq.com" target="_blank" class="text-purple-600 hover:underline">Groq Console</a> থেকে API Key পাওয়া যায়।</p>
+                            <p class="mt-2 text-xs text-gray-500">@lang('ai.groq_help')</p>
                         </div>
                         <button type="submit" class="inline-flex items-center px-6 py-3 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition shadow-lg shadow-purple-200">
-                            {{ $groqKey ? 'আপডেট করুন' : 'Key যোগ করুন' }}
+                            {{ $groqKey ? __('ai.update_btn') : __('ai.add_key') }}
                         </button>
                     </form>
                 </div>
@@ -180,7 +180,7 @@
                         </div>
                         <div>
                             <h2 class="text-lg font-bold text-gray-900">Cerebras API Key (Secondary)</h2>
-                            <p class="text-sm text-gray-500">Groq ফেইল হলে Cerebras দিয়ে রিপ্লাই দেবে (ফ্রি, বড় কনটেক্সট)</p>
+                            <p class="text-sm text-gray-500">@lang('ai.cerebras_desc')</p>
                         </div>
                     </div>
 
@@ -197,9 +197,9 @@
                                         <div class="flex items-center space-x-2">
                                             <span class="font-medium text-gray-900">Cerebras Key</span>
                                             @if($cerebrasKey->is_active)
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">সক্রিয়</span>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">@lang('common.active')</span>
                                             @else
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">নিষ্ক্রিয়</span>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">@lang('common.inactive')</span>
                                             @endif
                                         </div>
                                         <p class="text-sm text-gray-500 font-mono mt-0.5">
@@ -211,7 +211,7 @@
                                 <div class="flex items-center space-x-2">
                                     <a href="{{ route('ai.setup.test', $cerebrasKey) }}"
                                        class="inline-flex items-center px-3 py-2 text-sm text-gray-600 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition"
-                                       title="টেস্ট করুন">
+                                       title="@lang('ai.test')">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                                         </svg>
@@ -221,7 +221,7 @@
                                         @csrf
                                         <button type="submit"
                                                 class="inline-flex items-center px-3 py-2 text-sm {{ $cerebrasKey->is_active ? 'text-green-600 hover:text-yellow-600' : 'text-gray-400 hover:text-green-600' }} hover:bg-gray-50 rounded-lg transition"
-                                                title="{{ $cerebrasKey->is_active ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন' }}">
+                                                title="{{ $cerebrasKey->is_active ? __('ai.deactivate') : __('ai.activate') }}">
                                             @if($cerebrasKey->is_active)
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -236,12 +236,12 @@
                                     </form>
 
                                     <form action="{{ route('ai.setup.destroy', $cerebrasKey) }}" method="POST"
-                                          onsubmit="return confirm('আপনি কি নিশ্চিত এই Key মুছে ফেলতে চান?');" class="inline">
+                                          onsubmit="return confirm('{{ __('ai.delete_key_confirm') }}');" class="inline">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit"
                                                 class="inline-flex items-center px-3 py-2 text-sm text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                                                title="মুছে ফেলুন">
+                                                title="@lang('ai.delete')">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                             </svg>
@@ -266,10 +266,10 @@
                                 placeholder="csk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                                 required
                             >
-                            <p class="mt-2 text-xs text-gray-500"><a href="https://cloud.cerebras.ai" target="_blank" class="text-teal-600 hover:underline">Cerebras Cloud</a> থেকে ফ্রি API Key পাওয়া যায়।</p>
+                            <p class="mt-2 text-xs text-gray-500">@lang('ai.cerebras_help')</p>
                         </div>
                         <button type="submit" class="inline-flex items-center px-6 py-3 bg-teal-600 text-white rounded-xl font-medium hover:bg-teal-700 transition shadow-lg shadow-teal-200">
-                            {{ $cerebrasKey ? 'আপডেট করুন' : 'Key যোগ করুন' }}
+                            {{ $cerebrasKey ? __('ai.update_btn') : __('ai.add_key') }}
                         </button>
                     </form>
                 </div>
@@ -284,7 +284,7 @@
                         </div>
                         <div>
                             <h2 class="text-lg font-bold text-gray-900">Gemini API Key (Fallback)</h2>
-                            <p class="text-sm text-gray-500">Groq ফেইল হলে Gemini দিয়ে রিপ্লাই দেবে</p>
+                            <p class="text-sm text-gray-500">@lang('ai.gemini_desc')</p>
                         </div>
                     </div>
 
@@ -301,9 +301,9 @@
                                         <div class="flex items-center space-x-2">
                                             <span class="font-medium text-gray-900">Gemini Key</span>
                                             @if($geminiKey->is_active)
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">সক্রিয়</span>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">@lang('common.active')</span>
                                             @else
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">নিষ্ক্রিয়</span>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">@lang('common.inactive')</span>
                                             @endif
                                         </div>
                                         <p class="text-sm text-gray-500 font-mono mt-0.5">
@@ -315,7 +315,7 @@
                                 <div class="flex items-center space-x-2">
                                     <a href="{{ route('ai.setup.test', $geminiKey) }}"
                                        class="inline-flex items-center px-3 py-2 text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                                       title="টেস্ট করুন">
+                                       title="@lang('ai.test')">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                                         </svg>
@@ -325,7 +325,7 @@
                                         @csrf
                                         <button type="submit"
                                                 class="inline-flex items-center px-3 py-2 text-sm {{ $geminiKey->is_active ? 'text-green-600 hover:text-yellow-600' : 'text-gray-400 hover:text-green-600' }} hover:bg-gray-50 rounded-lg transition"
-                                                title="{{ $geminiKey->is_active ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন' }}">
+                                                title="{{ $geminiKey->is_active ? __('ai.deactivate') : __('ai.activate') }}">
                                             @if($geminiKey->is_active)
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -340,12 +340,12 @@
                                     </form>
 
                                     <form action="{{ route('ai.setup.destroy', $geminiKey) }}" method="POST"
-                                          onsubmit="return confirm('আপনি কি নিশ্চিত এই Key মুছে ফেলতে চান?');" class="inline">
+                                          onsubmit="return confirm('{{ __('ai.delete_key_confirm') }}');" class="inline">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit"
                                                 class="inline-flex items-center px-3 py-2 text-sm text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                                                title="মুছে ফেলুন">
+                                                title="@lang('ai.delete')">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                             </svg>
@@ -370,10 +370,10 @@
                                 placeholder="AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                                 required
                             >
-                            <p class="mt-2 text-xs text-gray-500"><a href="https://aistudio.google.com/apikey" target="_blank" class="text-purple-600 hover:underline">Google AI Studio</a> থেকে ফ্রি API Key পাওয়া যায়।</p>
+                            <p class="mt-2 text-xs text-gray-500">@lang('ai.gemini_help')</p>
                         </div>
                         <button type="submit" class="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition shadow-lg shadow-blue-200">
-                            {{ $geminiKey ? 'আপডেট করুন' : 'Key যোগ করুন' }}
+                            {{ $geminiKey ? __('ai.update_btn') : __('ai.add_key') }}
                         </button>
                     </form>
                 </div>
@@ -383,30 +383,30 @@
             <div class="space-y-6">
                 {{-- Status Card --}}
                 <div class="bg-white rounded-2xl p-6 shadow-sm">
-                    <h3 class="text-lg font-bold text-gray-900 mb-4">স্ট্যাটাস</h3>
+                    <h3 class="text-lg font-bold text-gray-900 mb-4">@lang('ai.status_title')</h3>
                     <div class="space-y-4">
                         <div class="flex justify-between items-center">
                             <span class="text-sm text-gray-500">Groq (Primary)</span>
                             @if($groqKey && $groqKey->is_active)
-                                <span class="text-sm font-medium text-green-600">সক্রিয়</span>
+                                <span class="text-sm font-medium text-green-600">@lang('common.active')</span>
                             @else
-                                <span class="text-sm font-medium text-yellow-600">সেট করা হয়নি</span>
+                                <span class="text-sm font-medium text-yellow-600">@lang('ai.not_set')</span>
                             @endif
                         </div>
                         <div class="flex justify-between items-center">
                             <span class="text-sm text-gray-500">Cerebras (Secondary)</span>
                             @if($cerebrasKey && $cerebrasKey->is_active)
-                                <span class="text-sm font-medium text-green-600">সক্রিয়</span>
+                                <span class="text-sm font-medium text-green-600">@lang('common.active')</span>
                             @else
-                                <span class="text-sm font-medium text-yellow-600">সেট করা হয়নি</span>
+                                <span class="text-sm font-medium text-yellow-600">@lang('ai.not_set')</span>
                             @endif
                         </div>
                         <div class="flex justify-between items-center">
                             <span class="text-sm text-gray-500">Gemini (Fallback)</span>
                             @if($geminiKey && $geminiKey->is_active)
-                                <span class="text-sm font-medium text-green-600">সক্রিয়</span>
+                                <span class="text-sm font-medium text-green-600">@lang('common.active')</span>
                             @else
-                                <span class="text-sm font-medium text-yellow-600">সেট করা হয়নি</span>
+                                <span class="text-sm font-medium text-yellow-600">@lang('ai.not_set')</span>
                             @endif
                         </div>
                     </div>
@@ -414,7 +414,7 @@
 
                 {{-- API Key Guide --}}
                 <div class="bg-white rounded-2xl p-6 shadow-sm">
-                    <h3 class="text-lg font-bold text-gray-900 mb-4">API Key কোথায় পাবেন?</h3>
+                    <h3 class="text-lg font-bold text-gray-900 mb-4">@lang('ai.api_key_guide')</h3>
                     <div class="space-y-5">
                         {{-- Groq --}}
                         <div>
@@ -425,11 +425,11 @@
                                 <span class="text-sm font-bold text-gray-900">Groq (Primary)</span>
                             </div>
                             <ol class="ml-7 space-y-1 text-xs text-gray-600 list-decimal">
-                                <li><a href="https://console.groq.com" target="_blank" class="text-purple-600 hover:underline font-medium">console.groq.com</a> এ যান</li>
-                                <li>Sign Up বা Login করুন</li>
-                                <li>ডান পাশের API Keys ট্যাবে যান</li>
-                                <li>"Create API Key" ক্লিক করুন</li>
-                                <li>Key copy করে উপরে পেস্ট করুন</li>
+                                <li><a href="https://console.groq.com" target="_blank" class="text-purple-600 hover:underline font-medium">console.groq.com</a> @lang('ai.go_to_site')</li>
+                                <li>@lang('ai.signup_or_login')</li>
+                                <li>@lang('ai.right_tab')</li>
+                                <li>@lang('ai.create_api_key')</li>
+                                <li>@lang('ai.copy_paste')</li>
                             </ol>
                         </div>
 
@@ -442,11 +442,11 @@
                                 <span class="text-sm font-bold text-gray-900">Cerebras (Secondary)</span>
                             </div>
                             <ol class="ml-7 space-y-1 text-xs text-gray-600 list-decimal">
-                                <li><a href="https://cloud.cerebras.ai" target="_blank" class="text-teal-600 hover:underline font-medium">cloud.cerebras.ai</a> এ যান</li>
-                                <li>Sign Up বা Login করুন</li>
-                                <li>ডান পাশের API Keys ট্যাবে যান</li>
-                                <li>"Create API Key" ক্লিক করুন</li>
-                                <li>Key copy করে উপরে পেস্ট করুন</li>
+                                <li><a href="https://cloud.cerebras.ai" target="_blank" class="text-teal-600 hover:underline font-medium">cloud.cerebras.ai</a> @lang('ai.go_to_site')</li>
+                                <li>@lang('ai.signup_or_login')</li>
+                                <li>@lang('ai.right_tab')</li>
+                                <li>@lang('ai.create_api_key')</li>
+                                <li>@lang('ai.copy_paste')</li>
                             </ol>
                         </div>
 
@@ -459,10 +459,10 @@
                                 <span class="text-sm font-bold text-gray-900">Gemini (Fallback)</span>
                             </div>
                             <ol class="ml-7 space-y-1 text-xs text-gray-600 list-decimal">
-                                <li><a href="https://aistudio.google.com/apikey" target="_blank" class="text-blue-600 hover:underline font-medium">aistudio.google.com/apikey</a> এ যান</li>
-                                <li>Google অ্যাকাউন্টে Login করুন</li>
-                                <li>"Create API Key" ক্লিক করুন</li>
-                                <li>Key copy করে উপরে পেস্ট করুন</li>
+                                <li><a href="https://aistudio.google.com/apikey" target="_blank" class="text-blue-600 hover:underline font-medium">aistudio.google.com/apikey</a> @lang('ai.go_to_site')</li>
+                                <li>@lang('ai.google_login')</li>
+                                <li>@lang('ai.create_api_key')</li>
+                                <li>@lang('ai.copy_paste')</li>
                             </ol>
                         </div>
                     </div>
