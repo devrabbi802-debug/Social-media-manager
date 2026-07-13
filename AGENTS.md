@@ -51,7 +51,6 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 - **Gemini API** (Flash Lite) — Tertiary fallback
 - **CLIP Server** (Local, Offline, Free) for image recognition and product matching (`http://localhost:8089`)
 - **`AiSystemPrompt`** — landlord-level table, global default prompt with `{company_name}` placeholder
-- **`AiImagePrompt`** — landlord-level table, image analysis prompt (editable from admin panel)
 - **`AiSetting`** — tenant-level table, per-user `api_key` with `type` field (`message`=Groq, `cerebras`=Cerebras, `image`=Gemini)
 - **`AiChatService`** (`app/Services/`) — Multi-provider wrapper, 15-30s timeout, handles 429, key rotation per provider
 - **`ClipService`** (`app/Services/`) — CLIP server wrapper for image embedding and matching
@@ -109,7 +108,7 @@ docker exec laravel-app php artisan <command>
 
 - **Public views**: `resources/views/` (welcome, features, pricing, about, contact, auth)
 - **Tenant views**: `resources/views/tenant/` — `index`, `integration`, `facebook-settings`, `facebook-select-page`, `ai-setup`, `conversations/`, `products/`, `categories/`, `brands/`, `warehouses/`, `inventory/`, `attribute-templates/`, `image-match/`
-- **Admin views**: `resources/views/admin/` (auth, dashboard, users CRUD, tenants CRUD, ai-system-prompt, ai-image-prompt)
+- **Admin views**: `resources/views/admin/` (auth, dashboard, users CRUD, tenants CRUD, ai-system-prompt)
 - **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/layouts/tenant.blade.php` (tenant dashboard), `resources/views/admin/layouts/app.blade.php` (admin)
 - **Menu config**: `config/menu.php` — add admin sidebar menu groups here
 - **Tenancy config**: `config/tenancy.php` — central domains, DB suffix, tenant model
@@ -134,7 +133,6 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 - `admins` — admin users (landlord DB, `admin` guard)
 - `admin_user_permissions` — per-admin menu permissions (super_admin bypasses all)
 - `ai_system_prompts` — global AI system prompt (landlord-level)
-- `ai_image_prompts` — global AI image analysis prompt (landlord-level)
 - `cache`, `jobs`, `sessions` — Standard Laravel tables
 
 ### Tenant DB Tables
