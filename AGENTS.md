@@ -2,7 +2,7 @@
 
 ## Project
 
-SocialBoost AI — Laravel 13 multi-tenant SaaS for social media management. Bengali UI, MySQL in production, SQLite in-memory for tests. `stancl/tenancy` v3.10 (database-per-tenant, subdomain-based).
+SocialBoost AI — Laravel 13 multi-tenant SaaS for social media management. Bengali UI, MySQL production, SQLite in-memory tests. `stancl/tenancy` v3.10 (database-per-tenant, subdomain-based).
 
 **Local Dev URL**: `http://smm.test/`
 
@@ -27,11 +27,12 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 ### Multi-Tenancy (Database-per-Tenant)
 
 - **Landlord DB** (`socialboost`): `tenants`, `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `cache`, `jobs`, `sessions`
-- **Tenant DB** (`{subdomain}_socialboost`): `users`, `sessions`, `password_reset_tokens`, `facebook_settings`, `ai_settings`, `conversations`, `messages`, `categories`, `attribute_templates`, `brands`, `products`, `product_attribute_values`, `product_variants`, `product_images`, `warehouses`, `stock_movements`, `inventory_alerts`
+- **Tenant DB** (`{subdomain}_socialboost`): `users`, `facebook_settings`, `ai_settings`, `conversations`, `messages`, `categories`, `attribute_templates`, `brands`, `products`, `product_attribute_values`, `product_variants`, `product_images`, `warehouses`, `stock_movements`, `inventory_alerts`, `stock_transfers`, `attribute_options`, `variant_images`
 - **Users table does NOT exist in landlord DB** — never `User::count()` from central routes
 - **Registration**: `Tenant::create()` → auto DB + migrate → user in tenant DB → redirect to `{subdomain}.smm.test`
 - **Tenant custom attributes** in `data` JSON column — query: `where('data->status', 'active')`, NOT `where('status', 'active')`
 - **Central domains** (not tenant): `127.0.0.1`, `localhost`, `smm.test`, `socialboost.com`, `www.socialboost.com`
+- **Tenant migrations**: `database/migrations/tenant/` — run via `php artisan tenants:migrate`
 
 ### Auth System
 
@@ -39,62 +40,45 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 - **Admin permissions**: `super_admin` bypasses all. Defined in `config/menu.php`, stored in `admin_user_permissions`
 - **Admin routes loaded via** `then:` callback in `bootstrap/app.php`, NOT through `withRouting()`
 - **`admin` middleware alias** registered in `bootstrap/app.php`
+- **User model** uses Laravel 11+ `#[Fillable]`/`#[Hidden]` PHP attributes. **Admin model** uses traditional `$fillable`/`$hidden` arrays — style differs between the two
+- **`Admin::getAllPermissions()`** references `\App\Services\Menu::class` which **does not exist** — will error if called by non-super_admin
 
 ### AI Integration
 
-- **Dual AI provider support** with 3-tier fallback chain: **Groq → Cerebras → Gemini**
-- **Groq API** (Llama 3.3 70B) — Primary AI for text replies, OpenAI-compatible endpoint
-- **Cerebras API** (gpt-oss-120b) — Secondary/fallback AI, free tier, big context window, OpenAI-compatible endpoint
-- **Gemini API** (Flash Lite) — Tertiary/fallback AI for when both Groq and Cerebras fail
-- **CLIP Server** (Local, Offline, Free) for image recognition and product matching
-- **`AiSystemPrompt`** — landlord-level table (`ai_system_prompts`), global default prompt with `{company_name}` placeholder
-- **`AiImagePrompt`** — landlord-level table (`ai_image_prompts`), image analysis prompt (editable from admin panel)
-- **`AiSetting`** — tenant-level table (`ai_settings`), per-user `api_key` with `type` field (`message`=Groq, `cerebras`=Cerebras, `image`=Gemini)
-- **`AiChatService`** (`app/Services/`) — Multi-provider AI wrapper (Groq + Cerebras + Gemini), 15-30s timeout, handles 429 rate limiting, key rotation per provider
+- **3-tier fallback chain**: **Groq → Cerebras → Gemini**
+- **Groq API** (Llama 3.3 70B) — Primary, OpenAI-compatible
+- **Cerebras API** (gpt-oss-120b) — Secondary, free tier, OpenAI-compatible
+- **Gemini API** (Flash Lite) — Tertiary fallback
+- **CLIP Server** (Local, Offline, Free) for image recognition and product matching (`http://localhost:8089`)
+- **`AiSystemPrompt`** — landlord-level table, global default prompt with `{company_name}` placeholder
+- **`AiImagePrompt`** — landlord-level table, image analysis prompt (editable from admin panel)
+- **`AiSetting`** — tenant-level table, per-user `api_key` with `type` field (`message`=Groq, `cerebras`=Cerebras, `image`=Gemini)
+- **`AiChatService`** (`app/Services/`) — Multi-provider wrapper, 15-30s timeout, handles 429, key rotation per provider
 - **`ClipService`** (`app/Services/`) — CLIP server wrapper for image embedding and matching
-- **`SendAiReplyJob`** — queued on `facebook` queue, 5 tries, 15s backoff, 180s timeout. Sends typing indicators during AI processing. Fallback chain: tries all Groq keys → all Cerebras keys → all Gemini keys
-- **`ProcessImageBatch`** — Batch image analysis via CLIP server
-- **`AnalyzeProductImageJob`** — Product image embedding via CLIP server, queued on `facebook` queue, stores embedding in `product_images.embedding` JSON column
+- **`SendAiReplyJob`** — queued on `facebook` queue, 5 tries, 15s backoff, 180s timeout. Fallback: all Groq keys → all Cerebras keys → all Gemini keys
 - **Queue**: Redis, queue name `facebook`, Horizon supervisor (1-10 processes, 256MB memory)
 - **Key rotation**: Within each provider, iterates all active keys by priority before falling back to next provider
-- **Rate limit handling**: 429 errors trigger automatic key rotation; if all keys in a provider are rate-limited, falls back to next provider
 
 ### Facebook Integration
 
 - **Dual connection modes**: Facebook App (direct) OR Zernio (third-party API)
 - **Webhook route** in `routes/web.php` (central, NOT tenant) — Facebook calls via ngrok tunnel URL
-- **CSRF exemption**: `webhook/*` excluded in `bootstrap/app.php`
-- **OAuth flow (Facebook App)**: redirect → callback → auto-fetch page_id + page_access_token → save to `facebook_settings`
-- **OAuth flow (Zernio)**: API key save → profile create → `GET /v1/connect/facebook` → user authorizes → callback with tempToken → `GET /v1/connect/facebook/select-page` → page select → `POST /v1/connect/facebook/select-page` → save to `facebook_settings`
+- **CSRF exemption**: `webhook/*` and `facebook/zernio/test-webhook` excluded in `bootstrap/app.php`
 - **Verify token**: `socialboost_verify_token_2026` (hardcoded in `FacebookOAuthController`)
 - **Multi-tenant webhook**: `FacebookWebhookController` iterates ALL tenants to find matching `page_id` or `zernio_account_id` (O(n), won't scale well)
 - **Ngrok URL check**: `wget -qO- http://127.0.0.1:4040/api/tunnels`
 - **Facebook App ID**: `703674879507719`, permissions: `pages_show_list`, `pages_messaging`, `pages_read_engagement`
 - **Duplicate message handling**: Checks `facebook_mid` before saving incoming messages
-- **Sender name fetching**: Uses Facebook Graph API to fetch sender's first_name + last_name (Facebook App) or `senderName` from Zernio webhook payload
 
-### Zernio Integration (Third-Party Social Media API)
+### Zernio Integration
 
 - **Purpose**: Connect Facebook Pages without creating a Facebook App — per-tenant Zernio accounts
 - **API Base**: `https://zernio.com/api/v1` (configured in `config/services.php` → `zernio.base_url`)
-- **Auth**: Per-tenant `zernio_api_key` stored in `facebook_settings` table
 - **Connection type**: `facebook_settings.connection_type` — enum `facebook_app` (direct) or `zernio`
-- **Flow**: Tenant saves API key → creates/uses Zernio profile → OAuth Facebook → selects page → done
-- **Facebook OAuth via Zernio**: `GET /v1/connect/facebook?profileId={id}&redirect_url={url}` → returns `authUrl` + `state`
-- **Page selection**: `GET /v1/connect/facebook/select-page?profileId={id}&tempToken={token}` → returns pages list
-- **Page confirm**: `POST /v1/connect/facebook/select-page` with `{ profileId, pageId, tempToken }`
-- **Send reply**: `POST /v1/inbox/conversations/{conversationId}/messages` with `{ accountId, message }`
-- **Typing indicator**: `POST /v1/inbox/conversations/{conversationId}/typing` with `{ accountId }`
+- **Flow**: Save API key → create profile → OAuth Facebook → select page → save to `facebook_settings`
+- **Key files**: `app/Services/ZernioService.php`, `app/Http/Controllers/ZernioOAuthController.php`
 - **Webhook**: `POST /webhook/zernio` — handles `message.received`, `conversation.started`, `account.connected`, `account.disconnected`
 - **Fallback**: If Zernio connection, `SendAiReplyJob` uses Zernio API; otherwise Facebook Graph API directly
-- **Key files**:
-  - `app/Services/ZernioService.php` — API wrapper (verify, profiles, accounts, pages, messages, posts)
-  - `app/Http/Controllers/ZernioOAuthController.php` — OAuth flow (storeApiKey, connectFacebook, facebookCallback, selectPage, connectSelectedPage, disconnect)
-  - `app/Http/Controllers/FacebookWebhookController.php` — `handleZernio()` for Zernio webhooks
-  - `app/Jobs/SendAiReplyJob.php` — dual send: Zernio API or Facebook Graph API based on `zernioAccountId`/`zernioApiKey`
-- **Dashboard UI**: `resources/views/tenant/facebook-settings.blade.php` — shows two connection options (Zernio recommended, Facebook App fallback)
-- **Page select view**: `resources/views/tenant/facebook-select-page.blade.php` — handles both `_id`/`id`/`pageId` keys from Zernio
-- **Zernio pricing**: First 2 social accounts free, then $6/account/month (1-10), $3/account/month (11-100)
 - **Gotcha**: Zernio profile names must be unique — controller appends `time()` to avoid conflicts
 - **Gotcha**: `tempToken` from OAuth callback is required for page selection — stored in session
 
@@ -124,53 +108,42 @@ docker exec laravel-app php artisan <command>
 ## Key Paths
 
 - **Public views**: `resources/views/` (welcome, features, pricing, about, contact, auth)
-- **Tenant views**: `resources/views/tenant/` — `index`, `integration`, `facebook-settings`, `facebook-select-page`, `ai-setup`, `conversations/`, `products/` (CRUD+show), `categories/` (CRUD), `brands/` (CRUD), `warehouses/` (CRUD), `inventory/` (index+movements+alerts+transfers), `attribute-templates/` (CRUD), `image-match/`
+- **Tenant views**: `resources/views/tenant/` — `index`, `integration`, `facebook-settings`, `facebook-select-page`, `ai-setup`, `conversations/`, `products/`, `categories/`, `brands/`, `warehouses/`, `inventory/`, `attribute-templates/`, `image-match/`
 - **Admin views**: `resources/views/admin/` (auth, dashboard, users CRUD, tenants CRUD, ai-system-prompt, ai-image-prompt)
 - **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/layouts/tenant.blade.php` (tenant dashboard), `resources/views/admin/layouts/app.blade.php` (admin)
 - **Menu config**: `config/menu.php` — add admin sidebar menu groups here
 - **Tenancy config**: `config/tenancy.php` — central domains, DB suffix, tenant model
-- **Services config**: `config/services.php` — Facebook OAuth + Groq + Gemini model + CLIP server + Zernio base URL
+- **Services config**: `config/services.php` — Facebook OAuth + Groq + Cerebras + Gemini + CLIP server + Zernio base URL
 - **Landlord migrations**: `database/migrations/`
 - **Tenant migrations**: `database/migrations/tenant/`
 
 ## Missing Views (routes exist, views don't)
 
 These views are referenced in `routes/web.php` and `routes/tenant.php` but **do not exist on disk**:
-`tenant.settings`, `tenant.leads`, `tenant.reports`, `tenant.whatsapp`, `tenant.facebook`
+`tenant.settings`, `tenant.leads`, `tenant.reports`, `tenant.whatsapp`, `tenant.facebook`, `tenant.inventory-add`
 
 Visiting these routes throws `ViewNotFoundException`.
 
 ## Database
 
+Schema source of truth: migration files in `database/migrations/` (landlord) and `database/migrations/tenant/`.
+
 ### Landlord DB Tables
-1. `tenants` — id (string PK), data (JSON), timestamps
-2. `domains` — id, domain, tenant_id (FK), timestamps
-3. `admins` — id, name, email, password, role, timestamps
-4. `admin_user_permissions` — id, admin_id (FK), menu_slug, permission, timestamps
-5. `ai_system_prompts` — id, prompt_text, timestamps
-6. `ai_image_prompts` — id, prompt_text, timestamps
-7. `cache`, `jobs`, `sessions` — Standard Laravel tables
+- `tenants` — string PK (subdomain), `data` JSON column (custom attributes like status, plan, trial_ends_at)
+- `domains` — domain→tenant FK mapping
+- `admins` — admin users (landlord DB, `admin` guard)
+- `admin_user_permissions` — per-admin menu permissions (super_admin bypasses all)
+- `ai_system_prompts` — global AI system prompt (landlord-level)
+- `ai_image_prompts` — global AI image analysis prompt (landlord-level)
+- `cache`, `jobs`, `sessions` — Standard Laravel tables
 
 ### Tenant DB Tables
-1. `users` — id, name, email, phone, company, password, timestamps
-2. `facebook_settings` — id, user_id (FK), connection_type (enum: facebook_app/zernio), app_id (nullable), app_secret (nullable), verify_token (nullable), page_id (nullable), page_name (nullable), page_access_token (nullable), ai_auto_reply_enabled, zernio_api_key (nullable), zernio_account_id (nullable), zernio_profile_id (nullable), timestamps
-3. `ai_settings` — id, user_id (FK), api_key, type, is_active, priority, timestamps
-4. `conversations` — id, sender_id, sender_name, status, last_message_at, timestamps
-5. `messages` — id, facebook_mid, conversation_id (FK), direction, type, content, image_path, image_analysis, timestamps
-6. `categories` — id, parent_id (self-FK nullable), name, slug, description, image, sort_order, is_active, timestamps
-7. `attribute_templates` — id, category_id (FK nullable when is_global), name, slug, type (text/number/select/boolean/date), options (JSON), is_required, is_global (boolean, default false), sort_order, timestamps
-8. `brands` — id, name, slug, logo, is_active, timestamps
-9. `products` — id, category_id (FK), brand_id (FK nullable), name, slug, sku, description, base_price, discount_price, stock_quantity, unit, barcode, status, is_featured, meta_title, meta_description, sort_order, timestamps
-10. `product_attribute_values` — id, product_id (FK), attribute_template_id (FK), value, timestamps (unique on product_id + attribute_template_id)
-11. `product_variants` — id, product_id (FK), sku, name, price, stock_quantity, attributes (JSON), barcode, is_active, timestamps
-12. `product_images` — id, product_id (FK), image_path, alt_text, sort_order, image_analysis (JSON), embedding (JSON), timestamps
-13. `variant_images` — id, variant_id (FK), image_path, alt_text, sort_order, image_analysis (JSON), embedding (JSON), timestamps
-14. `warehouses` — id, name, address, phone, is_active, timestamps
-15. `stock_movements` — id, product_id (FK), variant_id (FK nullable), warehouse_id (FK), type (in/out/adjustment), quantity, reference, notes, created_by (FK nullable), timestamps
-16. `inventory_alerts` — id, product_id (FK unique), threshold, is_active, timestamps
-17. `attribute_options` — id, attribute_template_id (FK), value, slug, sort_order, is_active, timestamps (unique on attribute_template_id + slug)
-18. `stock_transfers` — id, product_id (FK), variant_id (FK nullable), from_warehouse_id (FK), to_warehouse_id (FK), quantity, status (pending/completed/cancelled), notes, created_by (FK nullable), timestamps
-19. `password_reset_tokens`, `sessions` — Standard Laravel tables
+- `users` — tenant users (uses `#[Fillable]`/`#[Hidden]` PHP attributes, NOT `$fillable` array)
+- `facebook_settings` — per-user Facebook/Zernio connection config (connection_type enum: `facebook_app`/`zernio`)
+- `ai_settings` — per-user AI API keys (type: `message`/`cerebras`/`image`)
+- `conversations`, `messages` — chat history
+- `categories` (self-FK parent_id), `attribute_templates` (is_variant_option boolean), `brands`, `products`, `product_attribute_values`, `product_variants` (JSON attributes), `product_images`, `variant_images` (JSON embedding column)
+- `warehouses`, `stock_movements`, `stock_transfers`, `inventory_alerts`, `attribute_options`
 
 ### Seeder
 - `AdminSeeder` creates `admin@socialboost.com` / `Admin@123456`, role `super_admin` (idempotent via `updateOrCreate`)
@@ -192,83 +165,21 @@ Visiting these routes throws `ViewNotFoundException`.
 - **No `pint.json`** — Laravel Pint uses defaults
 - **No CI workflows** configured
 - **No `tailwind.config.js`** — Tailwind v4 uses CSS-based config
-- **User model** uses Laravel 11+ `#[Fillable]`/`#[Hidden]` PHP attributes. **Admin model** uses traditional `$fillable`/`$hidden` arrays — style differs between the two
-- **`Admin::getAllPermissions()`** references `\App\Services\Menu::class` which **does not exist** — will error if called by non-super_admin
 - **Registration validation** does NOT use `unique:users,email` (users are per-tenant)
 - **Facebook OAuth**: HTTP not allowed — use ngrok HTTPS URL
 - **Facebook test users**: Dev mode only testers/admins trigger webhooks
-- **Zernio profile names must be unique** — controller appends `time()` to avoid conflicts
-- **Zernio `tempToken`** from OAuth callback is required for page selection — stored in session
 - **Horizon**: runs inside Docker worker container via Supervisor, not directly
 - **Redis**: queue + cache driver in `.env` (`QUEUE_CONNECTION=redis`, `CACHE_STORE=redis`)
-
-## Inventory System Improvements (Phase 1-4 Complete)
-
-### Bug Fixes Applied
-- **Stock operations** now wrapped in `DB::transaction()` — prevents race conditions
-- **Variant stock recalculation** — `recalculateStock()` called after every variant stock change
-- **Attribute stale values** — existing attributes deleted before re-saving on product edit
-- **Low stock alert** — now checks variant stock if product has variants
-- **Category dropdown** — supports subcategories with hierarchical indentation
-- **Product status** — removed auto-override from model boot hook (user's choice respected)
-- **Variant modal URL** — fixed string concatenation bug in show.blade.php
-
-### New Tables
-- **`attribute_options`** — standardized values per attribute (for future variant matrix)
-- **`stock_transfers`** — atomic stock movement between warehouses
-
-### New Controllers
-- **`StockTransferController`** — full CRUD + complete/cancel workflow with DB transactions
-
-### Key Architecture Decisions
-- **`Product::recalculateStock()`** — public method on model (not private on controller)
-- **Stock In/Out/Adjust** — all wrapped in `DB::transaction()` for atomicity
-- **`StockTransfer`** — creates 2 StockMovement records (out + in) atomically
+- **Stock operations** wrapped in `DB::transaction()` — `Product::recalculateStock()` called after variant changes
 - **`InventoryAlert::isLowStock()`** — variant-aware (checks variant stock if variants exist)
 
-## Shopify-Style Product Creation System (Phase 5 Complete)
+## Product/Inventory Architecture
 
-### How It Works Now
-```
-Step 1: Title + Description + Category
-Step 2: Price + Status
-Step 3: OPTIONS define koro (Color → Red, Blue, Green | Size → S, M, L)
-Step 4: AUTO-GENERATE variant matrix (3×3 = 9 variants)
-Step 5: Per-variant: SKU (auto), Price, Stock, Barcode
-```
-
-### Database Changes
-- **`attribute_templates.is_variant_option`** — boolean, marks if template is a variant option (Color/Size) vs product-level attribute (Material/Weight)
-- When creating product with options, system creates `AttributeTemplate` records with `type = 'option'` and `is_variant_option = true`
-- `options` JSON column stores values: `["Red", "Blue", "Green"]`
-
-### Variant Matrix Generation
-- JavaScript `getCombinations()` — recursive cartesian product of all option values
-- Auto SKU format: `{PRODUCT-SKU}-{OPTION1}-{OPTION2}` (e.g., `TSHIRT-RED-M`)
-- Matrix renders as editable table: SKU, Price, Stock, Barcode per row
-
-### Key Files
-```
-app/Http/Controllers/Dashboard/ProductController.php — store() handles options + variants
-app/Http/Controllers/Dashboard/StockTransferController.php — stock between warehouses
-app/Models/AttributeTemplate.php — is_variant_option field
-app/Models/AttributeOption.php — standardized option values
-app/Models/StockTransfer.php — warehouse transfer model
-resources/views/tenant/products/create.blade.php — Shopify-style wizard
-resources/views/tenant/products/edit.blade.php — shows existing + new options
-resources/views/tenant/inventory/transfers.blade.php — stock transfer UI
-```
-
-### Option vs Attribute Distinction
-| Type | Purpose | Example | Where Used |
-|------|---------|---------|------------|
-| Variant Option | Generates variants | Color, Size | Product create → Options section |
-| Product Attribute | Extra info | Material, Weight | Product create → Attributes section |
-
-### Variant Attributes Storage
-- Variant attributes stored as JSON: `{"Color": "Red", "Size": "M"}`
-- Product-level attributes stored in `product_attribute_values` table
-- Both coexist — variant attrs are for variant identification, product attrs are for display
+- **Variant Options** (Color/Size) vs **Product Attributes** (Material/Weight) — `attribute_templates.is_variant_option` boolean distinguishes them
+- **Variant matrix**: JS `getCombinations()` generates cartesian product of options, auto-SKU format: `{PRODUCT-SKU}-{OPT1}-{OPT2}`
+- **Variant attributes** stored as JSON: `{"Color": "Red", "Size": "M"}`
+- **Product-level attributes** stored in `product_attribute_values` table
+- **Stock transfers** create 2 `StockMovement` records (out + in) atomically
 
 # Agent Instructions
 
