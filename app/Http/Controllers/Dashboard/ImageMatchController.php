@@ -67,15 +67,13 @@ class ImageMatchController extends Controller
                 return back()->with('error', 'ছবি ম্যাচ করতে সমস্যা হয়েছে।');
             }
 
-            // Store the uploaded image temporarily for display
-            $tempPath = 'temp/match_' . time() . '.' . $imageFile->getClientOriginalExtension();
-            $imageFile->storeAs('public', $tempPath);
+            $uploadedPath = $imageFile->store('temp', 'public');
 
             return view('tenant.image-match-result', [
                 'matches' => $matchResult['matches'] ?? [],
                 'bestMatch' => $matchResult['best_match'] ?? null,
                 'totalCatalog' => $matchResult['total_catalog_items'] ?? 0,
-                'uploadedImage' => asset('storage/' . $tempPath),
+                'uploadedImage' => asset('storage/' . $uploadedPath),
             ]);
 
         } catch (\Exception $e) {
