@@ -23,7 +23,7 @@ class DashboardController extends Controller
             ->limit(5)
             ->get();
 
-        return view('dashboard.index', compact(
+        return view('tenant.index', compact(
             'facebookSetting',
             'todayMessages',
             'totalConversations',
@@ -35,41 +35,41 @@ class DashboardController extends Controller
 
     public function integration()
     {
-        return view('dashboard.integration');
+        return view('tenant.integration');
     }
 
     public function facebookPost()
     {
-        return view('dashboard.facebook');
+        return view('tenant.facebook');
     }
 
     public function settings()
     {
-        return view('dashboard.settings');
+        return view('tenant.settings');
     }
 
     public function leads()
     {
-        return view('dashboard.leads');
+        return view('tenant.leads');
     }
 
     public function reports()
     {
-        return view('dashboard.reports');
+        return view('tenant.reports');
     }
 
     public function whatsapp()
     {
-        return view('dashboard.whatsapp');
+        return view('tenant.whatsapp');
     }
 
     public function inventory()
     {
-        return view('dashboard.inventory');
+        return view('tenant.inventory');
     }
 
     public function inventoryAdd()
     {
-        return view('dashboard.inventory-add');
+        return view('tenant.inventory-add');
     }
 }

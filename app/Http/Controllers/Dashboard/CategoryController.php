@@ -31,7 +31,7 @@ class CategoryController extends Controller
         $categories = $query->orderBy('sort_order')->orderBy('name')->paginate(20);
         $rootCategories = Category::whereNull('parent_id')->orderBy('name')->get();
 
-        return view('dashboard.categories.index', compact('categories', 'rootCategories'));
+        return view('tenant.categories.index', compact('categories', 'rootCategories'));
     }
 
     public function create(Request $request)
@@ -39,7 +39,7 @@ class CategoryController extends Controller
         $parentCategories = Category::whereNull('parent_id')->orderBy('name')->get();
         $parentId = $request->parent_id;
 
-        return view('dashboard.categories.create', compact('parentCategories', 'parentId'));
+        return view('tenant.categories.create', compact('parentCategories', 'parentId'));
     }
 
     public function store(Request $request)
@@ -73,7 +73,7 @@ class CategoryController extends Controller
             ->orderBy('name')
             ->get();
 
-        return view('dashboard.categories.edit', compact('category', 'parentCategories'));
+        return view('tenant.categories.edit', compact('category', 'parentCategories'));
     }
 
     public function update(Request $request, Category $category)

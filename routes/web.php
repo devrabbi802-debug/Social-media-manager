@@ -123,39 +123,39 @@ Route::post('/logout', function (Request $request) {
 // Dashboard Routes (authenticated users only)
 Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', function () {
-        return view('dashboard.index');
+        return view('tenant.index');
     })->name('dashboard');
     
     Route::get('/settings', function () {
-        return view('dashboard.settings');
+        return view('tenant.settings');
     })->name('settings');
     
     Route::get('/leads', function () {
-        return view('dashboard.leads');
+        return view('tenant.leads');
     })->name('leads');
     
     Route::get('/inventory', function () {
-        return view('dashboard.inventory');
+        return view('tenant.inventory');
     })->name('inventory');
     
     Route::get('/reports', function () {
-        return view('dashboard.reports');
+        return view('tenant.reports');
     })->name('reports');
     
     Route::get('/whatsapp/send', function () {
-        return view('dashboard.whatsapp');
+        return view('tenant.whatsapp');
     })->name('whatsapp.send');
     
     Route::get('/facebook/post', function () {
-        return view('dashboard.facebook');
+        return view('tenant.facebook');
     })->name('facebook.post');
     
     Route::get('/inventory/add', function () {
-        return view('dashboard.inventory-add');
+        return view('tenant.inventory-add');
     })->name('inventory.add');
     
     Route::get('/integration', function () {
-        return view('dashboard.integration');
+        return view('tenant.integration');
     })->name('integration');
 
     Route::get('/facebook/settings', [FacebookSettingController::class, 'index'])->name('facebook.settings');

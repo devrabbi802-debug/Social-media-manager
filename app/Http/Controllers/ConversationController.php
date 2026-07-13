@@ -14,7 +14,7 @@ class ConversationController extends Controller
             ->orderByDesc('last_message_at')
             ->paginate(20);
 
-        return view('dashboard.conversations', compact('conversations'));
+        return view('tenant.conversations', compact('conversations'));
     }
 
     public function show(Conversation $conversation)
@@ -23,6 +23,6 @@ class ConversationController extends Controller
             $query->orderBy('created_at');
         }]);
 
-        return view('dashboard.conversation-detail', compact('conversation'));
+        return view('tenant.conversation-detail', compact('conversation'));
     }
 }

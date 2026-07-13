@@ -19,12 +19,12 @@ class WarehouseController extends Controller
 
         $warehouses = $query->orderBy('name')->paginate(20);
 
-        return view('dashboard.warehouses.index', compact('warehouses'));
+        return view('tenant.warehouses.index', compact('warehouses'));
     }
 
     public function create()
     {
-        return view('dashboard.warehouses.create');
+        return view('tenant.warehouses.create');
     }
 
     public function store(Request $request)
@@ -46,7 +46,7 @@ class WarehouseController extends Controller
 
     public function edit(Warehouse $warehouse)
     {
-        return view('dashboard.warehouses.edit', compact('warehouse'));
+        return view('tenant.warehouses.edit', compact('warehouse'));
     }
 
     public function update(Request $request, Warehouse $warehouse)

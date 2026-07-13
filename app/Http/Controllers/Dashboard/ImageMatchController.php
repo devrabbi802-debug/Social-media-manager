@@ -22,7 +22,7 @@ class ImageMatchController extends Controller
         $productCount = count(array_filter($catalogEmbeddings, fn($e) => $e['type'] === 'product'));
         $variantCount = count(array_filter($catalogEmbeddings, fn($e) => $e['type'] === 'variant'));
 
-        return view('dashboard.image-match', compact('clipStatus', 'productCount', 'variantCount'));
+        return view('tenant.image-match', compact('clipStatus', 'productCount', 'variantCount'));
     }
 
     /**
@@ -71,7 +71,7 @@ class ImageMatchController extends Controller
             $tempPath = 'temp/match_' . time() . '.' . $imageFile->getClientOriginalExtension();
             $imageFile->storeAs('public', $tempPath);
 
-            return view('dashboard.image-match-result', [
+            return view('tenant.image-match-result', [
                 'matches' => $matchResult['matches'] ?? [],
                 'bestMatch' => $matchResult['best_match'] ?? null,
                 'totalCatalog' => $matchResult['total_catalog_items'] ?? 0,

@@ -29,7 +29,7 @@ class StockTransferController extends Controller
         $products = Product::orderBy('name')->get();
         $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get();
 
-        return view('dashboard.inventory.transfers', compact('transfers', 'products', 'warehouses'));
+        return view('tenant.inventory.transfers', compact('transfers', 'products', 'warehouses'));
     }
 
     public function store(Request $request)

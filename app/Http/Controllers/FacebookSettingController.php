@@ -12,7 +12,7 @@ class FacebookSettingController extends Controller
     {
         $facebookSetting = FacebookSetting::where('user_id', Auth::id())->first();
 
-        return view('dashboard.facebook-settings', compact('facebookSetting'));
+        return view('tenant.facebook-settings', compact('facebookSetting'));
     }
 
     public function store(Request $request)

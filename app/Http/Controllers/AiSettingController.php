@@ -27,7 +27,7 @@ class AiSettingController extends Controller
         $clipService = new ClipService();
         $clipStatus = $clipService->healthCheck();
 
-        return view('dashboard.ai-setup', compact('groqKey', 'cerebrasKey', 'geminiKey', 'clipStatus'));
+        return view('tenant.ai-setup', compact('groqKey', 'cerebrasKey', 'geminiKey', 'clipStatus'));
     }
 
     public function store(Request $request)

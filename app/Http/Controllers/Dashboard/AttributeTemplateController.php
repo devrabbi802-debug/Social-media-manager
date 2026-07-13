@@ -30,7 +30,7 @@ class AttributeTemplateController extends Controller
 
         $categories = Category::whereNull('parent_id')->orderBy('name')->get();
 
-        return view('dashboard.attribute-templates.index', compact('attributes', 'categories'));
+        return view('tenant.attribute-templates.index', compact('attributes', 'categories'));
     }
 
     public function create(Request $request)
@@ -38,7 +38,7 @@ class AttributeTemplateController extends Controller
         $categories = Category::orderBy('name')->get();
         $categoryId = $request->category_id;
 
-        return view('dashboard.attribute-templates.create', compact('categories', 'categoryId'));
+        return view('tenant.attribute-templates.create', compact('categories', 'categoryId'));
     }
 
     public function store(Request $request)
@@ -80,7 +80,7 @@ class AttributeTemplateController extends Controller
         $categories = Category::orderBy('name')->get();
         $attribute->load('category');
 
-        return view('dashboard.attribute-templates.edit', compact('attribute', 'categories'));
+        return view('tenant.attribute-templates.edit', compact('attribute', 'categories'));
     }
 
     public function update(Request $request, AttributeTemplate $attribute)

@@ -44,7 +44,7 @@ class ProductController extends Controller
         $categories = Category::whereNull('parent_id')->orderBy('name')->get();
         $brands = Brand::where('is_active', true)->orderBy('name')->get();
 
-        return view('dashboard.products.index', compact('products', 'categories', 'brands'));
+        return view('tenant.products.index', compact('products', 'categories', 'brands'));
     }
 
     public function create()
@@ -55,7 +55,7 @@ class ProductController extends Controller
             ->get();
         $brands = Brand::where('is_active', true)->orderBy('name')->get();
 
-        return view('dashboard.products.create', compact('categories', 'brands'));
+        return view('tenant.products.create', compact('categories', 'brands'));
     }
 
     public function store(Request $request)
@@ -230,7 +230,7 @@ class ProductController extends Controller
     {
         $product->load(['category', 'brand', 'attributeValues.attributeTemplate', 'variants.images', 'images', 'inventoryAlert', 'stockMovements.warehouse']);
 
-        return view('dashboard.products.show', compact('product'));
+        return view('tenant.products.show', compact('product'));
     }
 
     /**
@@ -328,7 +328,7 @@ class ProductController extends Controller
             ->orderBy('sort_order')
             ->get();
 
-        return view('dashboard.products.edit', compact('product', 'categories', 'brands', 'attributeTemplates'));
+        return view('tenant.products.edit', compact('product', 'categories', 'brands', 'attributeTemplates'));
     }
 
     public function update(Request $request, Product $product)

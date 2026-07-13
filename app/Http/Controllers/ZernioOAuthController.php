@@ -237,7 +237,7 @@ class ZernioOAuthController extends Controller
                 ->with('error', 'কোনো Facebook Page পাওয়া যায়নি। Zernio থেকে Facebook আবার সংযুক্ত করুন।');
         }
 
-        return view('dashboard.facebook-select-page', [
+        return view('tenant.facebook-select-page', [
             'pages' => $pages,
             'accountId' => $accountId,
             'tempToken' => $tempToken,

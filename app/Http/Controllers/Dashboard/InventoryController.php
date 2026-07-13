@@ -40,7 +40,7 @@ class InventoryController extends Controller
         $allProducts = Product::orderBy('name')->get();
         $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get();
 
-        return view('dashboard.inventory.index', compact(
+        return view('tenant.inventory.index', compact(
             'products',
             'lowStockCount',
             'outOfStockCount',
@@ -78,7 +78,7 @@ class InventoryController extends Controller
         $products = Product::orderBy('name')->get();
         $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get();
 
-        return view('dashboard.inventory.movements', compact('movements', 'products', 'warehouses'));
+        return view('tenant.inventory.movements', compact('movements', 'products', 'warehouses'));
     }
 
     public function stockIn(Request $request)
@@ -232,7 +232,7 @@ class InventoryController extends Controller
 
         $alerts = $query->paginate(20);
 
-        return view('dashboard.inventory.alerts', compact('alerts'));
+        return view('tenant.inventory.alerts', compact('alerts'));
     }
 
     public function storeAlert(Request $request)

@@ -20,12 +20,12 @@ class BrandController extends Controller
 
         $brands = $query->orderBy('name')->paginate(20);
 
-        return view('dashboard.brands.index', compact('brands'));
+        return view('tenant.brands.index', compact('brands'));
     }
 
     public function create()
     {
-        return view('dashboard.brands.create');
+        return view('tenant.brands.create');
     }
 
     public function store(Request $request)
@@ -51,7 +51,7 @@ class BrandController extends Controller
 
     public function edit(Brand $brand)
     {
-        return view('dashboard.brands.edit', compact('brand'));
+        return view('tenant.brands.edit', compact('brand'));
     }
 
     public function update(Request $request, Brand $brand)

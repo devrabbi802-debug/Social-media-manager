@@ -84,7 +84,7 @@ class FacebookOAuthController extends Controller
                 ->with('error', 'No pages found. Please reconnect.');
         }
 
-        return view('dashboard.facebook-select-page', ['pages' => $pages]);
+        return view('tenant.facebook-select-page', ['pages' => $pages]);
     }
 
     public function connectSelectedPage(Request $request)

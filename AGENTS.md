@@ -92,8 +92,8 @@ php artisan tenants:run migrate    # Run migration for specific tenant
   - `app/Http/Controllers/ZernioOAuthController.php` — OAuth flow (storeApiKey, connectFacebook, facebookCallback, selectPage, connectSelectedPage, disconnect)
   - `app/Http/Controllers/FacebookWebhookController.php` — `handleZernio()` for Zernio webhooks
   - `app/Jobs/SendAiReplyJob.php` — dual send: Zernio API or Facebook Graph API based on `zernioAccountId`/`zernioApiKey`
-- **Dashboard UI**: `resources/views/dashboard/facebook-settings.blade.php` — shows two connection options (Zernio recommended, Facebook App fallback)
-- **Page select view**: `resources/views/dashboard/facebook-select-page.blade.php` — handles both `_id`/`id`/`pageId` keys from Zernio
+- **Dashboard UI**: `resources/views/tenant/facebook-settings.blade.php` — shows two connection options (Zernio recommended, Facebook App fallback)
+- **Page select view**: `resources/views/tenant/facebook-select-page.blade.php` — handles both `_id`/`id`/`pageId` keys from Zernio
 - **Zernio pricing**: First 2 social accounts free, then $6/account/month (1-10), $3/account/month (11-100)
 - **Gotcha**: Zernio profile names must be unique — controller appends `time()` to avoid conflicts
 - **Gotcha**: `tempToken` from OAuth callback is required for page selection — stored in session
@@ -117,16 +117,16 @@ docker exec laravel-app php artisan <command>
 
 - Tailwind CSS v4 via `@tailwindcss/vite` plugin (no `tailwind.config.js` — config via CSS)
 - **Public layouts**: Tailwind via CDN + Alpine.js (not Vite)
-- **Dashboard/Admin**: Tailwind via CDN
+- **Tenant/Admin**: Tailwind via CDN (dashboard sidebar layout)
 - Bengali font: Hind Siliguri (Google Fonts), Instrument Sans (Vite fonts plugin)
 - `app.js` is empty — no JS bundled via Vite yet
 
 ## Key Paths
 
 - **Public views**: `resources/views/` (welcome, features, pricing, about, contact, auth)
-- **Dashboard views**: `resources/views/dashboard/` — `index`, `integration`, `facebook-settings`, `facebook-select-page`, `ai-setup`, `products/` (CRUD+show), `categories/` (CRUD), `brands/` (CRUD), `warehouses/` (CRUD), `inventory/` (index+movements+alerts), `attribute-templates/` (CRUD)
-- **Admin views**: `resources/views/admin/` (auth, dashboard, users CRUD, tenants CRUD, ai-system-prompt)
-- **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/admin/layouts/app.blade.php` (admin)
+- **Tenant views**: `resources/views/tenant/` — `index`, `integration`, `facebook-settings`, `facebook-select-page`, `ai-setup`, `conversations/`, `products/` (CRUD+show), `categories/` (CRUD), `brands/` (CRUD), `warehouses/` (CRUD), `inventory/` (index+movements+alerts+transfers), `attribute-templates/` (CRUD), `image-match/`
+- **Admin views**: `resources/views/admin/` (auth, dashboard, users CRUD, tenants CRUD, ai-system-prompt, ai-image-prompt)
+- **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/layouts/tenant.blade.php` (tenant dashboard), `resources/views/admin/layouts/app.blade.php` (admin)
 - **Menu config**: `config/menu.php` — add admin sidebar menu groups here
 - **Tenancy config**: `config/tenancy.php` — central domains, DB suffix, tenant model
 - **Services config**: `config/services.php` — Facebook OAuth + Groq + Gemini model + CLIP server + Zernio base URL
@@ -136,7 +136,7 @@ docker exec laravel-app php artisan <command>
 ## Missing Views (routes exist, views don't)
 
 These views are referenced in `routes/web.php` and `routes/tenant.php` but **do not exist on disk**:
-`dashboard.settings`, `dashboard.leads`, `dashboard.reports`, `dashboard.whatsapp`, `dashboard.facebook`
+`tenant.settings`, `tenant.leads`, `tenant.reports`, `tenant.whatsapp`, `tenant.facebook`
 
 Visiting these routes throws `ViewNotFoundException`.
 
@@ -254,9 +254,9 @@ app/Http/Controllers/Dashboard/StockTransferController.php — stock between war
 app/Models/AttributeTemplate.php — is_variant_option field
 app/Models/AttributeOption.php — standardized option values
 app/Models/StockTransfer.php — warehouse transfer model
-resources/views/dashboard/products/create.blade.php — Shopify-style wizard
-resources/views/dashboard/products/edit.blade.php — shows existing + new options
-resources/views/dashboard/inventory/transfers.blade.php — stock transfer UI
+resources/views/tenant/products/create.blade.php — Shopify-style wizard
+resources/views/tenant/products/edit.blade.php — shows existing + new options
+resources/views/tenant/inventory/transfers.blade.php — stock transfer UI
 ```
 
 ### Option vs Attribute Distinction
