@@ -42,17 +42,22 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 
 ### AI Integration
 
-- **Groq API** (Llama 3.3 70B) for auto-reply on Facebook Messenger
+- **Dual AI provider support** with 3-tier fallback chain: **Groq → Cerebras → Gemini**
+- **Groq API** (Llama 3.3 70B) — Primary AI for text replies, OpenAI-compatible endpoint
+- **Cerebras API** (gpt-oss-120b) — Secondary/fallback AI, free tier, big context window, OpenAI-compatible endpoint
+- **Gemini API** (Flash Lite) — Tertiary/fallback AI for when both Groq and Cerebras fail
 - **CLIP Server** (Local, Offline, Free) for image recognition and product matching
 - **`AiSystemPrompt`** — landlord-level table (`ai_system_prompts`), global default prompt with `{company_name}` placeholder
 - **`AiImagePrompt`** — landlord-level table (`ai_image_prompts`), image analysis prompt (editable from admin panel)
-- **`AiSetting`** — tenant-level table (`ai_settings`), per-user `api_key` and optional `system_prompt`
-- **`AiChatService`** (`app/Services/`) — Groq API wrapper, 15s timeout, handles 429 rate limiting, key rotation
+- **`AiSetting`** — tenant-level table (`ai_settings`), per-user `api_key` with `type` field (`message`=Groq, `cerebras`=Cerebras, `image`=Gemini)
+- **`AiChatService`** (`app/Services/`) — Multi-provider AI wrapper (Groq + Cerebras + Gemini), 15-30s timeout, handles 429 rate limiting, key rotation per provider
 - **`ClipService`** (`app/Services/`) — CLIP server wrapper for image embedding and matching
-- **`SendAiReplyJob`** — queued on `facebook` queue, 3 tries, 45s backoff, `WithoutOverlapping` per tenant+sender. Sends typing indicators during AI processing
+- **`SendAiReplyJob`** — queued on `facebook` queue, 5 tries, 15s backoff, 180s timeout. Sends typing indicators during AI processing. Fallback chain: tries all Groq keys → all Cerebras keys → all Gemini keys
 - **`ProcessImageBatch`** — Batch image analysis via CLIP server
 - **`AnalyzeProductImageJob`** — Product image embedding via CLIP server, queued on `facebook` queue, stores embedding in `product_images.embedding` JSON column
 - **Queue**: Redis, queue name `facebook`, Horizon supervisor (1-10 processes, 256MB memory)
+- **Key rotation**: Within each provider, iterates all active keys by priority before falling back to next provider
+- **Rate limit handling**: 429 errors trigger automatic key rotation; if all keys in a provider are rate-limited, falls back to next provider
 
 ### Facebook Integration
 
