@@ -45,6 +45,7 @@ class SendAiReplyJob implements ShouldQueue
         public ?array $imageUrls = null,
         public ?string $zernioAccountId = null,
         public ?string $zernioApiKey = null,
+        public ?string $zernioConversationId = null,
     ) {
         $this->onQueue('facebook');
     }
@@ -120,7 +121,10 @@ class SendAiReplyJob implements ShouldQueue
         $systemPrompt = $this->buildSystemPrompt($tenant);
 
         $tenant->run(function () use ($tenant, $systemPrompt) {
-            $facebookSetting = FacebookSetting::where('page_access_token', $this->pageAccessToken)->first();
+            $facebookSetting = FacebookSetting::where('connection_type', 'zernio')
+                ->where('zernio_account_id', $this->zernioAccountId)
+                ->first()
+                ?? FacebookSetting::where('page_access_token', $this->pageAccessToken)->first();
 
             if (! $facebookSetting) {
                 Log::warning('SendAiReplyJob: facebookSetting not found', [
@@ -700,24 +704,23 @@ class SendAiReplyJob implements ShouldQueue
     {
         $zernio = new ZernioService($this->zernioApiKey);
 
-        // Find the conversation ID for this sender in Zernio
-        $conversations = $zernio->listConversations($this->zernioAccountId, 50);
+        $conversationId = $this->zernioConversationId;
 
-        $conversation = collect($conversations)->first(function ($conv) {
-            return ($conv['contactId'] ?? $conv['senderId'] ?? '') === $this->senderId;
-        });
+        if (! $conversationId) {
+            // Fallback: find conversation by listing
+            $conversations = $zernio->listConversations($this->zernioAccountId, 50);
+            $conversation = collect($conversations)->first(function ($conv) {
+                return ($conv['contactId'] ?? $conv['participantId'] ?? $conv['senderId'] ?? '') === $this->senderId;
+            });
+            $conversationId = $conversation['_id'] ?? $conversation['id'] ?? null;
+        }
 
-        if (! $conversation) {
-            Log::warning('Zernio: No conversation found for sender', [
-                'sender_id' => $this->senderId,
-                'account_id' => $this->zernioAccountId,
-            ]);
-            // Fallback: try sending directly to the account
-            throw new \Exception('Zernio: No conversation found for sender '.$this->senderId);
+        if (! $conversationId) {
+            throw new \Exception('Zernio: No conversation ID for sender '.$this->senderId);
         }
 
         $result = $zernio->sendInboxMessage(
-            $conversation['_id'],
+            $conversationId,
             $this->zernioAccountId,
             $text
         );

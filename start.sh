@@ -86,6 +86,9 @@ if [ -f "$HOME/ngrok" ]; then
     NGROK_URL=$(wget -qO- http://127.0.0.1:4040/api/tunnels 2>/dev/null | grep -o '"public_url":"[^"]*"' | head -1 | cut -d'"' -f4)
 
     if [ -n "$NGROK_URL" ]; then
+        # Save ngrok URL to file (PHP app reads this for webhook registration)
+        echo "$NGROK_URL" > "$PROJECT_DIR/.ngrok-url"
+
         echo ""
         echo "========================================="
         echo "  NGROK TUNNEL ACTIVE"

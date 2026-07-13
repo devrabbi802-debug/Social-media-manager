@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\Tenant;
 use App\Http\Controllers\FacebookSettingController;
 use App\Http\Controllers\FacebookWebhookController;
+use App\Http\Controllers\ZernioOAuthController;
 
 // Landing Page
 Route::get('/', function () {
@@ -162,3 +163,6 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/facebook/settings', [FacebookSettingController::class, 'destroy'])->name('facebook.settings.destroy');
     Route::post('/facebook/settings/toggle-ai-reply', [FacebookSettingController::class, 'toggleAiReply'])->name('facebook.settings.toggle.ai.reply');
 });
+
+Route::post('/facebook/zernio/test-webhook', [ZernioOAuthController::class, 'testWebhook'])->name('zernio.test.webhook')
+    ->middleware(['web', Stancl\Tenancy\Middleware\InitializeTenancyByDomain::class, 'auth']);

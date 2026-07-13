@@ -370,6 +370,185 @@ class ZernioService
         }
     }
 
+    // --- Webhook Methods ---
+
+    /**
+     * List all webhook configurations.
+     */
+    public function listWebhooks(): array
+    {
+        try {
+            $response = Http::withHeaders($this->headers())
+                ->timeout(15)
+                ->get("{$this->baseUrl}/webhooks/settings");
+
+            if ($response->successful()) {
+                return $response->json('webhooks', $response->json() ?? []);
+            }
+
+            return [];
+        } catch (\Exception $e) {
+            Log::error('Zernio list webhooks error', ['error' => $e->getMessage()]);
+
+            return [];
+        }
+    }
+
+    /**
+     * Create or update a webhook for SocialBoost AI.
+     * Registers our /webhook/zernio endpoint with relevant events.
+     */
+    public function ensureWebhook(string $webhookUrl): ?array
+    {
+        $events = [
+            'message.received',
+            'account.connected',
+            'account.disconnected',
+        ];
+
+        $webhooks = $this->listWebhooks();
+
+        // Find existing SocialBoost webhook
+        $existing = collect($webhooks)->first(function ($wh) {
+            return ($wh['name'] ?? '') === 'SocialBoost AI Webhook';
+        });
+
+        if ($existing) {
+            // Update if URL changed
+            if (($existing['url'] ?? '') !== $webhookUrl || ($existing['is_active'] ?? false) !== true) {
+                return $this->updateWebhook($existing['_id'] ?? $existing['id'], $webhookUrl, $events);
+            }
+
+            return $existing;
+        }
+
+        // Create new webhook
+        return $this->createWebhook($webhookUrl, $events);
+    }
+
+    /**
+     * Create a new webhook.
+     */
+    public function createWebhook(string $url, array $events): ?array
+    {
+        try {
+            $response = Http::withHeaders($this->headers())
+                ->timeout(15)
+                ->post("{$this->baseUrl}/webhooks/settings", [
+                    'name' => 'SocialBoost AI Webhook',
+                    'url' => $url,
+                    'events' => $events,
+                    'is_active' => true,
+                ]);
+
+            if ($response->successful()) {
+                Log::info('Zernio webhook created', ['url' => $url, 'events' => $events]);
+
+                return $response->json();
+            }
+
+            Log::error('Zernio create webhook failed', ['response' => $response->json(), 'status' => $response->status()]);
+
+            return null;
+        } catch (\Exception $e) {
+            Log::error('Zernio create webhook error', ['error' => $e->getMessage()]);
+
+            return null;
+        }
+    }
+
+    /**
+     * Update an existing webhook.
+     */
+    public function updateWebhook(string $webhookId, string $url, array $events): ?array
+    {
+        try {
+            $response = Http::withHeaders($this->headers())
+                ->timeout(15)
+                ->put("{$this->baseUrl}/webhooks/settings", [
+                    '_id' => $webhookId,
+                    'name' => 'SocialBoost AI Webhook',
+                    'url' => $url,
+                    'events' => $events,
+                    'is_active' => true,
+                ]);
+
+            if ($response->successful()) {
+                Log::info('Zernio webhook updated', ['webhook_id' => $webhookId, 'url' => $url]);
+
+                return $response->json();
+            }
+
+            Log::error('Zernio update webhook failed', ['response' => $response->json()]);
+
+            return null;
+        } catch (\Exception $e) {
+            Log::error('Zernio update webhook error', ['error' => $e->getMessage()]);
+
+            return null;
+        }
+    }
+
+    /**
+     * Delete a webhook.
+     */
+    public function deleteWebhook(string $webhookId): bool
+    {
+        try {
+            $response = Http::withHeaders($this->headers())
+                ->timeout(15)
+                ->delete("{$this->baseUrl}/webhooks/settings", [
+                    '_id' => $webhookId,
+                ]);
+
+            return $response->successful();
+        } catch (\Exception $e) {
+            Log::error('Zernio delete webhook error', ['error' => $e->getMessage()]);
+
+            return false;
+        }
+    }
+
+    /**
+     * Send a test webhook to verify endpoint is configured correctly.
+     */
+    public function testWebhook(string $webhookId): ?array
+    {
+        try {
+            $response = Http::withHeaders($this->headers())
+                ->timeout(15)
+                ->post("{$this->baseUrl}/webhooks/test", [
+                    'webhookId' => $webhookId,
+                ]);
+
+            $body = $response->json();
+
+            if ($response->successful()) {
+                Log::info('Zernio test webhook sent', ['webhook_id' => $webhookId]);
+
+                return $body;
+            }
+
+            Log::error('Zernio test webhook failed', ['response' => $body, 'status' => $response->status()]);
+
+            return $body ?: [
+                'success' => false,
+                'message' => 'Webhook test ব্যর্থ হয়েছে।',
+                'detail' => "HTTP {$response->status()} — API response payload pawa jayni",
+            ];
+        } catch (\Exception $e) {
+            Log::error('Zernio test webhook error', ['error' => $e->getMessage()]);
+
+            return [
+                'success' => false,
+                'message' => 'Webhook test ব্যর্থ হয়েছে।',
+                'detail' => $e->getMessage(),
+            ];
+        }
+    }
+
+    // --- Post Methods ---
+
     /**
      * Create a post (for future use — scheduling, publishing).
      */

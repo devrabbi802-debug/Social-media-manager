@@ -113,15 +113,21 @@ class FacebookWebhookController extends Controller
     private function handleZernioMessageReceived(array $payload): void
     {
         $data = $payload['data'] ?? $payload;
-        $accountId = $data['accountId'] ?? null;
-        $conversationId = $data['conversationId'] ?? null;
-        $message = $data['message'] ?? $data['text'] ?? null;
-        $senderId = $data['senderId'] ?? $data['contactId'] ?? null;
-        $messageType = $data['type'] ?? 'text';
-        $attachments = $data['attachments'] ?? $data['media'] ?? [];
+        $messageData = $data['message'] ?? null;
+        $accountData = $data['account'] ?? null;
+        $senderData = $messageData['sender'] ?? null;
 
-        if (! $accountId || ! $message) {
-            Log::warning('Zernio webhook: missing required fields', ['data' => $data]);
+        // Zernio payload: accountId is in data.account.id, message text in data.message.text
+        $accountId = $accountData['id'] ?? $data['accountId'] ?? null;
+        $conversationId = $data['conversation']['id'] ?? $messageData['conversationId'] ?? null;
+        $messageText = is_string($messageData) ? $messageData : ($messageData['text'] ?? $data['text'] ?? null);
+        $senderId = $senderData['contactId'] ?? $senderData['id'] ?? $data['senderId'] ?? null;
+        $senderName = $senderData['name'] ?? $data['conversation']['participantName'] ?? null;
+        $messageType = $messageData['type'] ?? $data['type'] ?? 'text';
+        $attachments = $messageData['attachments'] ?? $data['attachments'] ?? $data['media'] ?? [];
+
+        if (! $accountId || ! $messageText) {
+            Log::warning('Zernio webhook: missing required fields', ['data' => $data, 'accountId' => $accountId, 'messageText' => $messageText]);
 
             return;
         }
@@ -135,7 +141,7 @@ class FacebookWebhookController extends Controller
             return;
         }
 
-        $tenant->run(function () use ($tenant, $data, $accountId, $message, $senderId, $attachments) {
+        $tenant->run(function () use ($tenant, $data, $accountId, $messageText, $senderId, $senderName, $conversationId, $attachments) {
             // Extract image URLs from attachments
             $imageUrls = [];
             if (is_array($attachments)) {
@@ -153,11 +159,12 @@ class FacebookWebhookController extends Controller
             );
 
             // Fetch sender name if not set
-            if (! $conversation->sender_name && isset($data['senderName'])) {
-                $conversation->update(['sender_name' => $data['senderName']]);
+            if (! $conversation->sender_name && $senderName) {
+                $conversation->update(['sender_name' => $senderName]);
             }
 
             // Save incoming message(s)
+            $messageId = $data['message']['id'] ?? $data['messageId'] ?? null;
             if (! empty($imageUrls)) {
                 foreach ($imageUrls as $imageUrl) {
                     try {
@@ -167,20 +174,20 @@ class FacebookWebhookController extends Controller
                             'type' => 'image',
                             'content' => 'ইমেজ পাঠিয়েছে',
                             'image_path' => $imageUrl,
-                            'facebook_mid' => $data['messageId'] ?? null,
+                            'facebook_mid' => $messageId,
                         ]);
                     } catch (\Throwable $e) {
                         Log::error('Zernio: Failed to save incoming image', ['error' => $e->getMessage()]);
                     }
                 }
-            } elseif ($message) {
+            } elseif ($messageText) {
                 try {
                     Message::create([
                         'conversation_id' => $conversation->id,
                         'direction' => 'incoming',
                         'type' => 'text',
-                        'content' => $message,
-                        'facebook_mid' => $data['messageId'] ?? null,
+                        'content' => $messageText,
+                        'facebook_mid' => $messageId,
                     ]);
                 } catch (\Throwable $e) {
                     Log::error('Zernio: Failed to save incoming message', ['error' => $e->getMessage()]);
@@ -188,20 +195,9 @@ class FacebookWebhookController extends Controller
             }
 
             // Check if AI auto-reply is enabled
-            $facebookSetting = FacebookSetting::where('user_id', $tenant->id ?? null)
-                ->where('connection_type', 'zernio')
+            $facebookSetting = FacebookSetting::where('connection_type', 'zernio')
                 ->where('zernio_account_id', $accountId)
-                ->first()
-                ?? FacebookSetting::where('connection_type', 'zernio')
-                    ->where('zernio_account_id', $accountId)
-                    ->first();
-
-            if (! $facebookSetting) {
-                // Try finding by user_id in tenant context
-                $facebookSetting = FacebookSetting::where('connection_type', 'zernio')
-                    ->where('zernio_account_id', $accountId)
-                    ->first();
-            }
+                ->first();
 
             if (! $facebookSetting) {
                 Log::warning('Zernio: No Facebook setting found', ['account_id' => $accountId]);
@@ -226,9 +222,9 @@ class FacebookWebhookController extends Controller
 
             // Combine text + images (same logic as Facebook webhook)
             $finalImageUrls = $imageUrls;
-            $finalText = $message;
+            $finalText = $messageText;
 
-            if (! empty($imageUrls) && $message) {
+            if (! empty($imageUrls) && $messageText) {
                 // Text + image together — good
             } elseif (! empty($imageUrls)) {
                 // Image only — check for recent text
@@ -241,7 +237,7 @@ class FacebookWebhookController extends Controller
                 if ($recentText) {
                     $finalText = $recentText;
                 }
-            } elseif ($message) {
+            } elseif ($messageText) {
                 // Text only — check for recent images
                 $recentImages = Message::where('conversation_id', $conversation->id)
                     ->where('direction', 'incoming')
@@ -265,6 +261,7 @@ class FacebookWebhookController extends Controller
                 imageUrls: $finalImageUrls,
                 zernioAccountId: $facebookSetting->zernio_account_id,
                 zernioApiKey: $facebookSetting->zernio_api_key,
+                zernioConversationId: $conversationId,
             )->delay(now()->addSeconds(0));
 
             Log::info('Zernio: AI reply job dispatched', [

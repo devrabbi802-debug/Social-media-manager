@@ -22,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->validateCsrfTokens(except: [
             'webhook/*',
+            'facebook/zernio/test-webhook',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

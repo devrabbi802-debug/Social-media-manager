@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\FacebookSetting;
+use App\Models\Tenant;
 use App\Services\ZernioService;
+use Stancl\Tenancy\Database\Models\Domain;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\URL;
 
 class ZernioOAuthController extends Controller
 {
@@ -59,6 +62,12 @@ class ZernioOAuthController extends Controller
         $facebookSetting->zernio_api_key = $apiKey;
         $facebookSetting->zernio_profile_id = $profileId;
         $facebookSetting->save();
+
+        // Auto-register webhook URL with Zernio
+        $webhookUrl = $this->getWebhookUrl();
+        if ($webhookUrl) {
+            $zernio->ensureWebhook($webhookUrl);
+        }
 
         return redirect()->route('facebook.settings')
             ->with('success', 'Zernio সফলভাবে সংযুক্ত হয়েছে! এখন Facebook Page সংযুক্ত করুন।');
@@ -282,6 +291,12 @@ class ZernioOAuthController extends Controller
             'page_name' => $request->page_name,
         ]);
 
+        // Ensure webhook is registered (fallback — in case storeApiKey didn't register it)
+        $webhookUrl = $this->getWebhookUrl();
+        if ($webhookUrl) {
+            $zernio->ensureWebhook($webhookUrl);
+        }
+
         session()->forget([
             'zernio_facebook_accounts',
             'zernio_selected_account_id',
@@ -313,5 +328,190 @@ class ZernioOAuthController extends Controller
 
         return redirect()->route('facebook.settings')
             ->with('success', 'Facebook সংযোগ সফলভাবে বিচ্ছিন্ন হয়েছে।');
+    }
+
+    /**
+     * Test Zernio webhook — sends a test event to verify endpoint works.
+     */
+    public function testWebhook(Request $request)
+    {
+        $user = Auth::user();
+
+        $facebookSetting = FacebookSetting::where('user_id', $user->id)
+            ->where('connection_type', 'zernio')
+            ->first();
+
+        if (! $facebookSetting || ! $facebookSetting->zernio_api_key) {
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => 'Zernio সেটিংস পাওয়া যায়নি।'])
+                : redirect('/facebook/settings')->with('error', 'Zernio সেটিংস পাওয়া যায়নি।');
+        }
+
+        $zernio = new ZernioService($facebookSetting->zernio_api_key);
+
+        // First ensure webhook URL is current (ngrok URL might have changed)
+        $webhookUrl = $this->getWebhookUrl();
+        if ($webhookUrl) {
+            $zernio->ensureWebhook($webhookUrl);
+        }
+
+        $webhooks = $zernio->listWebhooks();
+        $webhook = collect($webhooks)->first(function ($wh) {
+            return ($wh['name'] ?? '') === 'SocialBoost AI Webhook';
+        });
+
+        if (! $webhook) {
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => 'Webhook registered nai।'])
+                : redirect('/facebook/settings')->with('error', 'Webhook registered nai।');
+        }
+
+        $webhookId = $webhook['_id'] ?? $webhook['id'] ?? null;
+        if (! $webhookId) {
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => 'Webhook ID pawa jayni।'])
+                : redirect('/facebook/settings')->with('error', 'Webhook ID pawa jayni।');
+        }
+
+        // Test webhook handler directly (no HTTP roundtrip — avoids single-threaded server deadlock)
+        try {
+            $testPayload = [
+                'event' => 'webhook.test',
+                'message' => 'SocialBoost AI webhook test',
+                'id' => 'test-'.uniqid(),
+                'timestamp' => now()->toIso8601String(),
+            ];
+
+            $testRequest = new \Illuminate\Http\Request();
+            $testRequest->merge($testPayload);
+            $testRequest->headers->set('Content-Type', 'application/json');
+
+            $webhookHandler = app(\App\Http\Controllers\FacebookWebhookController::class);
+            $response = $webhookHandler->handleZernio($testRequest);
+
+            if ($response->getStatusCode() === 200) {
+                return $request->expectsJson()
+                    ? response()->json(['success' => true, 'message' => 'Webhook test সফল হয়েছে! Endpoint accessible আছে।'])
+                    : redirect('/facebook/settings')->with('success', 'Webhook test সফল হয়েছে! Endpoint accessible আছে।');
+            }
+
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => "Webhook endpoint HTTP {$response->getStatusCode()} return korche।"])
+                : redirect('/facebook/settings')->with('error', "Webhook endpoint HTTP {$response->getStatusCode()} return korche।");
+        } catch (\Exception $e) {
+            Log::error('Webhook test error', ['error' => $e->getMessage()]);
+
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => 'Webhook handler e error: ' . $e->getMessage()])
+                : redirect('/facebook/settings')->with('error', 'Webhook handler e error: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Initialize tenancy for tenant subdomains (e.g., noyan.smm.test).
+     * Required because this route is in web.php (central) without tenancy middleware.
+     */
+    private function initializeTenancy(Request $request): void
+    {
+        $host = $request->getHost();
+
+        $centralDomains = config('tenancy.central_domains', []);
+        if (in_array($host, $centralDomains, true)) {
+            return;
+        }
+
+        $domain = Domain::where('domain', $host)->first();
+        if ($domain && $domain->tenant) {
+            tenancy()->initialize($domain->tenant);
+            Log::info('Tenancy initialized for test-webhook', [
+                'host' => $host,
+                'tenant' => $domain->tenant->id,
+            ]);
+        }
+    }
+
+    /**
+     * Auto-detect webhook URL based on environment.
+     * Local: uses ngrok tunnel URL
+     * Production: uses app live URL
+     */
+    private function getWebhookUrl(): ?string
+    {
+        // Local environment — try to get ngrok URL
+        if (app()->environment('local', 'development')) {
+            $ngrokUrl = $this->getNgrokUrl();
+            if ($ngrokUrl) {
+                return $ngrokUrl.'/webhook/zernio';
+            }
+
+            Log::warning('Zernio: ngrok not running. Start ngrok tunnel first.', [
+                'tunnel' => 'ngrok http 8000',
+            ]);
+
+            return null;
+        }
+
+        // Production — use live URL
+        $baseUrl = config('app.url');
+        if (! $baseUrl) {
+            Log::warning('Zernio: app.url not configured');
+
+            return null;
+        }
+
+        return rtrim($baseUrl, '/').'/webhook/zernio';
+    }
+
+    /**
+     * Get the current ngrok tunnel URL from ngrok API.
+     * Reads from .ngrok-url file first (saved by start.sh),
+     * then falls back to HTTP API.
+     */
+    private function getNgrokUrl(): ?string
+    {
+        // Method 1: Read from .ngrok-url file (saved by start.sh)
+        $urlFile = base_path('.ngrok-url');
+        if (file_exists($urlFile)) {
+            $url = trim(file_get_contents($urlFile));
+            if (! empty($url) && str_starts_with($url, 'https://')) {
+                Log::info('Zernio: ngrok URL read from file', ['url' => $url]);
+
+                return $url;
+            }
+        }
+
+        // Method 2: Try HTTP API (works in native/non-Docker)
+        $hosts = [
+            'host.docker.internal',  // Docker container → host machine
+            '127.0.0.1',             // Native (non-Docker)
+        ];
+
+        foreach ($hosts as $host) {
+            try {
+                $response = \Illuminate\Support\Facades\Http::timeout(3)
+                    ->get("http://{$host}:4040/api/tunnels");
+
+                if ($response->successful()) {
+                    $tunnels = $response->json('tunnels', []);
+                    foreach ($tunnels as $tunnel) {
+                        $publicUrl = $tunnel['public_url'] ?? '';
+                        if (str_starts_with($publicUrl, 'https://')) {
+                            Log::info('Zernio: ngrok URL detected via HTTP', [
+                                'host' => $host,
+                                'url' => $publicUrl,
+                            ]);
+
+                            return $publicUrl;
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::debug("Zernio: ngrok API unreachable via {$host}", [
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return null;
     }
 }
