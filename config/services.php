@@ -10,6 +10,10 @@ return [
         'model' => env('GROQ_MODEL', 'llama-3.3-70b-versatile'),
     ],
 
+    'cerebras' => [
+        'model' => env('CEREBRAS_MODEL', 'gpt-oss-120b'),
+    ],
+
     'gemini' => [
         'model' => env('GEMINI_MODEL', 'gemini-3.1-flash-lite'),
     ],

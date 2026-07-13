@@ -16,6 +16,10 @@ class AiSettingController extends Controller
             ->byType('message')
             ->first();
 
+        $cerebrasKey = AiSetting::where('user_id', Auth::id())
+            ->byType('cerebras')
+            ->first();
+
         $geminiKey = AiSetting::where('user_id', Auth::id())
             ->byType('image')
             ->first();
@@ -23,14 +27,14 @@ class AiSettingController extends Controller
         $clipService = new ClipService();
         $clipStatus = $clipService->healthCheck();
 
-        return view('dashboard.ai-setup', compact('groqKey', 'geminiKey', 'clipStatus'));
+        return view('dashboard.ai-setup', compact('groqKey', 'cerebrasKey', 'geminiKey', 'clipStatus'));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
             'api_key' => 'required|string|max:500',
-            'type' => 'required|in:message,image',
+            'type' => 'required|in:message,cerebras,image',
         ]);
 
         $existing = AiSetting::where('user_id', Auth::id())
@@ -42,9 +46,11 @@ class AiSettingController extends Controller
                 'api_key' => $validated['api_key'],
                 'is_active' => true,
             ]);
-            $message = $validated['type'] === 'message'
-                ? 'Groq API Key আপডেট করা হয়েছে!'
-                : 'Gemini API Key আপডেট করা হয়েছে!';
+            $message = match($validated['type']) {
+                'message' => 'Groq API Key আপডেট করা হয়েছে!',
+                'cerebras' => 'Cerebras API Key আপডেট করা হয়েছে!',
+                'image' => 'Gemini API Key আপডেট করা হয়েছে!',
+            };
         } else {
             AiSetting::create([
                 'user_id' => Auth::id(),
@@ -53,9 +59,11 @@ class AiSettingController extends Controller
                 'is_active' => true,
                 'priority' => 1,
             ]);
-            $message = $validated['type'] === 'message'
-                ? 'Groq API Key সফলভাবে যোগ করা হয়েছে!'
-                : 'Gemini API Key সফলভাবে যোগ করা হয়েছে!';
+            $message = match($validated['type']) {
+                'message' => 'Groq API Key সফলভাবে যোগ করা হয়েছে!',
+                'cerebras' => 'Cerebras API Key সফলভাবে যোগ করা হয়েছে!',
+                'image' => 'Gemini API Key সফলভাবে যোগ করা হয়েছে!',
+            };
         }
 
         return redirect()->route('ai.setup')
@@ -94,11 +102,11 @@ class AiSettingController extends Controller
             abort(403);
         }
 
-        if ($aiSetting->type === 'image') {
-            $result = \App\Services\AiChatService::testGeminiConnection($aiSetting->api_key);
-        } else {
-            $result = $this->testGroqKey($aiSetting->api_key);
-        }
+        $result = match($aiSetting->type) {
+            'cerebras' => \App\Services\AiChatService::testCerebrasConnection($aiSetting->api_key),
+            'image' => \App\Services\AiChatService::testGeminiConnection($aiSetting->api_key),
+            default => $this->testGroqKey($aiSetting->api_key),
+        };
 
         $status = $result['success'] ? 'success' : 'error';
         $message = $result['message'];

@@ -213,6 +213,12 @@ class SendAiReplyJob implements ShouldQueue
             ->byPriority()
             ->get();
 
+        $cerebrasKeys = AiSetting::where('user_id', $facebookSetting->user_id)
+            ->active()
+            ->byType('cerebras')
+            ->byPriority()
+            ->get();
+
         $geminiKeys = AiSetting::where('user_id', $facebookSetting->user_id)
             ->active()
             ->byType('image')
@@ -222,13 +228,14 @@ class SendAiReplyJob implements ShouldQueue
         Log::info('SendAiReplyJob: handleTextMessage', [
             'user_id' => $facebookSetting->user_id,
             'groq_keys_count' => $aiKeys->count(),
+            'cerebras_keys_count' => $cerebrasKeys->count(),
             'gemini_keys_count' => $geminiKeys->count(),
             'message_text' => mb_substr($this->messageText, 0, 50),
         ]);
 
-        // Groq key nai + Gemini o nai = kono reply jabe na
-        if ($aiKeys->isEmpty() && $geminiKeys->isEmpty()) {
-            Log::warning('SendAiReplyJob: no AI keys (groq or gemini) for text message', ['user_id' => $facebookSetting->user_id]);
+        // No keys at all = no reply
+        if ($aiKeys->isEmpty() && $cerebrasKeys->isEmpty() && $geminiKeys->isEmpty()) {
+            Log::warning('SendAiReplyJob: no AI keys (groq, cerebras, or gemini) for text message', ['user_id' => $facebookSetting->user_id]);
             return null;
         }
 
@@ -254,13 +261,29 @@ class SendAiReplyJob implements ShouldQueue
 
         $history = $this->getConversationHistory();
 
-        // Jodi Groq key thake → Groq try koro, Gemini fallback
-        // Jodi Groq na thake → directly Gemini diye reply koro
+        // Fallback chain: Groq → Cerebras → Gemini
         if ($aiKeys->isNotEmpty()) {
             $aiService = new AiChatService($systemPrompt);
-            $reply = $aiService->chatWithHistory($this->messageText, $aiKeys, $history, 'gemini', $geminiKeys);
+            $reply = $aiService->chatWithHistory(
+                $this->messageText,
+                $aiKeys,
+                $history,
+                'cerebras',
+                $cerebrasKeys->isNotEmpty() ? $cerebrasKeys : null,
+                'gemini',
+                $geminiKeys->isNotEmpty() ? $geminiKeys : null,
+            );
+        } elseif ($cerebrasKeys->isNotEmpty()) {
+            Log::info('SendAiReplyJob: no Groq keys, using Cerebras directly', ['user_id' => $facebookSetting->user_id]);
+            $aiService = new AiChatService($systemPrompt);
+            $reply = $aiService->chatWithCerebrasFallback($this->messageText, $cerebrasKeys, $history);
+            // If Cerebras fails, try Gemini
+            if ($reply === null && $geminiKeys->isNotEmpty()) {
+                Log::info('SendAiReplyJob: Cerebras failed, falling back to Gemini');
+                $reply = $aiService->chatWithGeminiFallback($this->messageText, $geminiKeys, $history);
+            }
         } else {
-            Log::info('SendAiReplyJob: no Groq keys, using Gemini directly', ['user_id' => $facebookSetting->user_id]);
+            Log::info('SendAiReplyJob: no Groq/Cerebras keys, using Gemini directly', ['user_id' => $facebookSetting->user_id]);
             $aiService = new AiChatService($systemPrompt);
             $reply = $aiService->chatWithGeminiFallback($this->messageText, $geminiKeys, $history);
         }
@@ -292,14 +315,20 @@ class SendAiReplyJob implements ShouldQueue
             ->byPriority()
             ->get();
 
+        $cerebrasKeys = AiSetting::where('user_id', $facebookSetting->user_id)
+            ->active()
+            ->byType('cerebras')
+            ->byPriority()
+            ->get();
+
         $geminiKeys = AiSetting::where('user_id', $facebookSetting->user_id)
             ->active()
             ->byType('image')
             ->byPriority()
             ->get();
 
-        if ($groqKeys->isEmpty() && $geminiKeys->isEmpty()) {
-            Log::warning('No AI keys (groq or gemini) available for image reply', [
+        if ($groqKeys->isEmpty() && $cerebrasKeys->isEmpty() && $geminiKeys->isEmpty()) {
+            Log::warning('No AI keys (groq, cerebras, or gemini) available for image reply', [
                 'user_id' => $facebookSetting->user_id,
             ]);
             return null;
@@ -421,10 +450,26 @@ class SendAiReplyJob implements ShouldQueue
         $history = $this->getConversationHistory();
         $aiService = new AiChatService($systemPrompt);
 
+        // Fallback chain: Groq → Cerebras → Gemini
         if ($groqKeys->isNotEmpty()) {
-            $reply = $aiService->chatWithHistory($combinedMessage, $groqKeys, $history, 'gemini', $geminiKeys);
+            $reply = $aiService->chatWithHistory(
+                $combinedMessage,
+                $groqKeys,
+                $history,
+                'cerebras',
+                $cerebrasKeys->isNotEmpty() ? $cerebrasKeys : null,
+                'gemini',
+                $geminiKeys->isNotEmpty() ? $geminiKeys : null,
+            );
+        } elseif ($cerebrasKeys->isNotEmpty()) {
+            Log::info('SendAiReplyJob: no Groq keys for image reply, using Cerebras');
+            $reply = $aiService->chatWithCerebrasFallback($combinedMessage, $cerebrasKeys, $history);
+            if ($reply === null && $geminiKeys->isNotEmpty()) {
+                Log::info('SendAiReplyJob: Cerebras failed for image reply, falling back to Gemini');
+                $reply = $aiService->chatWithGeminiFallback($combinedMessage, $geminiKeys, $history);
+            }
         } else {
-            Log::info('SendAiReplyJob: no Groq keys for image reply, using Gemini directly');
+            Log::info('SendAiReplyJob: no Groq/Cerebras keys for image reply, using Gemini');
             $reply = $aiService->chatWithGeminiFallback($combinedMessage, $geminiKeys, $history);
         }
 

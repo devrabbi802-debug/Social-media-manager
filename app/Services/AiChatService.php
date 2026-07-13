@@ -19,7 +19,7 @@ class AiChatService
         return $this->chatWithHistory($message, $keys, []);
     }
 
-    public function chatWithHistory(string $message, $keys, array $history = [], ?string $fallbackProvider = null, $fallbackKeys = null): ?string
+    public function chatWithHistory(string $message, $keys, array $history = [], ?string $fallbackProvider = null, $fallbackKeys = null, ?string $secondFallbackProvider = null, $secondFallbackKeys = null): ?string
     {
         $lastException = null;
         $allRateLimited = true;
@@ -58,7 +58,23 @@ class AiChatService
             'last_error' => $lastException?->getMessage(),
         ]);
 
-        if ($fallbackProvider && $fallbackKeys && $fallbackKeys->isNotEmpty()) {
+        // Cerebras fallback
+        if ($fallbackProvider === 'cerebras' && $fallbackKeys && $fallbackKeys->isNotEmpty()) {
+            Log::info('Trying Cerebras fallback keys', ['count' => $fallbackKeys->count()]);
+            $cerebrasResult = $this->chatWithCerebrasFallback($message, $fallbackKeys, $history);
+            if ($cerebrasResult !== null) {
+                return $cerebrasResult;
+            }
+        }
+
+        // Gemini fallback
+        if ($secondFallbackProvider === 'gemini' && $secondFallbackKeys && $secondFallbackKeys->isNotEmpty()) {
+            Log::info('Trying Gemini fallback keys', ['count' => $secondFallbackKeys->count()]);
+            return $this->chatWithGeminiFallback($message, $secondFallbackKeys, $history);
+        }
+
+        // If only Gemini was provided as fallback (no Cerebras)
+        if ($fallbackProvider === 'gemini' && $fallbackKeys && $fallbackKeys->isNotEmpty()) {
             Log::info('Trying Gemini fallback keys', ['count' => $fallbackKeys->count()]);
             return $this->chatWithGeminiFallback($message, $fallbackKeys, $history);
         }
@@ -96,6 +112,100 @@ class AiChatService
 
         Log::error('All Gemini fallback keys exhausted');
         return null;
+    }
+
+    public function chatWithCerebrasFallback(string $message, $fallbackKeys, array $history = []): ?string
+    {
+        foreach ($fallbackKeys as $key) {
+            try {
+                $result = $this->chatWithCerebras($message, $key->api_key, $history);
+
+                if ($result !== null) {
+                    Log::info('Cerebras fallback succeeded', [
+                        'key_id' => $key->id,
+                    ]);
+                    return $result;
+                }
+
+                Log::warning('Cerebras fallback key returned null', [
+                    'key_id' => $key->id,
+                ]);
+            } catch (\Exception $e) {
+                Log::warning('Cerebras fallback key failed', [
+                    'key_id' => $key->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        Log::error('All Cerebras fallback keys exhausted');
+        return null;
+    }
+
+    private function chatWithCerebras(string $message, string $apiKey, array $history = []): ?string
+    {
+        try {
+            $messages = [
+                ['role' => 'system', 'content' => $this->systemPrompt],
+            ];
+
+            foreach ($history as $msg) {
+                $messages[] = [
+                    'role' => $msg['role'],
+                    'content' => $msg['content'],
+                ];
+            }
+
+            $messages[] = ['role' => 'user', 'content' => $message];
+
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer '.$apiKey,
+                'Content-Type' => 'application/json',
+            ])->timeout(30)->post('https://api.cerebras.ai/v1/chat/completions', [
+                'model' => config('services.cerebras.model', 'gpt-oss-120b'),
+                'messages' => $messages,
+                'temperature' => 0.7,
+                'max_tokens' => 512,
+                'top_p' => 0.9,
+            ]);
+
+            if ($response->status() === 429) {
+                Log::warning('Cerebras 429 rate limited');
+                throw new \Exception('Cerebras API rate limited (429)');
+            }
+
+            if ($response->status() === 413) {
+                Log::error('Cerebras API request too large (413)', [
+                    'message_length' => mb_strlen($message),
+                ]);
+
+                $truncatedMessage = mb_substr($message, 0, 4000) . "\n\n[বার্তা সংক্ষিপ্ত করা হয়েছে]";
+
+                return $this->chatWithCerebras($truncatedMessage, $apiKey, $history);
+            }
+
+            if ($response->failed()) {
+                Log::error('Cerebras API error', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+
+                return null;
+            }
+
+            $body = $response->json();
+
+            return $body['choices'][0]['message']['content'] ?? null;
+        } catch (\Exception $e) {
+            if (str_contains($e->getMessage(), '429')) {
+                throw $e;
+            }
+            Log::error('Cerebras API exception', [
+                'message' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     private function chatWithGemini(string $message, string $apiKey, array $history = []): ?string
@@ -380,6 +490,40 @@ class AiChatService
             $text = $body['candidates'][0]['content']['parts'][0]['text'] ?? null;
 
             return ['success' => true, 'message' => 'Connected! Gemini replied: '.substr($text ?? '', 0, 50)];
+        } catch (\Exception $e) {
+            return ['success' => false, 'message' => 'Error: '.$e->getMessage()];
+        }
+    }
+
+    public static function testCerebrasConnection(string $apiKey): array
+    {
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer '.$apiKey,
+                'Content-Type' => 'application/json',
+            ])->timeout(15)->post('https://api.cerebras.ai/v1/chat/completions', [
+                'model' => config('services.cerebras.model', 'gpt-oss-120b'),
+                'messages' => [
+                    ['role' => 'user', 'content' => 'Hello, just testing connection. Reply with one word.'],
+                ],
+            ]);
+
+            if ($response->status() === 401) {
+                return ['success' => false, 'message' => 'API key invalid'];
+            }
+
+            if ($response->status() === 429) {
+                return ['success' => true, 'message' => 'Connected! (Rate limited but key is valid)'];
+            }
+
+            if ($response->failed()) {
+                return ['success' => false, 'message' => 'API error: '.$response->status()];
+            }
+
+            $body = $response->json();
+            $reply = $body['choices'][0]['message']['content'] ?? null;
+
+            return ['success' => true, 'message' => 'Connected! Cerebras replied: '.substr($reply ?? '', 0, 50)];
         } catch (\Exception $e) {
             return ['success' => false, 'message' => 'Error: '.$e->getMessage()];
         }
