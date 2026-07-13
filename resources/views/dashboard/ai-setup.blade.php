@@ -468,12 +468,6 @@
                     </div>
                 </div>
 
-                {{-- Info --}}
-                <div class="bg-purple-50 rounded-2xl p-6 border border-purple-200">
-                    <h3 class="text-lg font-bold text-purple-800 mb-2">তথ্য</h3>
-                    <p class="text-sm text-purple-700 mb-3">Groq — প্রাথমিক AI (ফ্রি, দ্রুত)। Cerebras — মাধ্যমিক AI (ফ্রি, বড় কনটেক্সট)। Gemini — তৃতীয় পছন্দের AI (ফ্রি, লিমিট বেশি)।</p>
-                    <p class="text-sm text-purple-600"><strong>টিপস:</strong> তিনটো key দিলে AI সবসময় কাজ করবে। Groq limit শেষ হলেও Cerebras, তাও ফেইল হলে Gemini চলবে।</p>
-                </div>
             </div>
         </div>
     </div>
