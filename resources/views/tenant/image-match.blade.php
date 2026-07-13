@@ -59,7 +59,7 @@
         <!-- Upload Form -->
         <div class="bg-white rounded-lg shadow-md p-6">
             <h2 class="text-xl font-semibold text-gray-800 mb-4">ছবি আপলোড করুন</h2>
-            <form action="{{ route('dashboard.image-match.match') }}" method="POST" enctype="multipart/form-data" id="matchForm">
+            <form action="{{ route('image-match.match') }}" method="POST" enctype="multipart/form-data" id="matchForm">
                 @csrf
                 <div class="mb-6">
                     <label class="block text-sm font-medium text-gray-700 mb-2">
