@@ -49,7 +49,11 @@
                     @else
                         <div class="space-y-4">
                             @foreach($matches as $index => $match)
-                                <div class="border rounded-lg p-4 {{ $index === 0 ? 'border-green-500 bg-green-50' : 'border-gray-200' }}">
+                                @php
+                                    $productId = $match['product_id'] ?? null;
+                                    $productUrl = $productId ? route('inventory.products.show', $productId) : '#';
+                                @endphp
+                                <a href="{{ $productUrl }}" class="block border rounded-lg p-4 transition hover:shadow-md {{ $index === 0 ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-purple-300' }}">
                                     <div class="flex items-center justify-between">
                                         <div class="flex items-center space-x-4">
                                             <div class="flex-shrink-0">
@@ -65,9 +69,11 @@
                                             </div>
                                             <div>
                                                 <h3 class="text-lg font-semibold text-gray-800">{{ $match['product_name'] }}</h3>
-                                                <p class="text-sm text-gray-500">ID: {{ $match['id'] }}</p>
-                                                @if(isset($match['metadata']['product_sku']))
-                                                    <p class="text-sm text-gray-500">SKU: {{ $match['metadata']['product_sku'] }}</p>
+                                                @if(!empty($match['product_sku']))
+                                                    <p class="text-sm text-gray-500">SKU: {{ $match['product_sku'] }}</p>
+                                                @endif
+                                                @if(!empty($match['product_price']))
+                                                    <p class="text-sm font-medium text-purple-600">মূল্য: ৳{{ number_format($match['product_price'], 2) }}</p>
                                                 @endif
                                             </div>
                                         </div>
@@ -76,6 +82,11 @@
                                                 {{ round($match['score'] * 100, 1) }}%
                                             </div>
                                             <div class="text-sm text-gray-500">স্কোর</div>
+                                            @if($productId)
+                                                <span class="inline-flex items-center mt-2 text-xs text-purple-600 font-medium">
+                                                    প্রোডাক্ট দেখুন →
+                                                </span>
+                                            @endif
                                         </div>
                                     </div>
                                     
@@ -92,7 +103,7 @@
                                             <strong>কম সম্ভাবনা:</strong> এই প্রোডাক্টটি সম্ভবত ভিন্ন।
                                         </div>
                                     @endif
-                                </div>
+                                </a>
                             @endforeach
                         </div>
                     @endif

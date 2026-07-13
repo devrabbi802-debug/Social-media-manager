@@ -67,10 +67,31 @@ class ImageMatchController extends Controller
                 return back()->with('error', 'ছবি ম্যাচ করতে সমস্যা হয়েছে।');
             }
 
+            // Build lookup map from catalog embeddings
+            $catalogMap = [];
+            foreach ($catalogEmbeddings as $item) {
+                $catalogMap[$item['id']] = $item;
+            }
+
+            // Enrich match results with full product data
+            $matches = $matchResult['matches'] ?? [];
+            foreach ($matches as &$match) {
+                $catalogItem = $catalogMap[$match['id']] ?? null;
+                if ($catalogItem) {
+                    $match['product_id'] = $catalogItem['product_id'] ?? null;
+                    $match['product_name'] = $catalogItem['product_name'] ?? $match['product_name'] ?? 'Unknown';
+                    $match['product_sku'] = $catalogItem['product_sku'] ?? '';
+                    $match['product_slug'] = $catalogItem['product_slug'] ?? '';
+                    $match['product_price'] = $catalogItem['product_price'] ?? null;
+                    $match['type'] = $catalogItem['type'] ?? 'product';
+                }
+            }
+            unset($match);
+
             $uploadedPath = $imageFile->store('temp', 'public');
 
             return view('tenant.image-match-result', [
-                'matches' => $matchResult['matches'] ?? [],
+                'matches' => $matches,
                 'bestMatch' => $matchResult['best_match'] ?? null,
                 'totalCatalog' => $matchResult['total_catalog_items'] ?? 0,
                 'uploadedImage' => asset('storage/' . $uploadedPath),
