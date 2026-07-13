@@ -124,6 +124,37 @@ class ZernioService
     }
 
     /**
+     * Get Facebook pages available for selection via tempToken.
+     * Called after OAuth callback — Zernio returns pages list.
+     */
+    public function getFacebookSelectPageUrl(string $profileId, string $tempToken): ?array
+    {
+        try {
+            $response = Http::withHeaders($this->headers())
+                ->timeout(15)
+                ->get("{$this->baseUrl}/connect/facebook/select-page", [
+                    'profileId' => $profileId,
+                    'tempToken' => $tempToken,
+                ]);
+
+            if ($response->successful()) {
+                return $response->json();
+            }
+
+            Log::error('Zernio Facebook select-page failed', [
+                'response' => $response->json(),
+                'status' => $response->status(),
+            ]);
+
+            return null;
+        } catch (\Exception $e) {
+            Log::error('Zernio Facebook select-page error', ['error' => $e->getMessage()]);
+
+            return null;
+        }
+    }
+
+    /**
      * Select a Facebook page after OAuth authorization.
      */
     public function selectFacebookPage(string $profileId, string $pageId, string $tempToken, ?string $redirectUrl = null): ?array

@@ -6,6 +6,7 @@ use App\Models\FacebookSetting;
 use App\Services\ZernioService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class ZernioOAuthController extends Controller
 {
@@ -20,35 +21,28 @@ class ZernioOAuthController extends Controller
 
         $apiKey = $request->input('zernio_api_key');
 
-        // Verify the API key works
         $zernio = new ZernioService($apiKey);
         if (! $zernio->verifyKey()) {
             return redirect()->route('facebook.settings')
                 ->with('error', 'Zernio API key সঠিক নয়। আবার চেষ্টা করুন।');
         }
 
-        // Get or create a profile for this tenant
         $user = Auth::user();
         $existingSetting = FacebookSetting::where('user_id', $user->id)->first();
 
-        // If already has a Zernio setting with same key, just return
         if ($existingSetting && $existingSetting->zernio_api_key === $apiKey) {
             return redirect()->route('facebook.settings')
                 ->with('success', 'Zernio API key আগেই সংরক্ষিত আছে।');
         }
 
-        // First, try to use an existing profile
         $profiles = $zernio->listProfiles();
         $profileId = null;
 
         if (! empty($profiles)) {
-            // Use the first existing profile
             $profileId = $profiles[0]['_id'];
         } else {
-            // Create a new profile with a unique name
             $profileName = ($user->company ?? $user->name ?? 'SocialBoost').' '.time();
             $profile = $zernio->createProfile($profileName, 'SocialBoost AI managed profile');
-
             if ($profile && isset($profile['_id'])) {
                 $profileId = $profile['_id'];
             }
@@ -59,7 +53,6 @@ class ZernioOAuthController extends Controller
                 ->with('error', 'Zernio profile তৈরি করা যায়নি। আবার চেষ্টা করুন।');
         }
 
-        // Save or update facebook_settings
         $facebookSetting = $existingSetting ?: new FacebookSetting;
         $facebookSetting->user_id = $user->id;
         $facebookSetting->connection_type = 'zernio';
@@ -73,7 +66,6 @@ class ZernioOAuthController extends Controller
 
     /**
      * Step 2: Start Facebook OAuth via Zernio.
-     * Redirects user to Zernio's Facebook authorization page.
      */
     public function connectFacebook()
     {
@@ -91,7 +83,6 @@ class ZernioOAuthController extends Controller
 
         // Ensure we have a profile
         if (! $facebookSetting->zernio_profile_id) {
-            // First, try to use an existing profile
             $profiles = $zernio->listProfiles();
             if (! empty($profiles)) {
                 $facebookSetting->zernio_profile_id = $profiles[0]['_id'];
@@ -107,7 +98,6 @@ class ZernioOAuthController extends Controller
             $facebookSetting->save();
         }
 
-        // Get Facebook connect URL from Zernio
         $redirectUrl = route('zernio.facebook.callback');
         $result = $zernio->getFacebookConnectUrl($facebookSetting->zernio_profile_id, $redirectUrl);
 
@@ -116,7 +106,6 @@ class ZernioOAuthController extends Controller
                 ->with('error', 'Facebook সংযোগ URL তৈরি করা যায়নি। আবার চেষ্টা করুন।');
         }
 
-        // Store state in session for verification
         session(['zernio_state' => $result['state'] ?? null]);
 
         return redirect($result['authUrl']);
@@ -124,7 +113,8 @@ class ZernioOAuthController extends Controller
 
     /**
      * Step 3: Facebook OAuth callback from Zernio.
-     * After user authorizes Facebook, Zernio redirects back here.
+     * Zernio redirects here after user authorizes Facebook.
+     * Callback includes tempToken which we use to list pages.
      */
     public function facebookCallback(Request $request)
     {
@@ -144,35 +134,70 @@ class ZernioOAuthController extends Controller
                 ->with('error', 'Facebook সংযোগ ব্যর্থ হয়েছে: '.($request->query('error', 'Unknown error')));
         }
 
-        $zernio = new ZernioService($facebookSetting->zernio_api_key);
+        $tempToken = $request->query('tempToken') ?? $request->query('temp_token') ?? $request->query('token');
+        $code = $request->query('code');
 
-        // List connected accounts to find the Facebook account
-        $accounts = $zernio->listAccounts($facebookSetting->zernio_profile_id);
-
-        $facebookAccounts = array_filter($accounts, fn ($a) => $a['platform'] === 'facebook');
-
-        if (empty($facebookAccounts)) {
-            return redirect()->route('facebook.settings')
-                ->with('error', 'কোনো Facebook Account পাওয়া যায়নি। আবার চেষ্টা করুন।');
-        }
-
-        // Store accounts in session for page selection
-        $facebookAccount = collect($facebookAccounts)->first();
-        session([
-            'zernio_facebook_accounts' => array_values($facebookAccounts),
-            'zernio_selected_account_id' => $facebookAccount['_id'],
+        Log::info('Zernio Facebook callback received', [
+            'has_temp_token' => $tempToken !== null,
+            'has_code' => $code !== null,
+            'all_params' => $request->query(),
         ]);
 
-        // If only one account, auto-select and go to page selection
-        if (count($facebookAccounts) === 1) {
-            return redirect()->route('zernio.select.page');
+        $zernio = new ZernioService($facebookSetting->zernio_api_key);
+
+        // If we have a tempToken, use it to get page list directly
+        if ($tempToken) {
+            session(['zernio_temp_token' => $tempToken]);
+
+            $pageResult = $zernio->getFacebookSelectPageUrl(
+                $facebookSetting->zernio_profile_id,
+                $tempToken
+            );
+
+            Log::info('Zernio select-page result', ['result' => $pageResult]);
+
+            if ($pageResult && isset($pageResult['pages']) && ! empty($pageResult['pages'])) {
+                session(['zernio_pages' => $pageResult['pages']]);
+
+                return redirect()->route('zernio.select.page');
+            }
+
+            // Even if no pages endpoint, the account might be connected — try listing accounts
+        }
+
+        // Fallback: list connected accounts
+        $accounts = $zernio->listAccounts($facebookSetting->zernio_profile_id);
+        $facebookAccounts = array_values(array_filter($accounts, fn ($a) => ($a['platform'] ?? '') === 'facebook'));
+
+        Log::info('Zernio accounts list', [
+            'total' => count($accounts),
+            'facebook' => count($facebookAccounts),
+            'accounts' => $facebookAccounts,
+        ]);
+
+        if (! empty($facebookAccounts)) {
+            $facebookAccount = $facebookAccounts[0];
+            $accountId = $facebookAccount['_id'] ?? null;
+
+            if ($accountId) {
+                session(['zernio_selected_account_id' => $accountId]);
+
+                // Try to get pages for this account
+                $pages = $zernio->listFacebookPages($accountId);
+
+                Log::info('Zernio Facebook pages', ['pages' => $pages, 'account_id' => $accountId]);
+
+                if (! empty($pages)) {
+                    session(['zernio_pages' => $pages]);
+                }
+            }
         }
 
         return redirect()->route('zernio.select.page');
     }
 
     /**
-     * Step 4: Show Facebook page selection (from Zernio connected account).
+     * Step 4: Show Facebook page selection.
      */
     public function selectPage()
     {
@@ -186,39 +211,27 @@ class ZernioOAuthController extends Controller
                 ->with('error', 'Zernio সেটিংস পাওয়া যায়নি।');
         }
 
-        $zernio = new ZernioService($facebookSetting->zernio_api_key);
+        // Pages from session (set during callback)
+        $pages = session('zernio_pages', []);
+        $accountId = session('zernio_selected_account_id');
+        $tempToken = session('zernio_temp_token');
 
-        // Get available Facebook pages from the connected account
-        $accounts = $zernio->listAccounts($facebookSetting->zernio_profile_id);
-        $facebookAccounts = array_filter($accounts, fn ($a) => $a['platform'] === 'facebook');
-
-        if (empty($facebookAccounts)) {
-            return redirect()->route('facebook.settings')
-                ->with('error', 'Facebook Account পাওয়া যায়নি।');
+        // If no pages in session, try fetching
+        if (empty($pages) && $accountId) {
+            $zernio = new ZernioService($facebookSetting->zernio_api_key);
+            $pages = $zernio->listFacebookPages($accountId);
+            session(['zernio_pages' => $pages]);
         }
 
-        $accountId = session('zernio_selected_account_id') ?? collect($facebookAccounts)->first()['_id'];
-
-        // Try to get pages from the account
-        $pages = $zernio->listFacebookPages($accountId);
-
-        // If no pages found via API, the account itself is the page
         if (empty($pages)) {
-            // Use the account info as page info
-            $account = collect($facebookAccounts)->firstWhere('_id', $accountId);
-            if ($account) {
-                $pages = [
-                    [
-                        'id' => $accountId,
-                        'name' => $account['displayName'] ?? $account['username'] ?? 'Facebook Page',
-                    ],
-                ];
-            }
+            return redirect()->route('facebook.settings')
+                ->with('error', 'কোনো Facebook Page পাওয়া যায়নি। Zernio থেকে Facebook আবার সংযুক্ত করুন।');
         }
 
         return view('dashboard.facebook-select-page', [
             'pages' => $pages,
             'accountId' => $accountId,
+            'tempToken' => $tempToken,
             'source' => 'zernio',
         ]);
     }
@@ -231,7 +244,7 @@ class ZernioOAuthController extends Controller
         $request->validate([
             'page_id' => 'required|string',
             'page_name' => 'nullable|string',
-            'account_id' => 'required|string',
+            'account_id' => 'nullable|string',
         ]);
 
         $user = Auth::user();
@@ -246,18 +259,36 @@ class ZernioOAuthController extends Controller
 
         $zernio = new ZernioService($facebookSetting->zernio_api_key);
 
-        // Set the default Facebook page
-        $zernio->setDefaultFacebookPage($request->account_id, $request->page_id);
+        // If we have a tempToken, use the select-page API to complete connection
+        $tempToken = session('zernio_temp_token');
+        $accountId = $request->account_id ?? session('zernio_selected_account_id');
 
-        // Update facebook_settings
+        if ($tempToken && $facebookSetting->zernio_profile_id) {
+            $zernio->selectFacebookPage(
+                $facebookSetting->zernio_profile_id,
+                $request->page_id,
+                $tempToken,
+            );
+        }
+
+        // If we have an accountId, set the default page
+        if ($accountId) {
+            $zernio->setDefaultFacebookPage($accountId, $request->page_id);
+        }
+
         $facebookSetting->update([
-            'zernio_account_id' => $request->account_id,
+            'zernio_account_id' => $accountId,
             'page_id' => $request->page_id,
             'page_name' => $request->page_name,
         ]);
 
-        // Clean up session
-        session()->forget(['zernio_facebook_accounts', 'zernio_selected_account_id', 'zernio_state']);
+        session()->forget([
+            'zernio_facebook_accounts',
+            'zernio_selected_account_id',
+            'zernio_state',
+            'zernio_temp_token',
+            'zernio_pages',
+        ]);
 
         return redirect()->route('facebook.settings')
             ->with('success', "'{$request->page_name}' Facebook Page সফলভাবে Zernio দিয়ে সংযুক্ত হয়েছে!");
@@ -272,7 +303,6 @@ class ZernioOAuthController extends Controller
         $facebookSetting = FacebookSetting::where('user_id', $user->id)->first();
 
         if ($facebookSetting) {
-            // If connected via Zernio, disconnect the account from Zernio
             if ($facebookSetting->connection_type === 'zernio' && $facebookSetting->zernio_account_id) {
                 $zernio = new ZernioService($facebookSetting->zernio_api_key);
                 $zernio->disconnectAccount($facebookSetting->zernio_account_id);

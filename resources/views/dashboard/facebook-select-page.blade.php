@@ -20,9 +20,18 @@
 
         <div class="grid gap-4">
             @foreach($pages as $page)
-                <form action="{{ route('facebook.connect.page') }}" method="POST">
+                @php
+                    $pageId = $page['id'] ?? $page['_id'] ?? $page['pageId'] ?? $page['page_id'] ?? '';
+                    $pageName = $page['name'] ?? $page['pageName'] ?? $page['displayName'] ?? 'Facebook Page';
+                    $pageCategory = $page['category'] ?? '';
+                @endphp
+                <form action="{{ route('zernio.connect.page') }}" method="POST">
                     @csrf
-                    <input type="hidden" name="page_id" value="{{ $page['id'] }}">
+                    <input type="hidden" name="page_id" value="{{ $pageId }}">
+                    <input type="hidden" name="page_name" value="{{ $pageName }}">
+                    @if($accountId)
+                        <input type="hidden" name="account_id" value="{{ $accountId }}">
+                    @endif
                     <button type="submit" class="w-full bg-white rounded-2xl p-6 shadow-sm border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition text-left flex items-center justify-between group">
                         <div class="flex items-center">
                             <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mr-4 group-hover:bg-blue-200 transition">
@@ -31,8 +40,8 @@
                                 </svg>
                             </div>
                             <div>
-                                <h3 class="text-lg font-bold text-gray-900">{{ $page['name'] }}</h3>
-                                <p class="text-sm text-gray-500">ID: {{ $page['id'] }}@if(isset($page['category'])) · {{ $page['category'] }}@endif</p>
+                                <h3 class="text-lg font-bold text-gray-900">{{ $pageName }}</h3>
+                                <p class="text-sm text-gray-500">ID: {{ $pageId }}@if($pageCategory) · {{ $pageCategory }}@endif</p>
                             </div>
                         </div>
                         <svg class="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
