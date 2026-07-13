@@ -26,6 +26,7 @@ class FacebookSettingController extends Controller
         ]);
 
         $validated['user_id'] = Auth::id();
+        $validated['connection_type'] = 'facebook_app';
 
         FacebookSetting::updateOrCreate(
             ['user_id' => Auth::id()],

@@ -8,6 +8,7 @@ use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FacebookSettingController;
 use App\Http\Controllers\FacebookOAuthController;
+use App\Http\Controllers\ZernioOAuthController;
 use App\Http\Controllers\AiSettingController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\Dashboard\ProductController;
@@ -174,6 +175,14 @@ Route::middleware([
         Route::get('/facebook/callback', [FacebookOAuthController::class, 'callback'])->name('facebook.callback');
         Route::get('/facebook/select-page', [FacebookOAuthController::class, 'selectPage'])->name('facebook.select.page');
         Route::post('/facebook/connect-page', [FacebookOAuthController::class, 'connectSelectedPage'])->name('facebook.connect.page');
+
+        // Zernio Integration
+        Route::post('/facebook/settings/zernio', [ZernioOAuthController::class, 'storeApiKey'])->name('zernio.store.apikey');
+        Route::get('/facebook/connect-zernio', [ZernioOAuthController::class, 'connectFacebook'])->name('zernio.connect.facebook');
+        Route::get('/facebook/zernio/callback', [ZernioOAuthController::class, 'facebookCallback'])->name('zernio.facebook.callback');
+        Route::get('/facebook/zernio/select-page', [ZernioOAuthController::class, 'selectPage'])->name('zernio.select.page');
+        Route::post('/facebook/zernio/connect-page', [ZernioOAuthController::class, 'connectSelectedPage'])->name('zernio.connect.page');
+        Route::post('/facebook/zernio/disconnect', [ZernioOAuthController::class, 'disconnect'])->name('zernio.disconnect');
 
         // Image Matching (CLIP)
         Route::get('/image-match', [ImageMatchController::class, 'index'])->name('image-match.index');

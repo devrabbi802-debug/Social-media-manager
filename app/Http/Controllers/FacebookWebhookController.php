@@ -9,11 +9,15 @@ use App\Models\Message;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class FacebookWebhookController extends Controller
 {
+    /**
+     * Facebook webhook verification (for direct Facebook App connections).
+     */
     public function verify(Request $request): Response
     {
         $mode = $request->query('hub_mode');
@@ -37,6 +41,9 @@ class FacebookWebhookController extends Controller
         return response($challenge, 200)->header('Content-Type', 'text/plain');
     }
 
+    /**
+     * Handle Facebook webhook (for direct Facebook App connections).
+     */
     public function handle(Request $request): Response
     {
         $payload = $request->all();
@@ -70,6 +77,238 @@ class FacebookWebhookController extends Controller
         return response('EVENT_RECEIVED', 200);
     }
 
+    /**
+     * Handle Zernio webhook (for Zernio-connected accounts).
+     * Zernio sends events like: message.received, message.sent, conversation.started, etc.
+     */
+    public function handleZernio(Request $request): Response
+    {
+        $payload = $request->all();
+        $eventName = $payload['event'] ?? $payload['type'] ?? null;
+        $eventId = $payload['id'] ?? $request->header('X-Zernio-Event-Id', null);
+
+        Log::info('Zernio webhook received', [
+            'event' => $eventName,
+            'event_id' => $eventId,
+        ]);
+
+        // Verify signature if secret is configured
+        $this->verifyZernioSignature($request);
+
+        // Handle different event types
+        match ($eventName) {
+            'message.received' => $this->handleZernioMessageReceived($payload),
+            'conversation.started' => $this->handleZernioConversationStarted($payload),
+            'account.connected' => $this->handleZernioAccountConnected($payload),
+            'account.disconnected' => $this->handleZernioAccountDisconnected($payload),
+            default => Log::info('Zernio webhook: unhandled event', ['event' => $eventName]),
+        };
+
+        return response('OK', 200);
+    }
+
+    /**
+     * Handle incoming message from Zernio webhook.
+     */
+    private function handleZernioMessageReceived(array $payload): void
+    {
+        $data = $payload['data'] ?? $payload;
+        $accountId = $data['accountId'] ?? null;
+        $conversationId = $data['conversationId'] ?? null;
+        $message = $data['message'] ?? $data['text'] ?? null;
+        $senderId = $data['senderId'] ?? $data['contactId'] ?? null;
+        $messageType = $data['type'] ?? 'text';
+        $attachments = $data['attachments'] ?? $data['media'] ?? [];
+
+        if (! $accountId || ! $message) {
+            Log::warning('Zernio webhook: missing required fields', ['data' => $data]);
+
+            return;
+        }
+
+        // Find tenant by Zernio account ID
+        $tenant = $this->findTenantByZernioAccountId($accountId);
+
+        if (! $tenant) {
+            Log::warning('Zernio webhook: no tenant for account', ['account_id' => $accountId]);
+
+            return;
+        }
+
+        $tenant->run(function () use ($tenant, $data, $accountId, $message, $senderId, $attachments) {
+            // Extract image URLs from attachments
+            $imageUrls = [];
+            if (is_array($attachments)) {
+                foreach ($attachments as $attachment) {
+                    if (isset($attachment['url']) && str_starts_with($attachment['type'] ?? '', 'image')) {
+                        $imageUrls[] = $attachment['url'];
+                    }
+                }
+            }
+
+            // Get or create conversation
+            $conversation = Conversation::updateOrCreate(
+                ['sender_id' => $senderId],
+                ['last_message_at' => now()]
+            );
+
+            // Fetch sender name if not set
+            if (! $conversation->sender_name && isset($data['senderName'])) {
+                $conversation->update(['sender_name' => $data['senderName']]);
+            }
+
+            // Save incoming message(s)
+            if (! empty($imageUrls)) {
+                foreach ($imageUrls as $imageUrl) {
+                    try {
+                        Message::create([
+                            'conversation_id' => $conversation->id,
+                            'direction' => 'incoming',
+                            'type' => 'image',
+                            'content' => 'ইমেজ পাঠিয়েছে',
+                            'image_path' => $imageUrl,
+                            'facebook_mid' => $data['messageId'] ?? null,
+                        ]);
+                    } catch (\Throwable $e) {
+                        Log::error('Zernio: Failed to save incoming image', ['error' => $e->getMessage()]);
+                    }
+                }
+            } elseif ($message) {
+                try {
+                    Message::create([
+                        'conversation_id' => $conversation->id,
+                        'direction' => 'incoming',
+                        'type' => 'text',
+                        'content' => $message,
+                        'facebook_mid' => $data['messageId'] ?? null,
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::error('Zernio: Failed to save incoming message', ['error' => $e->getMessage()]);
+                }
+            }
+
+            // Check if AI auto-reply is enabled
+            $facebookSetting = FacebookSetting::where('user_id', $tenant->id ?? null)
+                ->where('connection_type', 'zernio')
+                ->where('zernio_account_id', $accountId)
+                ->first()
+                ?? FacebookSetting::where('connection_type', 'zernio')
+                    ->where('zernio_account_id', $accountId)
+                    ->first();
+
+            if (! $facebookSetting) {
+                // Try finding by user_id in tenant context
+                $facebookSetting = FacebookSetting::where('connection_type', 'zernio')
+                    ->where('zernio_account_id', $accountId)
+                    ->first();
+            }
+
+            if (! $facebookSetting) {
+                Log::warning('Zernio: No Facebook setting found', ['account_id' => $accountId]);
+
+                return;
+            }
+
+            $aiEnabled = $facebookSetting->ai_auto_reply_enabled ?? true;
+            if (! $aiEnabled) {
+                Log::info('Zernio: AI auto-reply disabled', ['account_id' => $accountId]);
+
+                return;
+            }
+
+            // Debounce: skip if already dispatched recently
+            $dispatchKey = "zernio_job_dispatched:{$senderId}";
+            if (Cache::get($dispatchKey)) {
+                Log::info('Zernio webhook debounce: skipping duplicate dispatch', ['sender_id' => $senderId]);
+
+                return;
+            }
+
+            // Combine text + images (same logic as Facebook webhook)
+            $finalImageUrls = $imageUrls;
+            $finalText = $message;
+
+            if (! empty($imageUrls) && $message) {
+                // Text + image together — good
+            } elseif (! empty($imageUrls)) {
+                // Image only — check for recent text
+                $recentText = Message::where('conversation_id', $conversation->id)
+                    ->where('direction', 'incoming')
+                    ->where('type', 'text')
+                    ->where('created_at', '>=', now()->subSeconds(5))
+                    ->latest()
+                    ->value('content');
+                if ($recentText) {
+                    $finalText = $recentText;
+                }
+            } elseif ($message) {
+                // Text only — check for recent images
+                $recentImages = Message::where('conversation_id', $conversation->id)
+                    ->where('direction', 'incoming')
+                    ->where('type', 'image')
+                    ->where('created_at', '>=', now()->subSeconds(5))
+                    ->pluck('image_path')
+                    ->toArray();
+                if (! empty($recentImages)) {
+                    $finalImageUrls = $recentImages;
+                }
+            }
+
+            Cache::put($dispatchKey, true, now()->addSeconds(8));
+
+            // Dispatch AI reply job
+            SendAiReplyJob::dispatch(
+                tenantId: $tenant->id,
+                senderId: $senderId,
+                messageText: $finalText ?? '',
+                pageAccessToken: $facebookSetting->page_access_token ?? '',
+                imageUrls: $finalImageUrls,
+                zernioAccountId: $facebookSetting->zernio_account_id,
+                zernioApiKey: $facebookSetting->zernio_api_key,
+            )->delay(now()->addSeconds(0));
+
+            Log::info('Zernio: AI reply job dispatched', [
+                'tenant_id' => $tenant->id,
+                'sender_id' => $senderId,
+            ]);
+        });
+    }
+
+    private function handleZernioConversationStarted(array $payload): void
+    {
+        Log::info('Zernio: conversation started', ['payload' => $payload]);
+    }
+
+    private function handleZernioAccountConnected(array $payload): void
+    {
+        Log::info('Zernio: account connected', ['payload' => $payload]);
+    }
+
+    private function handleZernioAccountDisconnected(array $payload): void
+    {
+        $accountId = $payload['data']['accountId'] ?? $payload['accountId'] ?? null;
+
+        if ($accountId) {
+            $facebookSetting = FacebookSetting::where('zernio_account_id', $accountId)->first();
+            if ($facebookSetting) {
+                $facebookSetting->update([
+                    'zernio_account_id' => null,
+                    'page_id' => null,
+                    'page_name' => null,
+                ]);
+                Log::info('Zernio: account disconnected, settings cleared', ['account_id' => $accountId]);
+            }
+        }
+    }
+
+    private function verifyZernioSignature(Request $request): void
+    {
+        // Optional: verify X-Zernio-Signature header if webhook secret is configured
+        // For now, we'll skip signature verification
+    }
+
+    // --- Helper methods (existing) ---
+
     private function findTenantByVerifyToken(string $token): ?Tenant
     {
         return Tenant::all()->first(function (Tenant $tenant) use ($token) {
@@ -88,6 +327,18 @@ class FacebookWebhookController extends Controller
         return Tenant::all()->first(function (Tenant $tenant) use ($pageId) {
             return $tenant->run(function () use ($pageId) {
                 return FacebookSetting::where('page_id', $pageId)->exists();
+            });
+        });
+    }
+
+    /**
+     * Find tenant by Zernio account ID.
+     */
+    private function findTenantByZernioAccountId(string $accountId): ?Tenant
+    {
+        return Tenant::all()->first(function (Tenant $tenant) use ($accountId) {
+            return $tenant->run(function () use ($accountId) {
+                return FacebookSetting::where('zernio_account_id', $accountId)->exists();
             });
         });
     }
@@ -111,6 +362,7 @@ class FacebookWebhookController extends Controller
                     'sender_id' => $senderId,
                     'mid' => $mid,
                 ]);
+
                 return;
             }
         }
@@ -190,6 +442,7 @@ class FacebookWebhookController extends Controller
 
         if (! $facebookSetting) {
             Log::warning('No Facebook setting found for tenant', ['tenant_id' => $tenant->id]);
+
             return;
         }
 
@@ -197,6 +450,7 @@ class FacebookWebhookController extends Controller
 
         if (! $aiEnabled) {
             Log::info('AI auto-reply disabled for tenant', ['tenant_id' => $tenant->id]);
+
             return;
         }
 
@@ -206,13 +460,14 @@ class FacebookWebhookController extends Controller
             $delay = 0;
 
             $dispatchKey = "job_dispatched:{$senderId}";
-            $alreadyDispatched = \Illuminate\Support\Facades\Cache::get($dispatchKey);
+            $alreadyDispatched = Cache::get($dispatchKey);
 
             if ($alreadyDispatched) {
                 Log::info('Webhook debounce: skipping duplicate dispatch', [
                     'sender_id' => $senderId,
-                    'has_images' => !empty($imageUrls),
+                    'has_images' => ! empty($imageUrls),
                 ]);
+
                 return;
             }
 
@@ -241,7 +496,7 @@ class FacebookWebhookController extends Controller
                     ->pluck('image_path')
                     ->toArray();
 
-                if (!empty($recentImages)) {
+                if (! empty($recentImages)) {
                     $finalImageUrls = $recentImages;
                     Log::info('Combined text with recent images', [
                         'sender_id' => $senderId,
@@ -250,7 +505,7 @@ class FacebookWebhookController extends Controller
                 }
             }
 
-            \Illuminate\Support\Facades\Cache::put($dispatchKey, true, now()->addSeconds(8));
+            Cache::put($dispatchKey, true, now()->addSeconds(8));
 
             SendAiReplyJob::dispatch(
                 tenantId: $tenant->id,
@@ -288,19 +543,13 @@ class FacebookWebhookController extends Controller
                     'status' => $response->status(),
                     'body' => $response->body(),
                 ]);
+
                 return null;
             }
 
             $data = $response->json();
-
-            Log::info('Facebook Graph API sender name response', [
-                'sender_id' => $senderId,
-                'data' => $data,
-            ]);
-
             $firstName = $data['first_name'] ?? '';
             $lastName = $data['last_name'] ?? '';
-
             $name = trim("{$firstName} {$lastName}");
 
             return $name !== '' ? $name : null;

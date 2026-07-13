@@ -7,9 +7,12 @@ use App\Models\AiSystemPrompt;
 use App\Models\Conversation;
 use App\Models\FacebookSetting;
 use App\Models\Message;
+use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\Tenant;
 use App\Services\AiChatService;
 use App\Services\ClipService;
+use App\Services\ZernioService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -40,6 +43,8 @@ class SendAiReplyJob implements ShouldQueue
         public string $messageText,
         public string $pageAccessToken,
         public ?array $imageUrls = null,
+        public ?string $zernioAccountId = null,
+        public ?string $zernioApiKey = null,
     ) {
         $this->onQueue('facebook');
     }
@@ -59,7 +64,7 @@ class SendAiReplyJob implements ShouldQueue
         Log::info('SendAiReplyJob: handle() called', [
             'tenant_id' => $this->tenantId,
             'sender_id' => $this->senderId,
-            'has_images' => !empty($this->imageUrls),
+            'has_images' => ! empty($this->imageUrls),
             'image_urls_count' => count($this->imageUrls ?? []),
         ]);
 
@@ -76,7 +81,7 @@ class SendAiReplyJob implements ShouldQueue
                     ->pluck('image_path')
                     ->toArray();
 
-                if (!empty($recentImages)) {
+                if (! empty($recentImages)) {
                     Log::info('SendAiReplyJob: text job found recent images after wait', [
                         'sender_id' => $this->senderId,
                         'image_count' => count($recentImages),
@@ -92,6 +97,7 @@ class SendAiReplyJob implements ShouldQueue
                         Log::info('SendAiReplyJob: SKIPPED text job - reply already sent', [
                             'sender_id' => $this->senderId,
                         ]);
+
                         return;
                     }
                 }
@@ -107,6 +113,7 @@ class SendAiReplyJob implements ShouldQueue
 
         if (! $tenant) {
             Log::warning('SendAiReplyJob: tenant not found', ['tenant_id' => $this->tenantId]);
+
             return;
         }
 
@@ -118,8 +125,9 @@ class SendAiReplyJob implements ShouldQueue
             if (! $facebookSetting) {
                 Log::warning('SendAiReplyJob: facebookSetting not found', [
                     'tenant_id' => $tenant->id,
-                    'page_access_token' => substr($this->pageAccessToken, 0, 20) . '...',
+                    'page_access_token' => substr($this->pageAccessToken, 0, 20).'...',
                 ]);
+
                 return;
             }
 
@@ -145,6 +153,7 @@ class SendAiReplyJob implements ShouldQueue
                     'tenant_id' => $tenant->id,
                     'sender_id' => $this->senderId,
                 ]);
+
                 return;
             }
 
@@ -236,6 +245,7 @@ class SendAiReplyJob implements ShouldQueue
         // No keys at all = no reply
         if ($aiKeys->isEmpty() && $cerebrasKeys->isEmpty() && $geminiKeys->isEmpty()) {
             Log::warning('SendAiReplyJob: no AI keys (groq, cerebras, or gemini) for text message', ['user_id' => $facebookSetting->user_id]);
+
             return null;
         }
 
@@ -249,12 +259,13 @@ class SendAiReplyJob implements ShouldQueue
                 ->pluck('image_path')
                 ->toArray();
 
-            if (!empty($recentImages)) {
+            if (! empty($recentImages)) {
                 Log::info('SendAiReplyJob: text job found recent images, switching to image handler', [
                     'sender_id' => $this->senderId,
                     'image_count' => count($recentImages),
                 ]);
                 $this->imageUrls = $recentImages;
+
                 return $this->handleImageMessage($facebookSetting, $systemPrompt);
             }
         }
@@ -305,6 +316,7 @@ class SendAiReplyJob implements ShouldQueue
                 Log::info('SendAiReplyJob: skipping image job - reply already sent recently', [
                     'sender_id' => $this->senderId,
                 ]);
+
                 return null;
             }
         }
@@ -331,40 +343,44 @@ class SendAiReplyJob implements ShouldQueue
             Log::warning('No AI keys (groq, cerebras, or gemini) available for image reply', [
                 'user_id' => $facebookSetting->user_id,
             ]);
+
             return null;
         }
 
         // Check CLIP server health
-        $clipService = new ClipService();
+        $clipService = new ClipService;
         $health = $clipService->healthCheck();
-        
+
         if ($health['status'] !== 'healthy') {
             Log::warning('CLIP server is not healthy', ['health' => $health]);
+
             return $this->getFallbackReply();
         }
 
         // Get catalog embeddings for matching
         $catalogEmbeddings = $clipService->getCatalogEmbeddings();
-        
+
         if (empty($catalogEmbeddings)) {
             Log::warning('No catalog embeddings found', ['user_id' => $facebookSetting->user_id]);
+
             return $this->getFallbackReply();
         }
 
         // Step 1: Process all images and collect matched products
         $matchedProducts = [];
         $processedImages = [];
-        
+
         foreach ($this->imageUrls as $index => $imageUrl) {
             try {
                 $customerEmbedding = $clipService->getEmbeddingFromUrl($imageUrl);
-                
-                if (!$customerEmbedding || !isset($customerEmbedding['embedding'])) {
+
+                if (! $customerEmbedding || ! isset($customerEmbedding['embedding'])) {
                     $processedImages[] = [
                         'index' => $index + 1,
                         'status' => 'error',
                         'message' => 'ছবি বিশ্লেষণ করা যায়নি',
                     ];
+
                     continue;
                 }
 
@@ -378,16 +394,16 @@ class SendAiReplyJob implements ShouldQueue
                 if ($matchResult && isset($matchResult['best_match'])) {
                     $bestMatch = $matchResult['best_match'];
                     $score = round($bestMatch['score'] * 100, 1);
-                    
+
                     // Find full catalog item details
                     $catalogItem = collect($catalogEmbeddings)->first(function ($item) use ($bestMatch) {
                         return $item['id'] == $bestMatch['id'] && $item['product_name'] == $bestMatch['product_name'];
                     });
-                    
+
                     if ($catalogItem) {
                         // Get full product/variant details from database
                         $fullDetails = $this->getFullProductDetails($catalogItem);
-                        
+
                         $matchedProducts[] = [
                             'image_index' => $index + 1,
                             'match_score' => $score,
@@ -400,7 +416,7 @@ class SendAiReplyJob implements ShouldQueue
                             'full_details' => $fullDetails,
                             'alternatives' => array_slice($matchResult['matches'] ?? [], 1, 3),
                         ];
-                        
+
                         $processedImages[] = [
                             'index' => $index + 1,
                             'status' => 'matched',
@@ -493,7 +509,7 @@ class SendAiReplyJob implements ShouldQueue
         ];
 
         if ($catalogItem['type'] === 'product' && isset($catalogItem['product_id'])) {
-            $product = \App\Models\Product::with(['category', 'brand'])->find($catalogItem['product_id']);
+            $product = Product::with(['category', 'brand'])->find($catalogItem['product_id']);
             if ($product) {
                 $details['description'] = $product->description;
                 $details['category'] = $product->category->name ?? null;
@@ -504,7 +520,7 @@ class SendAiReplyJob implements ShouldQueue
                 $details['discount_price'] = $product->discount_price;
             }
         } elseif (isset($catalogItem['variant_id'])) {
-            $variant = \App\Models\ProductVariant::with('product')->find($catalogItem['variant_id']);
+            $variant = ProductVariant::with('product')->find($catalogItem['variant_id']);
             if ($variant) {
                 $product = $variant->product;
                 $details['description'] = $product->description ?? null;
@@ -525,14 +541,14 @@ class SendAiReplyJob implements ShouldQueue
     private function buildProductContext(array $matchedProducts): string
     {
         $context = "ম্যাচ করা প্রোডাক্টসমূহ:\n\n";
-        
+
         foreach ($matchedProducts as $index => $product) {
             $details = $product['full_details'];
-            $context .= "**প্রোডাক্ট " . ($index + 1) . ":**\n";
+            $context .= '**প্রোডাক্ট '.($index + 1).":**\n";
             $context .= "- নাম: {$details['name']}\n";
             $context .= "- SKU: {$details['sku']}\n";
-            $context .= "- মূল্য: ৳" . number_format($details['price'], 2) . "\n";
-            
+            $context .= '- মূল্য: ৳'.number_format($details['price'], 2)."\n";
+
             if (isset($details['description']) && $details['description']) {
                 $context .= "- বিবরণ: {$details['description']}\n";
             }
@@ -543,37 +559,37 @@ class SendAiReplyJob implements ShouldQueue
                 $context .= "- ব্র্যান্ড: {$details['brand']}\n";
             }
             if (isset($details['stock'])) {
-                $stockText = $details['stock'] > 0 ? "{$details['stock']}টি স্টকে আছে" : "স্টক শেষ";
+                $stockText = $details['stock'] > 0 ? "{$details['stock']}টি স্টকে আছে" : 'স্টক শেষ';
                 $context .= "- স্টক: {$stockText}\n";
             }
-            if (isset($details['attributes']) && !empty($details['attributes'])) {
-                $attrs = collect($details['attributes'])->map(fn($v, $k) => "{$k}: {$v}")->implode(', ');
+            if (isset($details['attributes']) && ! empty($details['attributes'])) {
+                $attrs = collect($details['attributes'])->map(fn ($v, $k) => "{$k}: {$v}")->implode(', ');
                 $context .= "- বিকল্প: {$attrs}\n";
             }
             if (isset($details['variant_price']) && $details['variant_price']) {
-                $context .= "- ভ্যারিয়েন্ট মূল্য: ৳" . number_format($details['variant_price'], 2) . "\n";
+                $context .= '- ভ্যারিয়েন্ট মূল্য: ৳'.number_format($details['variant_price'], 2)."\n";
             }
-            
+
             $context .= "- ম্যাচ স্কোর: {$product['match_score']}%\n";
-            
-            if (!empty($product['alternatives'])) {
+
+            if (! empty($product['alternatives'])) {
                 $altNames = collect($product['alternatives'])->pluck('product_name')->implode(', ');
                 $context .= "- অন্যান্য সম্ভাব্য: {$altNames}\n";
             }
-            
+
             $context .= "\n";
         }
-        
+
         $context .= "উপরের তথ্য ব্যবহার করে কাস্টমারকে একটি সুন্দর এবং স্বাভাবিক কথোপকথনের ধরনে উত্তর দিন। শুধু দাম বা সংখ্যা তালিকাভুক্ত করবেন না। বরং এভাবে উত্তর দিন: 'আপনার ছবিতে এই প্রোডাক্টটি ম্যাচ করেছে — [প্রোডাক্টের নাম], যার দাম [মূল্য]। এটি স্টকে আছে/নেই। আপনি কি কিনতে চান?' এভাবে স্বাভাবিক ভাষায় উত্তর দিন।";
-        
+
         return $context;
     }
 
     private function getFallbackReply(): ?array
     {
         $fallbackReply = count($this->imageUrls) > 1
-            ? "আমি " . count($this->imageUrls) . "টি ছবি পেয়েছি। দুঃখিত, ছবি বিশ্লেষণ করতে সাময়িক সমস্যা হচ্ছে। আপনি কি কী জানতে চান সেটা লিখে পাঠাতে পারেন?"
-            : "আমি আপনার ছবিটি পেয়েছি। দুঃখিত, ছবি বিশ্লেষণ করতে সাময়িক সমস্যা হচ্ছে। আপনি কি কী জানতে চান সেটা লিখে পাঠাতে পারেন?";
+            ? 'আমি '.count($this->imageUrls).'টি ছবি পেয়েছি। দুঃখিত, ছবি বিশ্লেষণ করতে সাময়িক সমস্যা হচ্ছে। আপনি কি কী জানতে চান সেটা লিখে পাঠাতে পারেন?'
+            : 'আমি আপনার ছবিটি পেয়েছি। দুঃখিত, ছবি বিশ্লেষণ করতে সাময়িক সমস্যা হচ্ছে। আপনি কি কী জানতে চান সেটা লিখে পাঠাতে পারেন?';
 
         return ['reply' => $fallbackReply];
     }
@@ -596,16 +612,16 @@ class SendAiReplyJob implements ShouldQueue
         $history = [];
 
         foreach ($messages as $msg) {
-            if ($msg->direction === 'outgoing' && $msg->image_analysis && !empty($msg->image_analysis['matched_products'])) {
+            if ($msg->direction === 'outgoing' && $msg->image_analysis && ! empty($msg->image_analysis['matched_products'])) {
                 $productLines = [];
                 foreach ($msg->image_analysis['matched_products'] as $product) {
                     $details = $product['full_details'] ?? [];
                     $name = $details['name'] ?? 'N/A';
                     $sku = $details['sku'] ?? 'N/A';
                     $price = $details['price'] ?? 0;
-                    $line = "- {$name} (SKU: {$sku}, মূল্য: ৳" . number_format($price, 2) . ")";
+                    $line = "- {$name} (SKU: {$sku}, মূল্য: ৳".number_format($price, 2).')';
                     if (isset($details['stock'])) {
-                        $stockText = $details['stock'] > 0 ? "{$details['stock']}টি স্টকে" : "স্টক শেষ";
+                        $stockText = $details['stock'] > 0 ? "{$details['stock']}টি স্টকে" : 'স্টক শেষ';
                         $line .= " [স্টক: {$stockText}]";
                     }
                     if (isset($details['category'])) {
@@ -635,7 +651,7 @@ class SendAiReplyJob implements ShouldQueue
 
     private function buildSystemPrompt(Tenant $tenant): string
     {
-        $cacheKey = 'system_prompt_' . $tenant->id;
+        $cacheKey = 'system_prompt_'.$tenant->id;
 
         return cache()->remember($cacheKey, 300, function () use ($tenant) {
             $row = DB::connection('mysql')->table('ai_system_prompts')->first();
@@ -656,6 +672,14 @@ class SendAiReplyJob implements ShouldQueue
 
     private function sendFacebookMessage(string $text): void
     {
+        // If connected via Zernio, use Zernio API
+        if ($this->zernioAccountId && $this->zernioApiKey) {
+            $this->sendZernioMessage($text);
+
+            return;
+        }
+
+        // Otherwise, use Facebook Graph API directly
         $response = Http::withHeaders([
             'Content-Type' => 'application/json',
         ])->post('https://graph.facebook.com/v21.0/me/messages', [
@@ -665,12 +689,61 @@ class SendAiReplyJob implements ShouldQueue
         ]);
 
         if ($response->failed()) {
-            throw new \Exception('Facebook send message failed: ' . $response->body());
+            throw new \Exception('Facebook send message failed: '.$response->body());
+        }
+    }
+
+    /**
+     * Send message via Zernio API.
+     */
+    private function sendZernioMessage(string $text): void
+    {
+        $zernio = new ZernioService($this->zernioApiKey);
+
+        // Find the conversation ID for this sender in Zernio
+        $conversations = $zernio->listConversations($this->zernioAccountId, 50);
+
+        $conversation = collect($conversations)->first(function ($conv) {
+            return ($conv['contactId'] ?? $conv['senderId'] ?? '') === $this->senderId;
+        });
+
+        if (! $conversation) {
+            Log::warning('Zernio: No conversation found for sender', [
+                'sender_id' => $this->senderId,
+                'account_id' => $this->zernioAccountId,
+            ]);
+            // Fallback: try sending directly to the account
+            throw new \Exception('Zernio: No conversation found for sender '.$this->senderId);
+        }
+
+        $result = $zernio->sendInboxMessage(
+            $conversation['_id'],
+            $this->zernioAccountId,
+            $text
+        );
+
+        if (! $result) {
+            throw new \Exception('Zernio: Failed to send message');
         }
     }
 
     private function sendTypingIndicator(bool $on): void
     {
+        // If connected via Zernio, use Zernio API
+        if ($this->zernioAccountId && $this->zernioApiKey) {
+            $zernio = new ZernioService($this->zernioApiKey);
+            $conversations = $zernio->listConversations($this->zernioAccountId, 50);
+            $conversation = collect($conversations)->first(function ($conv) {
+                return ($conv['contactId'] ?? $conv['senderId'] ?? '') === $this->senderId;
+            });
+            if ($conversation && $on) {
+                $zernio->sendTypingIndicator($conversation['_id'], $this->zernioAccountId);
+            }
+
+            return;
+        }
+
+        // Otherwise, use Facebook Graph API directly
         Http::withHeaders([
             'Content-Type' => 'application/json',
         ])->post('https://graph.facebook.com/v21.0/me/messages', [

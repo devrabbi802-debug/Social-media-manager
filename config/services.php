@@ -18,6 +18,10 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-3.1-flash-lite'),
     ],
 
+    'zernio' => [
+        'base_url' => env('ZERNIO_BASE_URL', 'https://zernio.com/api/v1'),
+    ],
+
     'clip' => [
         'server_url' => env('CLIP_SERVER_URL', 'http://localhost:8089'),
         'threshold' => env('CLIP_THRESHOLD', 0.7),

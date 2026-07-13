@@ -36,6 +36,9 @@ Route::get('/contact', function () {
 Route::get('/webhook/facebook', [FacebookWebhookController::class, 'verify']);
 Route::post('/webhook/facebook', [FacebookWebhookController::class, 'handle']);
 
+// Zernio Webhook (central — Zernio calls this for message events)
+Route::post('/webhook/zernio', [FacebookWebhookController::class, 'handleZernio']);
+
 // Auth Routes - Login
 Route::get('/login', function () {
     return view('auth.login');
