@@ -1,5 +1,6 @@
 <?php
 return [
+    'title' => 'Dashboard',
     'welcome' => 'Welcome',
     'user' => 'User',
     'total_conversations' => 'Total Conversations',

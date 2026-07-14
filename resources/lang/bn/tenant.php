@@ -1,5 +1,6 @@
 <?php
 return [
+    'title' => 'ড্যাশবোর্ড',
     'welcome' => 'স্বাগতম',
     'user' => 'ব্যবহারকারী',
     'total_conversations' => 'মোট কথোপকথন',
