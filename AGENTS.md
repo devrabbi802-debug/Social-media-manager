@@ -29,8 +29,8 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 - **Landlord DB** (`socialboost`): `tenants`, `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `business_categories`, `cache`, `jobs`, `sessions`
 - **Tenant DB** (`{subdomain}_socialboost`): `users`, `facebook_settings`, `ai_settings`, `conversations`, `messages`, `categories`, `attribute_templates`, `brands`, `products`, `product_attribute_values`, `product_variants`, `product_images`, `warehouses`, `stock_movements`, `inventory_alerts`, `stock_transfers`, `attribute_options`, `variant_images`, `business_settings`
 - **Users table does NOT exist in landlord DB** — never `User::count()` from central routes
-- **Registration**: `GET /register` redirects to `/onboarding` — 9-step wizard (account, business info, category extra fields, tone, pricing, delivery, FAQ, escalation, logo) → `Tenant::create()` + `BusinessSetting::create()` → auto-login → redirect to `{subdomain}.smm.test/dashboard`
-- **Onboarding**: Alpine.js multi-step form. Category selection loads dynamic extra fields from `business_categories.extra_fields` JSON. Stores all business config in `business_settings` table (tenant DB). AI system prompt auto-generated from `BusinessSetting::generateSystemPrompt()`
+- **Registration**: `GET /register` redirects to `/onboarding` — 8-step wizard (account, business info, tone, pricing, delivery, FAQ, escalation, logo) → `Tenant::create()` + `BusinessSetting::create()` → auto-login → redirect to `{subdomain}.smm.test/dashboard`
+- **Onboarding**: Alpine.js multi-step form with step validation. Searchable category select with custom category creation. Real-time subdomain availability check via AJAX. Stores all business config in `business_settings` table (tenant DB). AI system prompt auto-generated from `BusinessSetting::generateSystemPrompt()`
 - **Tenant custom attributes** in `data` JSON column — query: `where('data->status', 'active')`, NOT `where('status', 'active')`
 - **Central domains** (not tenant): `127.0.0.1`, `localhost`, `smm.test`, `socialboost.com`, `www.socialboost.com`
 - **Tenant migrations**: `database/migrations/tenant/` — run via `php artisan tenants:migrate`
@@ -44,6 +44,41 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 - **`locale` middleware alias** registered in `bootstrap/app.php` — sets `app()->setLocale()` from user's `locale` column
 - **User model** uses Laravel 11+ `#[Fillable]`/`#[Hidden]` PHP attributes. **Admin model** uses traditional `$fillable`/`$hidden` arrays — style differs between the two
 - **`Admin::getAllPermissions()`** references `\App\Services\Menu::class` which **does not exist** — will error if called by non-super_admin
+
+### Onboarding System (8-Step Wizard)
+
+- **Route**: `GET /onboarding` → `OnboardingController@index`, `POST /onboarding` → `OnboardingController@store`
+- **Subdomain check**: `POST /check-subdomain` → `SubdomainController@check` — real-time AJAX availability check (500ms debounce)
+- **Navbar button**: Top-right "Let's Start" button (visible when logged out) → redirects to `/onboarding`
+- **Step validation**: Alpine.js client-side validation blocks "Next" button if required fields empty
+- **Subdomain auto-clean**: `@input` event auto-converts to lowercase, removes spaces/special chars
+- **Category select**: Searchable dropdown with custom category creation (user types name → "➕ যোগ করুন" → creates in `business_categories` table on submit)
+- **Old POST /register closure**: Removed — now only onboarding flow exists
+
+**8 Steps:**
+1. **Account**: name, email, phone, subdomain (with availability check), password
+2. **Business Info**: business name, category (searchable + custom), sub-category, AI persona name, business hours, off-hours message, description
+3. **Tone & Communication**: formality level (formal/casual), emoji usage (never/sometimes/often), language style (shuddho/anjonio/banglish), greeting style
+4. **Pricing Policy**: price negotiation toggle + limit %, bulk discount rule, current promo text
+5. **Delivery & Payment**: delivery areas/charge, time, partner, COD toggle, payment methods, advance payment toggle + %
+6. **Custom FAQ**: dynamic Q&A pairs (add/remove)
+7. **Escalation Rules**: escalation keywords (comma-separated), human contact info
+8. **Logo**: drag-drop or file upload (optional)
+
+**Controller flow** (`OnboardingController@store`):
+1. Validate all fields
+2. If `custom_category_name` provided (no `category_id`): `BusinessCategory::firstOrCreate()` with slug, icon 📦, sort_order 99
+3. `Tenant::create()` + `Domain::create()`
+4. `$tenant->run()`: create `User` + `BusinessSetting` in tenant DB
+5. Logo upload to `storage/logos/`
+6. FAQ filtered (empty Q/A removed)
+7. Auto-login + redirect to tenant dashboard
+
+**Validation rules:**
+- Step 1: name, email (valid format), phone, subdomain (lowercase/number/hyphen, available), password (8+ chars, confirmed)
+- Step 2: business_name, category_id OR custom_category_name, persona_name, business_hours, business_description
+- Step 3: formality_level, emoji_usage, language_style, greeting_style
+- Steps 4-8: all optional
 
 ### Localization (Multi-Language)
 
@@ -135,6 +170,8 @@ docker exec laravel-app php artisan <command>
 - **Translation files**: `lang/bn/` and `lang/en/` (18 files each — sidebar, common, tenant, nav, dashboard, settings, integration, conversations, facebook, ai, image_match, products, categories, brands, warehouses, inventory, attributes, auth)
 - **Localization middleware**: `app/Http/Middleware/SetLocale.php`
 - **Language controller**: `app/Http/Controllers/Tenant/LanguageController.php`
+- **Onboarding controller**: `app/Http/Controllers/OnboardingController.php`
+- **Subdomain check controller**: `app/Http/Controllers/SubdomainController.php`
 
 ## Missing Views (routes exist, views don't)
 
@@ -192,6 +229,8 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 - **No CI workflows** configured
 - **No `tailwind.config.js`** — Tailwind v4 uses CSS-based config
 - **Registration validation** does NOT use `unique:users,email` (users are per-tenant)
+- **Registration flow**: `GET /register` → redirects to `/onboarding` (no separate register page)
+- **POST /register**: Removed — all registration goes through `OnboardingController@store`
 - **Facebook OAuth**: HTTP not allowed — use ngrok HTTPS URL
 - **Facebook test users**: Dev mode only testers/admins trigger webhooks
 - **Horizon**: runs inside Docker worker container via Supervisor, not directly

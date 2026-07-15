@@ -160,13 +160,69 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">বিজনেস ক্যাটাগরি *</label>
-                        <select name="category_id" x-model="form.category_id" required
-                                class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                            <option value="">-- ক্যাটাগরি বাছুন --</option>
-                            @foreach($categories as $cat)
-                                <option value="{{ $cat->id }}" data-extra='@json($cat->extra_fields)'>{{ $cat->icon }} {{ $cat->name }}</option>
-                            @endforeach
-                        </select>
+                        <div class="relative" x-data="{ open: false, search: '' }" @click.outside="open = false">
+                            <input type="hidden" name="category_id" :value="form.category_id">
+                            <input type="hidden" name="custom_category_name" :value="form.custom_category_name">
+
+                            {{-- Selected display / trigger --}}
+                            <div @click="open = !open"
+                                 class="w-full px-4 py-3 border border-gray-300 rounded-xl cursor-pointer flex items-center justify-between bg-white"
+                                 :class="{ 'ring-2 ring-purple-500 border-transparent': open }">
+                                <span x-text="selectedCategoryName || 'ক্যাটাগরি খুঁজুন বা লিখুন...'" :class="{ 'text-gray-400': !selectedCategoryName }"></span>
+                                <svg class="w-5 h-5 text-gray-400 transition-transform" :class="{ 'rotate-180': open }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                            </div>
+
+                            {{-- Dropdown --}}
+                            <div x-show="open" x-transition
+                                 class="absolute z-50 mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-xl max-h-72 overflow-y-auto">
+
+                                {{-- Search input --}}
+                                <div class="sticky top-0 bg-white p-3 border-b">
+                                    <input type="text" x-model="search" placeholder="ক্যাটাগরি খুঁজুন..."
+                                           @click.stop
+                                           class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                                </div>
+
+                                {{-- Default categories list --}}
+                                <template x-for="cat in filteredCategories" :key="cat.id">
+                                    <div @click="form.category_id = cat.id; form.custom_category_name = ''; search = ''; open = false"
+                                         class="px-4 py-3 cursor-pointer hover:bg-purple-50 flex items-center space-x-3 transition"
+                                         :class="{ 'bg-purple-50 border-l-4 border-purple-500': form.category_id == cat.id }">
+                                        <span class="text-xl" x-text="cat.icon"></span>
+                                        <span class="text-sm font-medium text-gray-700" x-text="cat.name"></span>
+                                        <span class="text-xs text-gray-400" x-text="'(' + (cat.extra_fields || []).length + ' fields)'"></span>
+                                    </div>
+                                </template>
+
+                                {{-- No results found --}}
+                                <template x-if="search && filteredCategories.length === 0">
+                                    <div @click="form.category_id = ''; form.custom_category_name = search; open = false"
+                                         class="px-4 py-3 cursor-pointer hover:bg-green-50 flex items-center space-x-3 border-t">
+                                        <span class="text-xl">➕</span>
+                                        <div>
+                                            <span class="text-sm font-medium text-green-700">"<span x-text="search"></span>" যোগ করুন</span>
+                                            <p class="text-xs text-gray-400">নতুন ক্যাটাগরি হিসেবে তৈরি হবে</p>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                {{-- Default message --}}
+                                <template x-if="!search && filteredCategories.length > 0">
+                                    <div class="px-4 py-2 text-xs text-gray-400 border-t">
+                                        ডিফল্ট ক্যাটাগরি বাছুন অথবা নাম লিখে নতুন তৈরি করুন
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        {{-- Custom category name display --}}
+                        <template x-if="form.custom_category_name">
+                            <div class="mt-2 flex items-center space-x-2 bg-green-50 border border-green-200 rounded-lg px-4 py-2">
+                                <span class="text-green-600">✓</span>
+                                <span class="text-sm text-green-700">নতুন ক্যাটাগরি: <strong x-text="form.custom_category_name"></strong></span>
+                                <button type="button" @click="form.custom_category_name = ''; form.category_id = ''" class="text-red-400 hover:text-red-600 ml-auto">×</button>
+                            </div>
+                        </template>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">উপ-ক্যাটাগরি (ঐচ্ছিক)</label>
@@ -201,100 +257,8 @@
                 </div>
             </div>
 
-            {{-- Step 3: Category Extra Fields --}}
+            {{-- Step 3: Tone & Communication --}}
             <div x-show="currentStep === 3" x-transition class="step-enter">
-                <div class="text-center mb-8">
-                    <div class="w-16 h-16 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-                    </div>
-                    <h2 class="text-2xl font-bold text-gray-900">ক্যাটাগরি-স্পেসিফিক তথ্য</h2>
-                    <p class="text-gray-500 mt-2" x-text="selectedCategoryName + ' ক্যাটাগরির জন্য প্রয়োজনীয় তথ্য দিন'"></p>
-                </div>
-
-                <div class="bg-white rounded-2xl shadow-xl p-8 space-y-5">
-                    <template x-if="selectedExtraFields.length === 0">
-                        <div class="text-center py-8 text-gray-400">
-                            <p>এই ক্যাটাগরির জন্য অতিরিক্ত তথ্য প্রয়োজন নেই।</p>
-                        </div>
-                    </template>
-
-                    <template x-for="(field, index) in selectedExtraFields" :key="field.name">
-                        <div>
-                            {{-- Text Input --}}
-                            <template x-if="field.type === 'text'">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                                        <span x-text="field.label"></span>
-                                        <span x-show="field.required" class="text-red-500">*</span>
-                                    </label>
-                                    <input :type="field.type" :name="'extra_' + field.name" x-model="extraFields[field.name]"
-                                           :required="field.required"
-                                           class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                           :placeholder="field.placeholder || ''">
-                                </div>
-                            </template>
-
-                            {{-- Textarea --}}
-                            <template x-if="field.type === 'textarea'">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                                        <span x-text="field.label"></span>
-                                        <span x-show="field.required" class="text-red-500">*</span>
-                                    </label>
-                                    <textarea :name="'extra_' + field.name" x-model="extraFields[field.name]"
-                                              :required="field.required" rows="3"
-                                              class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                              :placeholder="field.placeholder || ''"></textarea>
-                                </div>
-                            </template>
-
-                            {{-- Number --}}
-                            <template x-if="field.type === 'number'">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                                        <span x-text="field.label"></span>
-                                        <span x-show="field.required" class="text-red-500">*</span>
-                                    </label>
-                                    <input type="number" :name="'extra_' + field.name" x-model="extraFields[field.name]"
-                                           :required="field.required" min="0"
-                                           class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                           :placeholder="field.placeholder || ''">
-                                </div>
-                            </template>
-
-                            {{-- Boolean (checkbox) --}}
-                            <template x-if="field.type === 'boolean'">
-                                <div class="flex items-center space-x-3 py-2">
-                                    <input type="checkbox" :name="'extra_' + field.name" x-model="extraFields[field.name]"
-                                           :value="1" class="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500">
-                                    <label class="text-sm font-medium text-gray-700" x-text="field.label"></label>
-                                </div>
-                            </template>
-
-                            {{-- Select --}}
-                            <template x-if="field.type === 'select'">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                                        <span x-text="field.label"></span>
-                                        <span x-show="field.required" class="text-red-500">*</span>
-                                    </label>
-                                    <select :name="'extra_' + field.name" x-model="extraFields[field.name]"
-                                            :required="field.required"
-                                            class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                                        <option value="">-- বাছুন --</option>
-                                        <template x-for="opt in (field.options || [])" :key="opt">
-                                            <option :value="opt" x-text="opt"></option>
-                                        </template>
-                                    </select>
-                                </div>
-                            </template>
-                        </div>
-                    </template>
-                </div>
-            </div>
-
-            {{-- Step 4: Tone & Communication --}}
-            <div x-show="currentStep === 4" x-transition class="step-enter">
                 <div class="text-center mb-8">
                     <div class="w-16 h-16 bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
                         <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 4.418 9 8z"/></svg>
@@ -384,8 +348,8 @@
                 </div>
             </div>
 
-            {{-- Step 5: Pricing Policy --}}
-            <div x-show="currentStep === 5" x-transition class="step-enter">
+            {{-- Step 4: Pricing Policy --}}
+            <div x-show="currentStep === 4" x-transition class="step-enter">
                 <div class="text-center mb-8">
                     <div class="w-16 h-16 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
                         <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -429,8 +393,8 @@
                 </div>
             </div>
 
-            {{-- Step 6: Delivery & Payment --}}
-            <div x-show="currentStep === 6" x-transition class="step-enter">
+            {{-- Step 5: Delivery & Payment --}}
+            <div x-show="currentStep === 5" x-transition class="step-enter">
                 <div class="text-center mb-8">
                     <div class="w-16 h-16 bg-gradient-to-r from-indigo-500 to-violet-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
                         <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
@@ -496,8 +460,8 @@
                 </div>
             </div>
 
-            {{-- Step 7: Custom FAQ --}}
-            <div x-show="currentStep === 7" x-transition class="step-enter">
+            {{-- Step 6: Custom FAQ --}}
+            <div x-show="currentStep === 6" x-transition class="step-enter">
                 <div class="text-center mb-8">
                     <div class="w-16 h-16 bg-gradient-to-r from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
                         <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -535,8 +499,8 @@
                 </div>
             </div>
 
-            {{-- Step 8: Escalation Rules --}}
-            <div x-show="currentStep === 8" x-transition class="step-enter">
+            {{-- Step 7: Escalation Rules --}}
+            <div x-show="currentStep === 7" x-transition class="step-enter">
                 <div class="text-center mb-8">
                     <div class="w-16 h-16 bg-gradient-to-r from-red-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
                         <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
@@ -562,11 +526,12 @@
                 </div>
             </div>
 
-            {{-- Step 9: Logo --}}
-            <div x-show="currentStep === 9" x-transition class="step-enter">
+            {{-- Step 8: Logo --}}
+            <div x-show="currentStep === 8" x-transition class="step-enter">
                 <div class="text-center mb-8">
                     <div class="w-16 h-16 bg-gradient-to-r from-teal-500 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+             ক্যাটাগরি-স্পেসিফিক তথ্য
+           <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                     </div>
                     <h2 class="text-2xl font-bold text-gray-900">কোম্পানি লোগো</h2>
                     <p class="text-gray-500 mt-2">আপনার ব্যবসার লোগো আপলোড করুন (ঐচ্ছিক)</p>
@@ -635,7 +600,7 @@
         function onboarding() {
             return {
                 currentStep: 1,
-                totalSteps: 9,
+                totalSteps: 8,
                 logoPreview: null,
                 stepError: '',
                 categories: @json($categories),
@@ -645,7 +610,7 @@
 
                 form: {
                     name: '', email: '', phone: '', subdomain: '', password: '', password_confirmation: '',
-                    business_name: '', category_id: '', sub_category: '', persona_name: '',
+                    business_name: '', category_id: '', custom_category_name: '', sub_category: '', persona_name: '',
                     business_hours: '', off_hours_message: '', business_description: '',
                     formality_level: 'casual', emoji_usage: 'sometimes', language_style: 'banglish', greeting_style: 'হ্যালো',
                     price_negotiation: false, negotiation_limit: 0, bulk_discount_rule: '', current_promo: '',
@@ -662,11 +627,19 @@
                 },
 
                 get selectedCategoryName() {
+                    if (this.form.custom_category_name) return this.form.custom_category_name;
                     const cat = this.categories.find(c => c.id == this.form.category_id);
                     return cat ? cat.name : '';
                 },
 
+                get filteredCategories() {
+                    if (!this.search) return this.categories;
+                    const q = this.search.toLowerCase();
+                    return this.categories.filter(c => c.name.toLowerCase().includes(q));
+                },
+
                 get selectedExtraFields() {
+                    if (this.form.custom_category_name) return [];
                     const cat = this.categories.find(c => c.id == this.form.category_id);
                     return cat ? (cat.extra_fields || []) : [];
                 },
@@ -723,23 +696,13 @@
 
                     if (step === 2) {
                         if (!this.form.business_name.trim()) errors.push('বিজনেসের নাম দিন');
-                        if (!this.form.category_id) errors.push('ক্যাটাগরি বাছুন');
+                        if (!this.form.category_id && !this.form.custom_category_name.trim()) errors.push('ক্যাটাগরি বাছুন বা নতুন লিখুন');
                         if (!this.form.persona_name.trim()) errors.push('AI Persona নাম দিন');
                         if (!this.form.business_hours.trim()) errors.push('বিজনেস সময় দিন');
                         if (!this.form.business_description.trim()) errors.push('বিজনেস বিবরণ দিন');
                     }
 
                     if (step === 3) {
-                        const requiredFields = this.selectedExtraFields.filter(f => f.required);
-                        for (const field of requiredFields) {
-                            const val = this.extraFields[field.name];
-                            if (!val && val !== 0 && val !== false) {
-                                errors.push(field.label + ' দিন');
-                            }
-                        }
-                    }
-
-                    if (step === 4) {
                         if (!this.form.formality_level) errors.push('ফর্মালিটি বাছুন');
                         if (!this.form.emoji_usage) errors.push('ইমোজি ব্যবহার বাছুন');
                         if (!this.form.language_style) errors.push('ভাষা স্টাইল বাছুন');

@@ -30,7 +30,8 @@ class OnboardingController extends Controller
 
             // Step 2: Business Info
             'business_name' => 'required|string|max:255',
-            'category_id' => 'required|exists:business_categories,id',
+            'category_id' => 'nullable|exists:business_categories,id',
+            'custom_category_name' => 'nullable|string|max:255',
             'sub_category' => 'nullable|string|max:255',
             'persona_name' => 'required|string|max:255',
             'business_hours' => 'required|string|max:255',
@@ -83,12 +84,35 @@ class OnboardingController extends Controller
             'prescription_required', 'storage_condition', 'regulatory_disclaimer', 'dosage_info',
         ]);
 
+        // Validate: either category_id or custom_category_name required
+        if (empty($validated['category_id']) && empty($validated['custom_category_name'])) {
+            return back()->withInput()->withErrors([
+                'category_id' => 'ক্যাটাগরি বাছুন বা নতুন ক্যাটাগরির নাম লিখুন।',
+            ]);
+        }
+
         // Clean empty extra fields
         $extraFieldsData = array_filter($extraFieldsData, fn($v) => $v !== null && $v !== '');
 
         DB::beginTransaction();
 
         try {
+            // Handle custom category
+            $categoryId = $validated['category_id'] ?? null;
+            if (empty($categoryId) && !empty($validated['custom_category_name'])) {
+                $slug = \Illuminate\Support\Str::slug($validated['custom_category_name']);
+                $category = BusinessCategory::firstOrCreate(
+                    ['slug' => $slug],
+                    [
+                        'name' => $validated['custom_category_name'],
+                        'icon' => '📦',
+                        'is_active' => true,
+                        'sort_order' => 99,
+                    ]
+                );
+                $categoryId = $category->id;
+            }
+
             // 1. Create Tenant
             $tenant = Tenant::create([
                 'id' => $validated['subdomain'],
@@ -107,7 +131,7 @@ class OnboardingController extends Controller
             ]);
 
             // 3. Create User in tenant DB + BusinessSettings
-            $tenant->run(function () use ($validated, $extraFieldsData, $request) {
+            $tenant->run(function () use ($validated, $extraFieldsData, $request, $categoryId) {
                 $user = \App\Models\User::create([
                     'name' => $validated['name'],
                     'email' => $validated['email'],
@@ -132,7 +156,7 @@ class OnboardingController extends Controller
                 BusinessSetting::create([
                     'user_id' => $user->id,
                     'business_name' => $validated['business_name'],
-                    'category_id' => $validated['category_id'],
+                    'category_id' => $categoryId,
                     'sub_category' => $validated['sub_category'] ?? null,
                     'persona_name' => $validated['persona_name'],
                     'business_hours' => $validated['business_hours'],
