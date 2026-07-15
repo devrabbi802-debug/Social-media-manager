@@ -12,6 +12,18 @@ use Illuminate\Support\Facades\DB;
 
 class OnboardingController extends Controller
 {
+    private function cleanPaymentMethods(?array $methods): ?array
+    {
+        if (empty($methods)) {
+            return null;
+        }
+
+        $cleaned = array_filter($methods, fn($m) => !empty($m['name']));
+        $cleaned = array_values($cleaned);
+
+        return !empty($cleaned) ? $cleaned : null;
+    }
+
     public function index()
     {
         $categories = BusinessCategory::active()->ordered()->get();
@@ -55,9 +67,13 @@ class OnboardingController extends Controller
             'delivery_time' => 'nullable|string|max:255',
             'delivery_partner' => 'nullable|string|max:255',
             'cod_available' => 'nullable|boolean',
-            'accepted_payment_methods' => 'nullable|string|max:500',
+            'accepted_payment_methods' => 'nullable|array',
+            'accepted_payment_methods.*.name' => 'required_with:accepted_payment_methods|string|max:255',
+            'accepted_payment_methods.*.details' => 'nullable|string|max:500',
             'advance_payment_required' => 'nullable|boolean',
             'advance_payment_percent' => 'nullable|integer|min:0|max:100',
+            'refund_policy' => 'nullable|string|max:1000',
+            'exchange_policy' => 'nullable|string|max:1000',
 
             // Step 7: FAQ
             'faq' => 'nullable|array',
@@ -174,9 +190,11 @@ class OnboardingController extends Controller
                     'delivery_time' => $validated['delivery_time'] ?? null,
                     'delivery_partner' => $validated['delivery_partner'] ?? null,
                     'cod_available' => $request->boolean('cod_available', true),
-                    'accepted_payment_methods' => $validated['accepted_payment_methods'] ?? null,
+                    'accepted_payment_methods' => $this->cleanPaymentMethods($request->input('accepted_payment_methods')),
                     'advance_payment_required' => $request->boolean('advance_payment_required'),
                     'advance_payment_percent' => $validated['advance_payment_percent'] ?? 0,
+                    'refund_policy' => $validated['refund_policy'] ?? null,
+                    'exchange_policy' => $validated['exchange_policy'] ?? null,
                     'custom_escalation_keywords' => $validated['custom_escalation_keywords'] ?? null,
                     'escalation_contact' => $validated['escalation_contact'] ?? null,
                     'extra_fields_data' => !empty($extraFieldsData) ? $extraFieldsData : null,

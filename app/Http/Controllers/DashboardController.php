@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BusinessSetting;
 use App\Models\Conversation;
 use App\Models\FacebookSetting;
 use App\Models\Message;
+use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
@@ -45,7 +47,66 @@ class DashboardController extends Controller
 
     public function settings()
     {
-        return view('tenant.settings');
+        $businessSetting = BusinessSetting::where('user_id', auth()->id())->first();
+        return view('tenant.settings', compact('businessSetting'));
+    }
+
+    public function updateBusinessSettings(Request $request)
+    {
+        $validated = $request->validate([
+            'delivery_areas' => 'nullable|string|max:1000',
+            'delivery_time' => 'nullable|string|max:255',
+            'delivery_partner' => 'nullable|string|max:255',
+            'cod_available' => 'nullable|boolean',
+            'accepted_payment_methods' => 'nullable|array',
+            'accepted_payment_methods.*.name' => 'required_with:accepted_payment_methods|string|max:255',
+            'accepted_payment_methods.*.details' => 'nullable|string|max:500',
+            'advance_payment_required' => 'nullable|boolean',
+            'advance_payment_percent' => 'nullable|integer|min:0|max:100',
+            'refund_policy' => 'nullable|string|max:1000',
+            'exchange_policy' => 'nullable|string|max:1000',
+            'logo' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+        ]);
+
+        $businessSetting = BusinessSetting::where('user_id', auth()->id())->first();
+
+        if (!$businessSetting) {
+            return back()->withErrors(['error' => 'বিজনেস সেটিংস পাওয়া যায়নি।']);
+        }
+
+        $paymentMethods = $request->input('accepted_payment_methods');
+        if (is_array($paymentMethods)) {
+            $paymentMethods = array_filter($paymentMethods, fn($m) => !empty($m['name']));
+            $paymentMethods = array_values($paymentMethods);
+            $paymentMethods = !empty($paymentMethods) ? $paymentMethods : null;
+        } else {
+            $paymentMethods = null;
+        }
+
+        // Handle logo upload
+        $logoPath = $businessSetting->logo_path;
+        if ($request->hasFile('logo')) {
+            // Delete old logo if exists
+            if ($logoPath && \Illuminate\Support\Facades\Storage::disk('public')->exists($logoPath)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($logoPath);
+            }
+            $logoPath = $request->file('logo')->store('logos', 'public');
+        }
+
+        $businessSetting->update([
+            'delivery_areas' => $validated['delivery_areas'] ?? null,
+            'delivery_time' => $validated['delivery_time'] ?? null,
+            'delivery_partner' => $validated['delivery_partner'] ?? null,
+            'cod_available' => $request->boolean('cod_available', true),
+            'accepted_payment_methods' => $paymentMethods,
+            'advance_payment_required' => $request->boolean('advance_payment_required'),
+            'advance_payment_percent' => $validated['advance_payment_percent'] ?? 0,
+            'refund_policy' => $validated['refund_policy'] ?? null,
+            'exchange_policy' => $validated['exchange_policy'] ?? null,
+            'logo_path' => $logoPath,
+        ]);
+
+        return back()->with('success', 'বিজনেস সেটিংস আপডেট হয়েছে!');
     }
 
     public function leads()

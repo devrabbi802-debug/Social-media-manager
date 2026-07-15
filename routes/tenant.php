@@ -79,6 +79,7 @@ Route::middleware([
         Route::get('/integration', [DashboardController::class, 'integration'])->name('integration');
         Route::get('/facebook/post', [DashboardController::class, 'facebookPost'])->name('facebook.post');
         Route::get('/settings', [DashboardController::class, 'settings'])->name('settings');
+        Route::put('/settings/business', [DashboardController::class, 'updateBusinessSettings'])->name('settings.business.update');
         Route::get('/leads', [DashboardController::class, 'leads'])->name('leads');
         Route::get('/reports', [DashboardController::class, 'reports'])->name('reports');
         Route::get('/whatsapp/send', [DashboardController::class, 'whatsapp'])->name('whatsapp.send');

@@ -38,9 +38,13 @@ return new class extends Migration
             $table->boolean('cod_available')->default(true);
 
             // Payment
-            $table->string('accepted_payment_methods')->nullable();
+            $table->json('accepted_payment_methods')->nullable();
             $table->boolean('advance_payment_required')->default(false);
             $table->integer('advance_payment_percent')->default(0);
+
+            // Policies
+            $table->text('refund_policy')->nullable();
+            $table->text('exchange_policy')->nullable();
 
             // Escalation
             $table->text('custom_escalation_keywords')->nullable();

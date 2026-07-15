@@ -31,6 +31,8 @@ class BusinessSetting extends Model
         'accepted_payment_methods',
         'advance_payment_required',
         'advance_payment_percent',
+        'refund_policy',
+        'exchange_policy',
         'custom_escalation_keywords',
         'escalation_contact',
         'extra_fields_data',
@@ -41,6 +43,7 @@ class BusinessSetting extends Model
     {
         return [
             'extra_fields_data' => 'array',
+            'accepted_payment_methods' => 'array',
             'price_negotiation' => 'boolean',
             'cod_available' => 'boolean',
             'advance_payment_required' => 'boolean',
@@ -59,6 +62,15 @@ class BusinessSetting extends Model
         }
 
         return BusinessCategory::find($this->category_id);
+    }
+
+    public function getLogoUrl(): ?string
+    {
+        if (!$this->logo_path) {
+            return null;
+        }
+
+        return \Illuminate\Support\Facades\Storage::disk('public')->url($this->logo_path);
     }
 
     public function generateSystemPrompt(): string
@@ -111,11 +123,25 @@ class BusinessSetting extends Model
         $prompt .= "\n- COD: " . ($this->cod_available ? 'হ্যাঁ' : 'না');
 
         $prompt .= "\n\nপেমেন্ট:";
-        if ($this->accepted_payment_methods) {
-            $prompt .= "\n- মেথড: {$this->accepted_payment_methods}";
+        if (!empty($this->accepted_payment_methods) && is_array($this->accepted_payment_methods)) {
+            $prompt .= "\n- মেথডসমূহ:";
+            foreach ($this->accepted_payment_methods as $method) {
+                $name = $method['name'] ?? '';
+                $details = $method['details'] ?? '';
+                if ($name) {
+                    $prompt .= "\n  - {$name}" . ($details ? ": {$details}" : '');
+                }
+            }
         }
         if ($this->advance_payment_required) {
             $prompt .= "\n- অ্যাডভান্স: {$this->advance_payment_percent}% লাগে";
+        }
+
+        if ($this->refund_policy) {
+            $prompt .= "\n\nরিফান্ড নীতি: {$this->refund_policy}";
+        }
+        if ($this->exchange_policy) {
+            $prompt .= "\nএক্সচেঞ্জ নীতি: {$this->exchange_policy}";
         }
 
         if (!empty($extraData)) {
