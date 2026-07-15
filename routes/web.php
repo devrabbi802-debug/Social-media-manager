@@ -8,6 +8,7 @@ use App\Models\Tenant;
 use App\Http\Controllers\FacebookSettingController;
 use App\Http\Controllers\FacebookWebhookController;
 use App\Http\Controllers\OnboardingController;
+use App\Http\Controllers\SubdomainController;
 use App\Http\Controllers\ZernioOAuthController;
 
 // Landing Page
@@ -72,51 +73,8 @@ Route::get('/register', function () {
 Route::get('/onboarding', [OnboardingController::class, 'index'])->name('onboarding');
 Route::post('/onboarding', [OnboardingController::class, 'store'])->name('onboarding.store');
 
-Route::post('/register', function (Request $request) {
-    $validated = $request->validate([
-        'name' => 'required|string|max:255',
-        'email' => 'required|string|email|max:255',
-        'phone' => 'required|string|max:20',
-        'company' => 'nullable|string|max:255',
-        'subdomain' => 'required|string|min:3|max:50|regex:/^[a-z0-9-]+$/|unique:tenants,id',
-        'password' => 'required|string|min:8|confirmed',
-    ]);
-
-    // Tenant create koro
-    $tenant = Tenant::create([
-        'id' => $validated['subdomain'],
-        'name' => $validated['company'] ?? $validated['name'],
-        'email' => $validated['email'],
-        'phone' => $validated['phone'],
-        'company' => $validated['company'],
-        'plan' => 'trial',
-        'status' => 'active',
-        'trial_ends_at' => now()->addDays(14),
-    ]);
-
-    // Domain create koro
-    $tenant->domains()->create([
-        'domain' => $validated['subdomain'] . '.' . config('app.domain'),
-    ]);
-
-    // Tenant database e user create koro
-    $tenant->run(function () use ($validated) {
-        $user = \App\Models\User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'phone' => $validated['phone'],
-            'company' => $validated['company'],
-            'password' => \Illuminate\Support\Facades\Hash::make($validated['password']),
-        ]);
-
-        Auth::login($user);
-    });
-
-    // Tenant subdomain e redirect koro
-    return redirect()->to(
-        'http://' . $validated['subdomain'] . '.' . config('app.domain') . '/dashboard'
-    );
-});
+// Check subdomain availability
+Route::post('/check-subdomain', [SubdomainController::class, 'check'])->name('check-subdomain');
 
 // Logout
 Route::post('/logout', function (Request $request) {

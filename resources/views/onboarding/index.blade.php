@@ -86,12 +86,43 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">সাবডোমেইন *</label>
                         <div class="flex">
-                            <input type="text" name="subdomain" x-model="form.subdomain" required
-                                   class="w-full px-4 py-3 border border-gray-300 rounded-l-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                   placeholder="আপনার ব্যবসার নাম">
+                            <div class="relative flex-1">
+                                <input type="text" name="subdomain" x-model="form.subdomain" required
+                                       @input="form.subdomain = form.subdomain.toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/\s+/g, ''); checkSubdomain()"
+                                       class="w-full px-4 py-3 border rounded-l-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent pr-10"
+                                       :class="{
+                                           'border-gray-300': !form.subdomain || subdomainChecking,
+                                           'border-green-500': form.subdomain && !subdomainChecking && subdomainAvailable === true,
+                                           'border-red-500': form.subdomain && !subdomainChecking && subdomainAvailable === false
+                                       }"
+                                       placeholder="yourshopname">
+                                <div class="absolute right-3 top-1/2 -translate-y-1/2">
+                                    <template x-if="subdomainChecking">
+                                        <svg class="w-5 h-5 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                    </template>
+                                    <template x-if="!subdomainChecking && subdomainAvailable === true">
+                                        <svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                                    </template>
+                                    <template x-if="!subdomainChecking && subdomainAvailable === false">
+                                        <svg class="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+                                    </template>
+                                </div>
+                            </div>
                             <span class="px-4 py-3 bg-gray-100 border border-l-0 border-gray-300 rounded-r-xl text-gray-600 text-sm">.{{ config('app.domain') }}</span>
                         </div>
-                        <p class="text-xs text-gray-400 mt-1">ছোট অক্ষর, সংখ্যা এবং হাইফেন ব্যবহার করুন</p>
+                        <div class="mt-1 flex items-center space-x-2">
+                            <template x-if="form.subdomain && !subdomainChecking && subdomainAvailable === true">
+                                <p class="text-xs text-green-600 flex items-center">
+                                    <span x-text="form.subdomain + '.{{ config('app.domain') }}'"></span> উপলব্ধ!
+                                </p>
+                            </template>
+                            <template x-if="form.subdomain && !subdomainChecking && subdomainAvailable === false">
+                                <p class="text-xs text-red-600">এই সাবডোমেইন ইতিমধ্যে নেওয়া হয়েছে। অন্য নাম বাছুন।</p>
+                            </template>
+                            <template x-if="!form.subdomain">
+                                <p class="text-xs text-gray-400">শুধু ছোট অক্ষর, সংখ্যা ও হাইফেন — স্পেস বা স্পেশাল ক্যারেক্টার দেওয়া যাবে না</p>
+                            </template>
+                        </div>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
@@ -581,14 +612,17 @@
                     </button>
                     <div x-show="currentStep === 1"></div>
 
+                    {{-- Error message --}}
+                    <div x-show="stepError" x-transition class="text-red-500 text-sm font-medium" x-text="stepError"></div>
+
                     <button type="button" @click="nextStep()" x-show="currentStep < totalSteps"
-                            class="flex items-center space-x-2 gradient-bg text-white px-8 py-3 rounded-xl font-semibold hover:opacity-90 transition">
+                            class="flex items-center space-x-2 gradient-bg text-white px-8 py-3 rounded-xl font-semibold hover:opacity-90 transition ml-auto">
                         <span>পরবর্তী</span>
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                     </button>
 
                     <button type="submit" x-show="currentStep === totalSteps"
-                            class="flex items-center space-x-2 bg-green-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-green-700 transition">
+                            class="flex items-center space-x-2 bg-green-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-green-700 transition ml-auto">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                         <span>সম্পন্ন করুন</span>
                     </button>
@@ -603,7 +637,11 @@
                 currentStep: 1,
                 totalSteps: 9,
                 logoPreview: null,
+                stepError: '',
                 categories: @json($categories),
+                subdomainAvailable: null,
+                subdomainChecking: false,
+                subdomainTimeout: null,
 
                 form: {
                     name: '', email: '', phone: '', subdomain: '', password: '', password_confirmation: '',
@@ -633,8 +671,94 @@
                     return cat ? (cat.extra_fields || []) : [];
                 },
 
+                checkSubdomain() {
+                    clearTimeout(this.subdomainTimeout);
+                    this.subdomainAvailable = null;
+
+                    if (!this.form.subdomain || this.form.subdomain.length < 3) {
+                        this.subdomainChecking = false;
+                        return;
+                    }
+
+                    this.subdomainChecking = true;
+
+                    this.subdomainTimeout = setTimeout(() => {
+                        fetch('{{ url("/check-subdomain") }}', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                                'Accept': 'application/json',
+                            },
+                            body: JSON.stringify({ subdomain: this.form.subdomain })
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            this.subdomainAvailable = data.available;
+                            this.subdomainChecking = false;
+                        })
+                        .catch(() => {
+                            this.subdomainChecking = false;
+                        });
+                    }, 500);
+                },
+
+                validateStep(step) {
+                    this.stepError = '';
+                    const errors = [];
+
+                    if (step === 1) {
+                        if (!this.form.name.trim()) errors.push('পুরো নাম দিন');
+                        if (!this.form.email.trim()) errors.push('ইমেইল দিন');
+                        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.form.email)) errors.push('সঠিক ইমেইল দিন');
+                        if (!this.form.phone.trim()) errors.push('মোবাইল নম্বর দিন');
+                        if (!this.form.subdomain.trim()) errors.push('সাবডোমেইন দিন');
+                        else if (!/^[a-z0-9-]+$/.test(this.form.subdomain)) errors.push('সাবডোমেইন শুধু ছোট অক্ষর, সংখ্যা ও হাইফেন হতে হবে');
+                        else if (this.subdomainAvailable === false) errors.push('এই সাবডোমেইন ইতিমধ্যে নেওয়া হয়েছে');
+                        else if (this.subdomainAvailable === null && this.form.subdomain.length >= 3) errors.push('সাবডোমেইন যাচাই করা হচ্ছে, অপেক্ষা করুন');
+                        if (!this.form.password) errors.push('পাসওয়ার্ড দিন');
+                        else if (this.form.password.length < 8) errors.push('পাসওয়ার্ড কমপক্ষে ৮ অক্ষর হতে হবে');
+                        if (this.form.password !== this.form.password_confirmation) errors.push('পাসওয়ার্ড মিলছে না');
+                    }
+
+                    if (step === 2) {
+                        if (!this.form.business_name.trim()) errors.push('বিজনেসের নাম দিন');
+                        if (!this.form.category_id) errors.push('ক্যাটাগরি বাছুন');
+                        if (!this.form.persona_name.trim()) errors.push('AI Persona নাম দিন');
+                        if (!this.form.business_hours.trim()) errors.push('বিজনেস সময় দিন');
+                        if (!this.form.business_description.trim()) errors.push('বিজনেস বিবরণ দিন');
+                    }
+
+                    if (step === 3) {
+                        const requiredFields = this.selectedExtraFields.filter(f => f.required);
+                        for (const field of requiredFields) {
+                            const val = this.extraFields[field.name];
+                            if (!val && val !== 0 && val !== false) {
+                                errors.push(field.label + ' দিন');
+                            }
+                        }
+                    }
+
+                    if (step === 4) {
+                        if (!this.form.formality_level) errors.push('ফর্মালিটি বাছুন');
+                        if (!this.form.emoji_usage) errors.push('ইমোজি ব্যবহার বাছুন');
+                        if (!this.form.language_style) errors.push('ভাষা স্টাইল বাছুন');
+                        if (!this.form.greeting_style.trim()) errors.push('গ্রিটিং স্টাইল দিন');
+                    }
+
+                    if (errors.length > 0) {
+                        this.stepError = errors[0];
+                        return false;
+                    }
+                    return true;
+                },
+
                 nextStep() {
+                    if (!this.validateStep(this.currentStep)) {
+                        return;
+                    }
                     if (this.currentStep < this.totalSteps) {
+                        this.stepError = '';
                         this.currentStep++;
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                     }
@@ -642,6 +766,7 @@
 
                 prevStep() {
                     if (this.currentStep > 1) {
+                        this.stepError = '';
                         this.currentStep--;
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                     }
@@ -669,7 +794,6 @@
                                 this.faq = [{ question: '', answer: '' }];
                             }
                         }
-                        // Load extra fields from old data
                         Object.keys(old).forEach(key => {
                             if (key.startsWith('extra_')) {
                                 this.extraFields[key.replace('extra_', '')] = old[key];
