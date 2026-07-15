@@ -21,6 +21,8 @@ return [
     'business_settings_subtitle' => 'Manage delivery and payment information',
     'delivery' => 'Delivery',
     'delivery_areas' => 'Delivery Areas & Charge',
+    'delivery_area_hint' => 'Enter name and charge for each area (e.g., Inside Dhaka — 60৳)',
+    'add_delivery_area' => 'Add Delivery Area',
     'delivery_time' => 'Delivery Time',
     'delivery_partner' => 'Delivery Partner',
     'cod_available' => 'Cash on Delivery available?',

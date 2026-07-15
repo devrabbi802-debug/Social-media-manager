@@ -32,10 +32,14 @@ class OnboardingController extends Controller
 
     public function store(Request $request)
     {
-        // Decode JSON string from hidden input to array before validation
+        // Decode JSON strings from hidden inputs to arrays before validation
         if (is_string($request->input('accepted_payment_methods'))) {
             $decoded = json_decode($request->input('accepted_payment_methods'), true);
             $request->merge(['accepted_payment_methods' => $decoded]);
+        }
+        if (is_string($request->input('delivery_areas'))) {
+            $decoded = json_decode($request->input('delivery_areas'), true);
+            $request->merge(['delivery_areas' => $decoded]);
         }
 
         $validated = $request->validate([
@@ -69,7 +73,9 @@ class OnboardingController extends Controller
             'current_promo' => 'nullable|string|max:500',
 
             // Step 6: Delivery & Payment
-            'delivery_areas' => 'nullable|string|max:1000',
+            'delivery_areas' => 'nullable|array',
+            'delivery_areas.*.name' => 'required_with:delivery_areas|string|max:255',
+            'delivery_areas.*.price' => 'nullable|string|max:255',
             'delivery_time' => 'nullable|string|max:255',
             'delivery_partner' => 'nullable|string|max:255',
             'cod_available' => 'nullable|boolean',
@@ -194,7 +200,7 @@ class OnboardingController extends Controller
                     'negotiation_limit' => $validated['negotiation_limit'] ?? 0,
                     'bulk_discount_rule' => $validated['bulk_discount_rule'] ?? null,
                     'current_promo' => $validated['current_promo'] ?? null,
-                    'delivery_areas' => $validated['delivery_areas'] ?? null,
+                    'delivery_areas' => $this->cleanPaymentMethods($validated['delivery_areas'] ?? null),
                     'delivery_time' => $validated['delivery_time'] ?? null,
                     'delivery_partner' => $validated['delivery_partner'] ?? null,
                     'cod_available' => $request->boolean('cod_available', true),

@@ -58,9 +58,15 @@ class DashboardController extends Controller
             $decoded = json_decode($request->input('accepted_payment_methods'), true);
             $request->merge(['accepted_payment_methods' => $decoded]);
         }
+        if (is_string($request->input('delivery_areas'))) {
+            $decoded = json_decode($request->input('delivery_areas'), true);
+            $request->merge(['delivery_areas' => $decoded]);
+        }
 
         $validated = $request->validate([
-            'delivery_areas' => 'nullable|string|max:1000',
+            'delivery_areas' => 'nullable|array',
+            'delivery_areas.*.name' => 'required_with:delivery_areas|string|max:255',
+            'delivery_areas.*.price' => 'nullable|string|max:255',
             'delivery_time' => 'nullable|string|max:255',
             'delivery_partner' => 'nullable|string|max:255',
             'cod_available' => 'nullable|boolean',
@@ -101,8 +107,17 @@ class DashboardController extends Controller
             $logoPath = $request->file('logo')->store('logos', 'public');
         }
 
+        $deliveryAreas = $validated['delivery_areas'] ?? null;
+        if (is_array($deliveryAreas)) {
+            $deliveryAreas = array_filter($deliveryAreas, fn($a) => !empty($a['name']));
+            $deliveryAreas = array_values($deliveryAreas);
+            $deliveryAreas = !empty($deliveryAreas) ? $deliveryAreas : null;
+        } else {
+            $deliveryAreas = null;
+        }
+
         $businessSetting->update([
-            'delivery_areas' => $validated['delivery_areas'] ?? null,
+            'delivery_areas' => $deliveryAreas,
             'delivery_time' => $validated['delivery_time'] ?? null,
             'delivery_partner' => $validated['delivery_partner'] ?? null,
             'cod_available' => $request->boolean('cod_available', true),

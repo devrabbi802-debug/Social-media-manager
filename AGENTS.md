@@ -54,31 +54,34 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 - **Subdomain auto-clean**: `@input` event auto-converts to lowercase, removes spaces/special chars
 - **Category select**: Searchable dropdown with custom category creation (user types name → "➕ যোগ করুন" → creates in `business_categories` table on submit)
 - **Old POST /register closure**: Removed — now only onboarding flow exists
+- **JSON hidden inputs**: `accepted_payment_methods` and `delivery_areas` use `JSON.stringify()` in hidden inputs — controllers decode with `json_decode()` before validation
 
 **8 Steps:**
 1. **Account**: name, email, phone, subdomain (with availability check), password
 2. **Business Info**: business name, category (searchable + custom), sub-category, AI persona name, business hours, off-hours message, description
 3. **Tone & Communication**: formality level (formal/casual), emoji usage (never/sometimes/often), language style (shuddho/anjonio/banglish), greeting style
 4. **Pricing Policy**: price negotiation toggle + limit %, bulk discount rule, current promo text
-5. **Delivery & Payment**: delivery areas/charge, time, partner, COD toggle, payment methods, advance payment toggle + %
+5. **Delivery & Payment**: delivery areas (dynamic list with name+price, default: Inside Dhaka/Outside Dhaka), time, partner, COD toggle, payment methods (dynamic list with name+details), advance payment toggle + %, advance for outside Dhaka toggle, refund policy, exchange policy, order process message
 6. **Custom FAQ**: dynamic Q&A pairs (add/remove)
 7. **Escalation Rules**: escalation keywords (comma-separated), human contact info
 8. **Logo**: drag-drop or file upload (optional)
 
 **Controller flow** (`OnboardingController@store`):
-1. Validate all fields
-2. If `custom_category_name` provided (no `category_id`): `BusinessCategory::firstOrCreate()` with slug, icon 📦, sort_order 99
-3. `Tenant::create()` + `Domain::create()`
-4. `$tenant->run()`: create `User` + `BusinessSetting` in tenant DB
-5. Logo upload to `storage/logos/`
-6. FAQ filtered (empty Q/A removed)
-7. Auto-login + redirect to tenant dashboard
+1. Decode JSON strings (`accepted_payment_methods`, `delivery_areas`) from hidden inputs
+2. Validate all fields
+3. If `custom_category_name` provided (no `category_id`): `BusinessCategory::firstOrCreate()` with slug, icon 📦, sort_order 99
+4. `Tenant::create()` + `Domain::create()`
+5. `$tenant->run()`: create `User` + `BusinessSetting` in tenant DB
+6. Logo upload to `storage/logos/`
+7. FAQ filtered (empty Q/A removed)
+8. Auto-login + redirect to tenant dashboard
 
 **Validation rules:**
 - Step 1: name, email (valid format), phone, subdomain (lowercase/number/hyphen, available), password (8+ chars, confirmed)
 - Step 2: business_name, category_id OR custom_category_name, persona_name, business_hours, business_description
 - Step 3: formality_level, emoji_usage, language_style, greeting_style
-- Steps 4-8: all optional
+- Step 5: delivery_areas (array with name+price), accepted_payment_methods (array with name+details), refund_policy, exchange_policy, order_process_message
+- Steps 4, 6-8: all optional
 
 ### Localization (Multi-Language)
 
@@ -108,6 +111,8 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 - **`SendAiReplyJob`** — queued on `facebook` queue, 5 tries, 15s backoff, 180s timeout. Fallback: all Groq keys → all Cerebras keys → all Gemini keys
 - **Queue**: Redis, queue name `facebook`, Horizon supervisor (1-10 processes, 256MB memory)
 - **Key rotation**: Within each provider, iterates all active keys by priority before falling back to next provider
+- **AI system prompt** includes: business info, communication style, pricing, delivery areas (structured), payment methods (structured), refund/exchange policies, order process message
+- **Order process message**: Customizable template stored in `business_settings.order_process_message` — AI sends this when customer wants to order
 
 ### Facebook Integration
 
@@ -172,6 +177,7 @@ docker exec laravel-app php artisan <command>
 - **Language controller**: `app/Http/Controllers/Tenant/LanguageController.php`
 - **Onboarding controller**: `app/Http/Controllers/OnboardingController.php`
 - **Subdomain check controller**: `app/Http/Controllers/SubdomainController.php`
+- **Business settings update**: `DashboardController@updateBusinessSettings` (`PUT /settings/business`)
 
 ## Missing Views (routes exist, views don't)
 
@@ -181,7 +187,7 @@ These views are referenced in `routes/web.php` but **do not exist on disk**:
 These views now exist (placeholder pages):
 `tenant.leads`, `tenant.reports`, `tenant.whatsapp`
 
-`tenant.settings` exists at `resources/views/tenant/settings.blade.php`.
+`tenant.settings` exists at `resources/views/tenant/settings.blade.php` — includes profile, password, and full business settings (logo, delivery areas, payment methods, refund/exchange policies, order process message).
 
 Visiting missing routes throws `ViewNotFoundException`.
 
@@ -205,7 +211,7 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 - `conversations`, `messages` — chat history
 - `categories` (self-FK parent_id), `attribute_templates` (is_variant_option boolean), `brands`, `products`, `product_attribute_values`, `product_variants` (JSON attributes), `product_images`, `variant_images` (JSON embedding column)
 - `warehouses`, `stock_movements`, `stock_transfers`, `inventory_alerts`, `attribute_options`
-- `business_settings` — per-user business config from onboarding (category, tone, pricing, delivery, FAQ, extra_fields_data JSON, logo_path)
+- `business_settings` — per-user business config from onboarding (category, tone, pricing, delivery areas (JSON array with name+price), payment methods (JSON array with name+details), advance payment settings, refund/exchange policies, order process message, FAQ, extra_fields_data JSON, logo_path)
 
 ### Seeder
 - `AdminSeeder` creates `admin@socialboost.com` / `Admin@123456`, role `super_admin` (idempotent via `updateOrCreate`)

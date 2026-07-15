@@ -32,7 +32,7 @@ return new class extends Migration
             $table->text('current_promo')->nullable();
 
             // Delivery
-            $table->text('delivery_areas')->nullable();
+            $table->json('delivery_areas')->nullable();
             $table->string('delivery_time')->nullable();
             $table->string('delivery_partner')->nullable();
             $table->boolean('cod_available')->default(true);

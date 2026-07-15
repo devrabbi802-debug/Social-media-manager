@@ -46,6 +46,7 @@ class BusinessSetting extends Model
         return [
             'extra_fields_data' => 'array',
             'accepted_payment_methods' => 'array',
+            'delivery_areas' => 'array',
             'price_negotiation' => 'boolean',
             'cod_available' => 'boolean',
             'advance_payment_required' => 'boolean',
@@ -114,8 +115,15 @@ class BusinessSetting extends Model
         }
 
         $prompt .= "\n\nডেলিভারি তথ্য:";
-        if ($this->delivery_areas) {
-            $prompt .= "\n- এরিয়াস: {$this->delivery_areas}";
+        if (!empty($this->delivery_areas) && is_array($this->delivery_areas)) {
+            $prompt .= "\n- এরিয়াস:";
+            foreach ($this->delivery_areas as $area) {
+                $name = $area['name'] ?? '';
+                $price = $area['price'] ?? '';
+                if ($name) {
+                    $prompt .= "\n  - {$name}" . ($price ? ": {$price}" : '');
+                }
+            }
         }
         if ($this->delivery_time) {
             $prompt .= "\n- সময়কাল: {$this->delivery_time}";

@@ -407,9 +407,39 @@
                     <h3 class="font-semibold text-gray-900 border-b pb-2">ডেলিভারি</h3>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">ডেলিভারি এরিয়া ও চার্জ</label>
-                        <textarea name="delivery_areas" x-model="form.delivery_areas" rows="2"
-                                  class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                  placeholder="যেমন: ঢাকা ৬০৳, বাইরে ১২০৳"></textarea>
+                        <p class="text-xs text-gray-400 mb-3">প্রতিটি এরিয়ার নাম ও চার্জ দিন (যেমন: Inside Dhaka — 60৳)</p>
+
+                        <div class="space-y-3">
+                            <template x-for="(area, index) in deliveryAreas" :key="index">
+                                <div class="flex items-start gap-3 bg-gray-50 rounded-xl p-3">
+                                    <div class="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div>
+                                            <input type="text" x-model="area.name"
+                                                   class="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                                                   placeholder="এরিয়ার নাম (যেমন: Inside Dhaka)">
+                                        </div>
+                                        <div>
+                                            <input type="text" x-model="area.price"
+                                                   class="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                                                   placeholder="চার্জ (যেমন: 60৳)">
+                                        </div>
+                                    </div>
+                                    <button type="button" @click="deliveryAreas.splice(index, 1)"
+                                            x-show="deliveryAreas.length > 1"
+                                            class="mt-1 text-red-400 hover:text-red-600 transition">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+
+                        <button type="button" @click="deliveryAreas.push({name: '', price: ''})"
+                                class="mt-3 flex items-center space-x-2 text-purple-600 hover:text-purple-700 text-sm font-medium transition">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                            <span>এরিয়া যোগ করুন</span>
+                        </button>
+
+                        <input type="hidden" name="delivery_areas" :value="JSON.stringify(deliveryAreas.filter(a => a.name.trim()))">
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
@@ -678,7 +708,7 @@
                     business_hours: '', off_hours_message: '', business_description: '',
                     formality_level: 'casual', emoji_usage: 'sometimes', language_style: 'banglish', greeting_style: 'হ্যালো',
                     price_negotiation: false, negotiation_limit: 0, bulk_discount_rule: '', current_promo: '',
-                    delivery_areas: '', delivery_time: '', delivery_partner: '', cod_available: true,
+                    delivery_time: '', delivery_partner: '', cod_available: true,
                     advance_payment_required: false, advance_payment_percent: 0, advance_for_outside_dhaka: false,
                     refund_policy: '', exchange_policy: '', order_process_message: '',
                     custom_escalation_keywords: '', escalation_contact: '',
@@ -687,6 +717,7 @@
                 extraFields: {},
                 faq: [{ question: '', answer: '' }],
                 paymentMethods: [{ name: '', details: '' }],
+                deliveryAreas: [{ name: 'Inside Dhaka', price: '' }, { name: 'Outside Dhaka', price: '' }],
 
                 init() {
                     this.loadExistingData();
@@ -828,6 +859,14 @@
                                 let pm = typeof oldData.accepted_payment_methods === 'string' ? JSON.parse(oldData.accepted_payment_methods) : oldData.accepted_payment_methods;
                                 if (Array.isArray(pm) && pm.length > 0) {
                                     this.paymentMethods = pm;
+                                }
+                            } catch(e) {}
+                        }
+                        if (oldData.delivery_areas) {
+                            try {
+                                let da = typeof oldData.delivery_areas === 'string' ? JSON.parse(oldData.delivery_areas) : oldData.delivery_areas;
+                                if (Array.isArray(da) && da.length > 0) {
+                                    this.deliveryAreas = da;
                                 }
                             } catch(e) {}
                         }

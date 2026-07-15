@@ -21,6 +21,8 @@ return [
     'business_settings_subtitle' => 'ডেলিভারি ও পেমেন্ট তথ্য পরিচালনা করুন',
     'delivery' => 'ডেলিভারি',
     'delivery_areas' => 'ডেলিভারি এরিয়া ও চার্জ',
+    'delivery_area_hint' => 'প্রতিটি এরিয়ার নাম ও চার্জ দিন (যেমন: Inside Dhaka — 60৳)',
+    'add_delivery_area' => 'এরিয়া যোগ করুন',
     'delivery_time' => 'ডেলিভারি সময়',
     'delivery_partner' => 'ডেলিভারি পার্টনার',
     'cod_available' => 'Cash on Delivery আছে?',
