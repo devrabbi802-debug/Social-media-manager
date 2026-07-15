@@ -32,6 +32,12 @@ class OnboardingController extends Controller
 
     public function store(Request $request)
     {
+        // Decode JSON string from hidden input to array before validation
+        if (is_string($request->input('accepted_payment_methods'))) {
+            $decoded = json_decode($request->input('accepted_payment_methods'), true);
+            $request->merge(['accepted_payment_methods' => $decoded]);
+        }
+
         $validated = $request->validate([
             // Step 1: Account
             'name' => 'required|string|max:255',
@@ -72,8 +78,10 @@ class OnboardingController extends Controller
             'accepted_payment_methods.*.details' => 'nullable|string|max:500',
             'advance_payment_required' => 'nullable|boolean',
             'advance_payment_percent' => 'nullable|integer|min:0|max:100',
+            'advance_for_outside_dhaka' => 'nullable|boolean',
             'refund_policy' => 'nullable|string|max:1000',
             'exchange_policy' => 'nullable|string|max:1000',
+            'order_process_message' => 'nullable|string|max:2000',
 
             // Step 7: FAQ
             'faq' => 'nullable|array',
@@ -193,8 +201,10 @@ class OnboardingController extends Controller
                     'accepted_payment_methods' => $this->cleanPaymentMethods($request->input('accepted_payment_methods')),
                     'advance_payment_required' => $request->boolean('advance_payment_required'),
                     'advance_payment_percent' => $validated['advance_payment_percent'] ?? 0,
+                    'advance_for_outside_dhaka' => $request->boolean('advance_for_outside_dhaka'),
                     'refund_policy' => $validated['refund_policy'] ?? null,
                     'exchange_policy' => $validated['exchange_policy'] ?? null,
+                    'order_process_message' => $validated['order_process_message'] ?? null,
                     'custom_escalation_keywords' => $validated['custom_escalation_keywords'] ?? null,
                     'escalation_contact' => $validated['escalation_contact'] ?? null,
                     'extra_fields_data' => !empty($extraFieldsData) ? $extraFieldsData : null,

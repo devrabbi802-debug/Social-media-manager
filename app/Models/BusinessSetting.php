@@ -31,8 +31,10 @@ class BusinessSetting extends Model
         'accepted_payment_methods',
         'advance_payment_required',
         'advance_payment_percent',
+        'advance_for_outside_dhaka',
         'refund_policy',
         'exchange_policy',
+        'order_process_message',
         'custom_escalation_keywords',
         'escalation_contact',
         'extra_fields_data',
@@ -47,6 +49,7 @@ class BusinessSetting extends Model
             'price_negotiation' => 'boolean',
             'cod_available' => 'boolean',
             'advance_payment_required' => 'boolean',
+            'advance_for_outside_dhaka' => 'boolean',
         ];
     }
 
@@ -136,12 +139,21 @@ class BusinessSetting extends Model
         if ($this->advance_payment_required) {
             $prompt .= "\n- অ্যাডভান্স: {$this->advance_payment_percent}% লাগে";
         }
+        if ($this->advance_for_outside_dhaka) {
+            $prompt .= "\n- ঢাকার বাইরে: অবশ্যই অ্যাডভান্স পেমেন্ট দিতে হবে";
+        }
 
         if ($this->refund_policy) {
             $prompt .= "\n\nরিফান্ড নীতি: {$this->refund_policy}";
         }
         if ($this->exchange_policy) {
             $prompt .= "\nএক্সচেঞ্জ নীতি: {$this->exchange_policy}";
+        }
+
+        if ($this->order_process_message) {
+            $prompt .= "\n\nঅর্ডার প্রসেস:";
+            $prompt .= "\nযখন কাস্টমার অর্ডার দিতে চাইবে, তখন নিচের মেসেজটি পাঠাবে:";
+            $prompt .= "\n{$this->order_process_message}";
         }
 
         if (!empty($extraData)) {

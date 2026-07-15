@@ -488,6 +488,17 @@
                                placeholder="যেমন: 50">
                     </div>
 
+                    <div class="flex items-center justify-between py-3">
+                        <div>
+                            <p class="font-medium text-gray-900">ঢাকার বাইরে অ্যাডভান্স লাগবে?</p>
+                            <p class="text-xs text-gray-400">বাইরের অর্ডারে অগ্রিম পেমেন্ট বাধ্যতামূলক</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="advance_for_outside_dhaka" value="1" x-model="form.advance_for_outside_dhaka" class="sr-only peer">
+                            <div class="w-14 h-7 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-purple-600"></div>
+                        </label>
+                    </div>
+
                     <h3 class="font-semibold text-gray-900 border-b pb-2 pt-4">নীতিমালা</h3>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">রিফান্ড নীতি</label>
@@ -500,6 +511,15 @@
                         <textarea name="exchange_policy" x-model="form.exchange_policy" rows="3"
                                   class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                   placeholder="যেমন: ৭ দিনের মধ্যে এক্সচেঞ্জ সম্ভব, পণ্য অব্যবহৃত হতে হবে..."></textarea>
+                    </div>
+
+                    <h3 class="font-semibold text-gray-900 border-b pb-2 pt-4">অর্ডার প্রসেস</h3>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">অর্ডার মেসেজ</label>
+                        <p class="text-xs text-gray-400 mb-2">কাস্টমার যখন অর্ডার দিতে চাইবে, AI এই মেসেজটি পাঠাবে।</p>
+                        <textarea name="order_process_message" x-model="form.order_process_message" rows="8"
+                                  class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono text-sm"
+                                  placeholder="অর্ডার প্রসেস&#10;নিম্নের তথ্যগুলো দিন👇।&#10;&#10;নাম:&#10;কন্টাক্ট নাম্বার:&#10;ঠিকানা:&#10;&#10;গুরুত্বপূর্ণ বিষয়: প্রতিটি তথ্য অবশ্যই ইংরেজিতে দিতে হবে।"></textarea>
                     </div>
                 </div>
             </div>
@@ -659,8 +679,8 @@
                     formality_level: 'casual', emoji_usage: 'sometimes', language_style: 'banglish', greeting_style: 'হ্যালো',
                     price_negotiation: false, negotiation_limit: 0, bulk_discount_rule: '', current_promo: '',
                     delivery_areas: '', delivery_time: '', delivery_partner: '', cod_available: true,
-                    advance_payment_required: false, advance_payment_percent: 0,
-                    refund_policy: '', exchange_policy: '',
+                    advance_payment_required: false, advance_payment_percent: 0, advance_for_outside_dhaka: false,
+                    refund_policy: '', exchange_policy: '', order_process_message: '',
                     custom_escalation_keywords: '', escalation_contact: '',
                 },
 
@@ -791,29 +811,29 @@
 
                 loadExistingData() {
                     @if(old())
-                        const old = @json(old()->all());
+                        const oldData = @json(old());
                         Object.keys(this.form).forEach(key => {
-                            if (old[key] !== undefined) this.form[key] = old[key];
+                            if (oldData[key] !== undefined) this.form[key] = oldData[key];
                         });
-                        if (old.faq) {
+                        if (oldData.faq) {
                             try {
-                                this.faq = typeof old.faq === 'string' ? JSON.parse(old.faq) : old.faq;
+                                this.faq = typeof oldData.faq === 'string' ? JSON.parse(oldData.faq) : oldData.faq;
                                 if (!Array.isArray(this.faq)) this.faq = [{ question: '', answer: '' }];
                             } catch(e) {
                                 this.faq = [{ question: '', answer: '' }];
                             }
                         }
-                        if (old.accepted_payment_methods) {
+                        if (oldData.accepted_payment_methods) {
                             try {
-                                let pm = typeof old.accepted_payment_methods === 'string' ? JSON.parse(old.accepted_payment_methods) : old.accepted_payment_methods;
+                                let pm = typeof oldData.accepted_payment_methods === 'string' ? JSON.parse(oldData.accepted_payment_methods) : oldData.accepted_payment_methods;
                                 if (Array.isArray(pm) && pm.length > 0) {
                                     this.paymentMethods = pm;
                                 }
                             } catch(e) {}
                         }
-                        Object.keys(old).forEach(key => {
+                        Object.keys(oldData).forEach(key => {
                             if (key.startsWith('extra_')) {
-                                this.extraFields[key.replace('extra_', '')] = old[key];
+                                this.extraFields[key.replace('extra_', '')] = oldData[key];
                             }
                         });
                     @endif

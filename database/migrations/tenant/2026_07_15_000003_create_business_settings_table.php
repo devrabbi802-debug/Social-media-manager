@@ -41,10 +41,14 @@ return new class extends Migration
             $table->json('accepted_payment_methods')->nullable();
             $table->boolean('advance_payment_required')->default(false);
             $table->integer('advance_payment_percent')->default(0);
+            $table->boolean('advance_for_outside_dhaka')->default(false);
 
             // Policies
             $table->text('refund_policy')->nullable();
             $table->text('exchange_policy')->nullable();
+
+            // Order Process
+            $table->text('order_process_message')->nullable();
 
             // Escalation
             $table->text('custom_escalation_keywords')->nullable();

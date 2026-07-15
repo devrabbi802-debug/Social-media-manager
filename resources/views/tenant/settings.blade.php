@@ -239,6 +239,19 @@
                                        class="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
                                        placeholder="যেমন: 50">
                             </div>
+
+                            <div class="flex items-center justify-between py-3">
+                                <div>
+                                    <p class="font-medium text-gray-900">@lang('settings.advance_for_outside_dhaka')</p>
+                                    <p class="text-xs text-gray-400">@lang('settings.advance_for_outside_dhaka_hint')</p>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" name="advance_for_outside_dhaka" value="1"
+                                           {{ ($businessSetting->advance_for_outside_dhaka ?? false) ? 'checked' : '' }}
+                                           class="sr-only peer">
+                                    <div class="w-14 h-7 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-purple-600"></div>
+                                </label>
+                            </div>
                         </div>
 
                         {{-- Policies Section --}}
@@ -257,6 +270,19 @@
                                 <textarea name="exchange_policy" rows="3"
                                           class="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
                                           placeholder="যেমন: ৭ দিনের মধ্যে এক্সচেঞ্জ সম্ভব, পণ্য অব্যবহৃত হতে হবে...">{{ old('exchange_policy', $businessSetting->exchange_policy ?? '') }}</textarea>
+                            </div>
+                        </div>
+
+                        {{-- Order Process Section --}}
+                        <h3 class="font-semibold text-gray-900 border-b pb-2 pt-6 mb-4">@lang('settings.order_process')</h3>
+
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">@lang('settings.order_process_message')</label>
+                                <p class="text-xs text-gray-400 mb-2">@lang('settings.order_process_hint')</p>
+                                <textarea name="order_process_message" rows="8"
+                                          class="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition font-mono text-sm"
+                                          placeholder="{{ __('settings.order_process_placeholder') }}">{{ old('order_process_message', $businessSetting->order_process_message ?? '') }}</textarea>
                             </div>
                         </div>
 
