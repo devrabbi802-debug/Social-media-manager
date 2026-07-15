@@ -92,11 +92,11 @@ class AudioTranscriptionService
                 'Authorization' => 'Bearer '.$apiKey,
             ])
                 ->attach('file', file_get_contents($filePath), basename($filePath))
-                ->timeout(30)
+                ->timeout(60)
                 ->post(self::GROQ_WHISPER_URL, [
-                    'model' => 'whisper-large-v3-turbo',
-                    'language' => 'bn',
+                    'model' => 'whisper-large-v3',
                     'response_format' => 'json',
+                    'prompt' => 'This is a Bengali (Bangla) conversation about products, shopping, clothing, shirts, pants, sizes, colors, and prices.',
                 ]);
 
             if ($response->status() === 429) {

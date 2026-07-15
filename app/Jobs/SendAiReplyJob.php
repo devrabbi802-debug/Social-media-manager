@@ -142,7 +142,7 @@ class SendAiReplyJob implements ShouldQueue
             $transcribedText = $transcriptionService->transcribe($this->audioUrl, $facebookSetting->user_id);
 
             if ($transcribedText) {
-                $this->messageText = $transcribedText;
+                $this->messageText = "[ভয়েস মেসেজ থেকে ট্রান্সক্রিপ্ট — শব্দ ভুল থাকতে পারে] {$transcribedText}";
                 Log::info('SendAiReplyJob: audio transcribed successfully', [
                     'sender_id' => $this->senderId,
                     'text' => mb_substr($transcribedText, 0, 100),
