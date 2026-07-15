@@ -12,7 +12,7 @@ return new class extends Migration
         DB::statement("ALTER TABLE messages MODIFY COLUMN type ENUM('text', 'image', 'ai_reply', 'audio') NOT NULL DEFAULT 'text'");
 
         Schema::table('messages', function (Blueprint $table) {
-            $table->string('audio_path')->nullable()->after('image_path');
+            $table->text('audio_path')->nullable()->after('image_path');
         });
     }
 

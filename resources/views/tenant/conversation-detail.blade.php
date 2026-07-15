@@ -100,6 +100,22 @@
                             </div>
                             @endif
 
+                            @if($message->type === 'audio' && $message->audio_path && $message->direction === 'incoming')
+                            <div class="mb-2">
+                                <div class="flex items-center gap-2 bg-gray-100 rounded-xl px-3 py-2">
+                                    <svg class="w-5 h-5 text-purple-500 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                                        <line x1="12" y1="19" x2="12" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                        <line x1="8" y1="23" x2="16" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                    </svg>
+                                    <audio controls class="h-8 flex-1" preload="none">
+                                        <source src="{{ $message->audio_path }}" type="audio/mpeg">
+                                    </audio>
+                                </div>
+                            </div>
+                            @endif
+
                             @if($message->content)
                             <p class="text-sm whitespace-pre-wrap">{{ $message->content }}</p>
                             @endif

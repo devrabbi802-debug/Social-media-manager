@@ -50,6 +50,8 @@
                         <p class="text-sm text-gray-500 truncate mt-1">
                             @if($conversation->latestMessage->direction === 'outgoing')
                                 <span class="text-blue-600">AI:</span>
+                            @elseif($conversation->latestMessage->type === 'audio')
+                                <svg class="w-3 h-3 inline text-purple-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                             @endif
                             {{ Str::limit($conversation->latestMessage->content, 80) }}
                         </p>
