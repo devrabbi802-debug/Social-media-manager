@@ -26,10 +26,11 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 
 ### Multi-Tenancy (Database-per-Tenant)
 
-- **Landlord DB** (`socialboost`): `tenants`, `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `cache`, `jobs`, `sessions`
-- **Tenant DB** (`{subdomain}_socialboost`): `users`, `facebook_settings`, `ai_settings`, `conversations`, `messages`, `categories`, `attribute_templates`, `brands`, `products`, `product_attribute_values`, `product_variants`, `product_images`, `warehouses`, `stock_movements`, `inventory_alerts`, `stock_transfers`, `attribute_options`, `variant_images`
+- **Landlord DB** (`socialboost`): `tenants`, `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `business_categories`, `cache`, `jobs`, `sessions`
+- **Tenant DB** (`{subdomain}_socialboost`): `users`, `facebook_settings`, `ai_settings`, `conversations`, `messages`, `categories`, `attribute_templates`, `brands`, `products`, `product_attribute_values`, `product_variants`, `product_images`, `warehouses`, `stock_movements`, `inventory_alerts`, `stock_transfers`, `attribute_options`, `variant_images`, `business_settings`
 - **Users table does NOT exist in landlord DB** — never `User::count()` from central routes
-- **Registration**: `Tenant::create()` → auto DB + migrate → user in tenant DB → redirect to `{subdomain}.smm.test`
+- **Registration**: `GET /register` redirects to `/onboarding` — 9-step wizard (account, business info, category extra fields, tone, pricing, delivery, FAQ, escalation, logo) → `Tenant::create()` + `BusinessSetting::create()` → auto-login → redirect to `{subdomain}.smm.test/dashboard`
+- **Onboarding**: Alpine.js multi-step form. Category selection loads dynamic extra fields from `business_categories.extra_fields` JSON. Stores all business config in `business_settings` table (tenant DB). AI system prompt auto-generated from `BusinessSetting::generateSystemPrompt()`
 - **Tenant custom attributes** in `data` JSON column — query: `where('data->status', 'active')`, NOT `where('status', 'active')`
 - **Central domains** (not tenant): `127.0.0.1`, `localhost`, `smm.test`, `socialboost.com`, `www.socialboost.com`
 - **Tenant migrations**: `database/migrations/tenant/` — run via `php artisan tenants:migrate`
@@ -122,8 +123,9 @@ docker exec laravel-app php artisan <command>
 ## Key Paths
 
 - **Public views**: `resources/views/` (welcome, features, pricing, about, contact, auth)
+- **Onboarding views**: `resources/views/onboarding/` — multi-step wizard (Alpine.js)
 - **Tenant views**: `resources/views/tenant/` — `index`, `integration`, `facebook-settings`, `facebook-select-page`, `ai-setup`, `conversations/`, `products/`, `categories/`, `brands/`, `warehouses/`, `inventory/`, `attribute-templates/`, `image-match/`
-- **Admin views**: `resources/views/admin/` (auth, dashboard, users CRUD, tenants CRUD, ai-system-prompt)
+- **Admin views**: `resources/views/admin/` (auth, dashboard, users CRUD, tenants CRUD, ai-system-prompt, business-categories CRUD)
 - **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/layouts/tenant.blade.php` (tenant dashboard), `resources/views/admin/layouts/app.blade.php` (admin)
 - **Menu config**: `config/menu.php` — add admin sidebar menu groups here
 - **Tenancy config**: `config/tenancy.php` — central domains, DB suffix, tenant model
@@ -156,6 +158,7 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 - `admins` — admin users (landlord DB, `admin` guard)
 - `admin_user_permissions` — per-admin menu permissions (super_admin bypasses all)
 - `ai_system_prompts` — global AI system prompt (landlord-level)
+- `business_categories` — default business categories with `extra_fields` JSON (category-specific dynamic fields for onboarding)
 - `cache`, `jobs`, `sessions` — Standard Laravel tables
 
 ### Tenant DB Tables
@@ -165,9 +168,11 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 - `conversations`, `messages` — chat history
 - `categories` (self-FK parent_id), `attribute_templates` (is_variant_option boolean), `brands`, `products`, `product_attribute_values`, `product_variants` (JSON attributes), `product_images`, `variant_images` (JSON embedding column)
 - `warehouses`, `stock_movements`, `stock_transfers`, `inventory_alerts`, `attribute_options`
+- `business_settings` — per-user business config from onboarding (category, tone, pricing, delivery, FAQ, extra_fields_data JSON, logo_path)
 
 ### Seeder
 - `AdminSeeder` creates `admin@socialboost.com` / `Admin@123456`, role `super_admin` (idempotent via `updateOrCreate`)
+- `BusinessCategorySeeder` seeds 8 default categories (Fashion, Electronics, Food, Cosmetics, Furniture, Digital, Handicraft, Pharmacy) with category-specific extra_fields JSON
 
 ## Testing
 

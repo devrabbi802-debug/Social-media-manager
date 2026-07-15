@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Hash;
 use App\Models\Tenant;
 use App\Http\Controllers\FacebookSettingController;
 use App\Http\Controllers\FacebookWebhookController;
+use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\ZernioOAuthController;
 
 // Landing Page
@@ -62,10 +63,14 @@ Route::post('/login', function (Request $request) {
     ])->onlyInput('email');
 });
 
-// Auth Routes - Register
+// Auth Routes - Register (redirect to onboarding)
 Route::get('/register', function () {
-    return view('auth.register');
+    return redirect()->route('onboarding');
 })->name('register');
+
+// Onboarding Wizard
+Route::get('/onboarding', [OnboardingController::class, 'index'])->name('onboarding');
+Route::post('/onboarding', [OnboardingController::class, 'store'])->name('onboarding.store');
 
 Route::post('/register', function (Request $request) {
     $validated = $request->validate([

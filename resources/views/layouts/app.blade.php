@@ -70,7 +70,7 @@
                         </div>
                     @else
                         <a href="{{ url('/login') }}" class="text-gray-600 hover:text-purple-600 transition font-medium">লগইন</a>
-                        <a href="{{ url('/register') }}" class="gradient-bg text-white px-6 py-2 rounded-full font-medium hover:opacity-90 transition">শুরু করুন</a>
+                        <a href="{{ url('/onboarding') }}" class="gradient-bg text-white px-6 py-2 rounded-full font-medium hover:opacity-90 transition">Let's Start</a>
                     @endauth
                 </div>
 
@@ -100,7 +100,7 @@
                     </form>
                 @else
                     <a href="{{ url('/login') }}" class="block text-gray-600">লগইন</a>
-                    <a href="{{ url('/register') }}" class="block gradient-bg text-white px-6 py-2 rounded-full text-center font-medium">শুরু করুন</a>
+                    <a href="{{ url('/onboarding') }}" class="block gradient-bg text-white px-6 py-2 rounded-full text-center font-medium">Let's Start</a>
                 @endauth
             </div>
         </div>

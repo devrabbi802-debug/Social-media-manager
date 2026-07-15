@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\TenantController;
 use App\Http\Controllers\Admin\AiSystemPromptController;
+use App\Http\Controllers\Admin\BusinessCategoryController;
 
 Route::middleware(['web'])->group(function () {
 
@@ -71,6 +72,14 @@ Route::middleware(['web'])->group(function () {
         // AI System Prompt
         Route::get('/ai-system-prompt', [AiSystemPromptController::class, 'index'])->name('admin.ai-prompt.index');
         Route::put('/ai-system-prompt', [AiSystemPromptController::class, 'update'])->name('admin.ai-prompt.update');
+
+        // Business Categories
+        Route::get('/business-categories', [BusinessCategoryController::class, 'index'])->name('admin.business-categories.index');
+        Route::get('/business-categories/create', [BusinessCategoryController::class, 'create'])->name('admin.business-categories.create');
+        Route::post('/business-categories', [BusinessCategoryController::class, 'store'])->name('admin.business-categories.store');
+        Route::get('/business-categories/{businessCategory}/edit', [BusinessCategoryController::class, 'edit'])->name('admin.business-categories.edit');
+        Route::put('/business-categories/{businessCategory}', [BusinessCategoryController::class, 'update'])->name('admin.business-categories.update');
+        Route::delete('/business-categories/{businessCategory}', [BusinessCategoryController::class, 'destroy'])->name('admin.business-categories.destroy');
 
     });
 

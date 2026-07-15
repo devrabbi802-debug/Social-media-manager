@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>বিজনেস সেটআপ — SocialBoost AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Hind Siliguri', sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .gradient-text { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .step-enter { animation: stepEnter 0.3s ease-out; }
+        @keyframes stepEnter { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="onboarding()" x-init="init()">
+
+    {{-- Top Progress Bar --}}
+    <div class="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
+        <div class="h-1.5 bg-gray-200">
+            <div class="h-full gradient-bg transition-all duration-500" :style="`width: ${(currentStep / totalSteps) * 100}%`"></div>
+        </div>
+        <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+            <a href="/" class="flex items-center space-x-2">
+                <div class="w-8 h-8 gradient-bg rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <span class="text-lg font-bold gradient-text">SocialBoost AI</span>
+            </a>
+            <div class="text-sm text-gray-500">
+                ধাপ <span x-text="currentStep" class="font-bold text-purple-600"></span> / <span x-text="totalSteps"></span>
+            </div>
+        </div>
+    </div>
+
+    {{-- Main Form --}}
+    <form method="POST" action="{{ url('/onboarding') }}" enctype="multipart/form-data" id="onboardingForm">
+        @csrf
+
+        <div class="max-w-3xl mx-auto px-4 pt-24 pb-32">
+
+            {{-- Error Display --}}
+            @if ($errors->any())
+                <div class="mb-6 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm">
+                    @foreach ($errors->all() as $error)
+                        <p>{{ $error }}</p>
+                    @endforeach
+                </div>
+            @endif
+
+            {{-- Step 1: Account --}}
+            <div x-show="currentStep === 1" x-transition class="step-enter">
+                <div class="text-center mb-8">
+                    <div class="w-16 h-16 gradient-bg rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-900">অ্যাকাউন্ট তৈরি করুন</h2>
+                    <p class="text-gray-500 mt-2">আপনার ব্যক্তিগত তথ্য দিন</p>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-xl p-8 space-y-5">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">পুরো নাম *</label>
+                        <input type="text" name="name" x-model="form.name" required
+                               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                               placeholder="আপনার পুরো নাম">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ইমেইল *</label>
+                        <input type="email" name="email" x-model="form.email" required
+                               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                               placeholder="example@email.com">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">মোবাইল নম্বর *</label>
+                        <input type="tel" name="phone" x-model="form.phone" required
+                               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                               placeholder="01XXXXXXXXX">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">সাবডোমেইন *</label>
+                        <div class="flex">
+                            <input type="text" name="subdomain" x-model="form.subdomain" required
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-l-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                   placeholder="আপনার ব্যবসার নাম">
+                            <span class="px-4 py-3 bg-gray-100 border border-l-0 border-gray-300 rounded-r-xl text-gray-600 text-sm">.{{ config('app.domain') }}</span>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1">ছোট অক্ষর, সংখ্যা এবং হাইফেন ব্যবহার করুন</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">পাসওয়ার্ড *</label>
+                            <input type="password" name="password" x-model="form.password" required
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                   placeholder="কমপক্ষে ৮ অক্ষর">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">পাসওয়ার্ড নিশ্চিত *</label>
+                            <input type="password" name="password_confirmation" x-model="form.password_confirmation" required
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                   placeholder="আবার লিখুন">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Step 2: Business Info --}}
+            <div x-show="currentStep === 2" x-transition class="step-enter">
+                <div class="text-center mb-8">
+                    <div class="w-16 h-16 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-900">বিজনেস তথ্য</h2>
+                    <p class="text-gray-500 mt-2">আপনার ব্যবসার বিস্তারিত দিন</p>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-xl p-8 space-y-5">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">বিজনেসের নাম *</label>
+                        <input type="text" name="business_name" x-model="form.business_name" required
+                               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                               placeholder="যেমন: রিয়া'স ফ্যাশন হাউজ">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">বিজনেস ক্যাটাগরি *</label>
+                        <select name="category_id" x-model="form.category_id" required
+                                class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                            <option value="">-- ক্যাটাগরি বাছুন --</option>
+                            @foreach($categories as $cat)
+                                <option value="{{ $cat->id }}" data-extra='@json($cat->extra_fields)'>{{ $cat->icon }} {{ $cat->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">উপ-ক্যাটাগরি (ঐচ্ছিক)</label>
+                        <input type="text" name="sub_category" x-model="form.sub_category"
+                               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                               placeholder="যেমন: মহিলাদের শাড়ি ও থ্রি-পিস">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">AI Persona নাম *</label>
+                        <input type="text" name="persona_name" x-model="form.persona_name" required
+                               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                               placeholder="AI এর নাম, যেমন: রিয়া">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">বিজনেস সময় *</label>
+                        <input type="text" name="business_hours" x-model="form.business_hours" required
+                               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                               placeholder="যেমন: সকাল ১০টা – রাত ৯টা">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">অফ-আয়ার মেসেজ</label>
+                        <input type="text" name="off_hours_message" x-model="form.off_hours_message"
+                               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                               placeholder="যেমন: আমরা এখন অফলাইনে, সকাল ১০টায় রিপ্লাই দিব">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">বিজনেস বিবরণ *</label>
+                        <textarea name="business_description" x-model="form.business_description" required rows="3"
+                                  class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                  placeholder="AI যেন নিজের বিজনেস সম্পর্কে বলতে পারে (১-২ লাইন)"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Step 3: Category Extra Fields --}}
+            <div x-show="currentStep === 3" x-transition class="step-enter">
+                <div class="text-center mb-8">
+                    <div class="w-16 h-16 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-900">ক্যাটাগরি-স্পেসিফিক তথ্য</h2>
+                    <p class="text-gray-500 mt-2" x-text="selectedCategoryName + ' ক্যাটাগরির জন্য প্রয়োজনীয় তথ্য দিন'"></p>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-xl p-8 space-y-5">
+                    <template x-if="selectedExtraFields.length === 0">
+                        <div class="text-center py-8 text-gray-400">
+                            <p>এই ক্যাটাগরির জন্য অতিরিক্ত তথ্য প্রয়োজন নেই।</p>
+                        </div>
+                    </template>
+
+                    <template x-for="(field, index) in selectedExtraFields" :key="field.name">
+                        <div>
+                            {{-- Text Input --}}
+                            <template x-if="field.type === 'text'">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                                        <span x-text="field.label"></span>
+                                        <span x-show="field.required" class="text-red-500">*</span>
+                                    </label>
+                                    <input :type="field.type" :name="'extra_' + field.name" x-model="extraFields[field.name]"
+                                           :required="field.required"
+                                           class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                           :placeholder="field.placeholder || ''">
+                                </div>
+                            </template>
+
+                            {{-- Textarea --}}
+                            <template x-if="field.type === 'textarea'">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                                        <span x-text="field.label"></span>
+                                        <span x-show="field.required" class="text-red-500">*</span>
+                                    </label>
+                                    <textarea :name="'extra_' + field.name" x-model="extraFields[field.name]"
+                                              :required="field.required" rows="3"
+                                              class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                              :placeholder="field.placeholder || ''"></textarea>
+                                </div>
+                            </template>
+
+                            {{-- Number --}}
+                            <template x-if="field.type === 'number'">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                                        <span x-text="field.label"></span>
+                                        <span x-show="field.required" class="text-red-500">*</span>
+                                    </label>
+                                    <input type="number" :name="'extra_' + field.name" x-model="extraFields[field.name]"
+                                           :required="field.required" min="0"
+                                           class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                           :placeholder="field.placeholder || ''">
+                                </div>
+                            </template>
+
+                            {{-- Boolean (checkbox) --}}
+                            <template x-if="field.type === 'boolean'">
+                                <div class="flex items-center space-x-3 py-2">
+                                    <input type="checkbox" :name="'extra_' + field.name" x-model="extraFields[field.name]"
+                                           :value="1" class="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500">
+                                    <label class="text-sm font-medium text-gray-700" x-text="field.label"></label>
+                                </div>
+                            </template>
+
+                            {{-- Select --}}
+                            <template x-if="field.type === 'select'">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                                        <span x-text="field.label"></span>
+                                        <span x-show="field.required" class="text-red-500">*</span>
+                                    </label>
+                                    <select :name="'extra_' + field.name" x-model="extraFields[field.name]"
+                                            :required="field.required"
+                                            class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                                        <option value="">-- বাছুন --</option>
+                                        <template x-for="opt in (field.options || [])" :key="opt">
+                                            <option :value="opt" x-text="opt"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            {{-- Step 4: Tone & Communication --}}
+            <div x-show="currentStep === 4" x-transition class="step-enter">
+                <div class="text-center mb-8">
+                    <div class="w-16 h-16 bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 4.418 9 8z"/></svg>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-900">টোন ও কমিউনিকেশন</h2>
+                    <p class="text-gray-500 mt-2">AI কিভাবে কথা বলবে সেটা সেট করুন</p>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-xl p-8 space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-3">ফর্মালিটি লেভেল *</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="relative cursor-pointer">
+                                <input type="radio" name="formality_level" value="formal" x-model="form.formality_level" class="peer sr-only">
+                                <div class="border-2 border-gray-200 peer-checked:border-purple-500 peer-checked:bg-purple-50 rounded-xl p-4 text-center transition">
+                                    <div class="text-2xl mb-1"> Formal</div>
+                                    <div class="text-sm text-gray-500">পেশাদার ভাষা</div>
+                                </div>
+                            </label>
+                            <label class="relative cursor-pointer">
+                                <input type="radio" name="formality_level" value="casual" x-model="form.formality_level" class="peer sr-only" checked>
+                                <div class="border-2 border-gray-200 peer-checked:border-purple-500 peer-checked:bg-purple-50 rounded-xl p-4 text-center transition">
+                                    <div class="text-2xl mb-1"> Casual</div>
+                                    <div class="text-sm text-gray-500">বন্ধুসুলভ ভাষা</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-3">ইমোজি ব্যবহার *</label>
+                        <div class="grid grid-cols-3 gap-3">
+                            <label class="relative cursor-pointer">
+                                <input type="radio" name="emoji_usage" value="never" x-model="form.emoji_usage" class="peer sr-only">
+                                <div class="border-2 border-gray-200 peer-checked:border-purple-500 peer-checked:bg-purple-50 rounded-xl p-3 text-center transition">
+                                    <div class="text-lg font-medium"> না</div>
+                                    <div class="text-xs text-gray-500">কখনো না</div>
+                                </div>
+                            </label>
+                            <label class="relative cursor-pointer">
+                                <input type="radio" name="emoji_usage" value="sometimes" x-model="form.emoji_usage" class="peer sr-only" checked>
+                                <div class="border-2 border-gray-200 peer-checked:border-purple-500 peer-checked:bg-purple-50 rounded-xl p-3 text-center transition">
+                                    <div class="text-lg font-medium"> মাঝে মাঝে</div>
+                                    <div class="text-xs text-gray-500">কখনো কখনো</div>
+                                </div>
+                            </label>
+                            <label class="relative cursor-pointer">
+                                <input type="radio" name="emoji_usage" value="often" x-model="form.emoji_usage" class="peer sr-only">
+                                <div class="border-2 border-gray-200 peer-checked:border-purple-500 peer-checked:bg-purple-50 rounded-xl p-3 text-center transition">
+                                    <div class="text-lg font-medium"> বেশি</div>
+                                    <div class="text-xs text-gray-500">প্রায় সবসময়</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-3">ভাষা স্টাইল *</label>
+                        <div class="grid grid-cols-3 gap-3">
+                            <label class="relative cursor-pointer">
+                                <input type="radio" name="language_style" value="shuddho_bangla" x-model="form.language_style" class="peer sr-only">
+                                <div class="border-2 border-gray-200 peer-checked:border-purple-500 peer-checked:bg-purple-50 rounded-xl p-3 text-center transition">
+                                    <div class="text-sm font-medium">শুদ্ধ বাংলা</div>
+                                </div>
+                            </label>
+                            <label class="relative cursor-pointer">
+                                <input type="radio" name="language_style" value="anjonio" x-model="form.language_style" class="peer sr-only">
+                                <div class="border-2 border-gray-200 peer-checked:border-purple-500 peer-checked:bg-purple-50 rounded-xl p-3 text-center transition">
+                                    <div class="text-sm font-medium">আঞ্চলিক</div>
+                                </div>
+                            </label>
+                            <label class="relative cursor-pointer">
+                                <input type="radio" name="language_style" value="banglish" x-model="form.language_style" class="peer sr-only" checked>
+                                <div class="border-2 border-gray-200 peer-checked:border-purple-500 peer-checked:bg-purple-50 rounded-xl p-3 text-center transition">
+                                    <div class="text-sm font-medium">Banglish</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">গ্রিটিং স্টাইল *</label>
+                        <input type="text" name="greeting_style" x-model="form.greeting_style" required
+                               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                               placeholder="যেমন: আসসালামু আলাইকুম / হ্যালো / নমস্কার">
+                    </div>
+                </div>
+            </div>
+
+            {{-- Step 5: Pricing Policy --}}
+            <div x-show="currentStep === 5" x-transition class="step-enter">
+                <div class="text-center mb-8">
+                    <div class="w-16 h-16 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-900">প্রাইসিং নীতি</h2>
+                    <p class="text-gray-500 mt-2">দাম ও ছাড় সম্পর্কে নীতি সেট করুন</p>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-xl p-8 space-y-6">
+                    <div class="flex items-center justify-between py-3">
+                        <div>
+                            <p class="font-medium text-gray-900">দরদাম করা যাবে?</p>
+                            <p class="text-sm text-gray-500">AI কি কাস্টমারের সাথে দরদাম করতে পারবে</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="price_negotiation" value="1" x-model="form.price_negotiation" class="sr-only peer">
+                            <div class="w-14 h-7 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-purple-600"></div>
+                        </label>
+                    </div>
+
+                    <div x-show="form.price_negotiation" x-transition>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">সর্বোচ্চ ছাড় (%)</label>
+                        <input type="number" name="negotiation_limit" x-model="form.negotiation_limit" min="0" max="100"
+                               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                               placeholder="যেমন: 10">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">বাল্ক ডিসকাউন্ট রুল</label>
+                        <input type="text" name="bulk_discount_rule" x-model="form.bulk_discount_rule"
+                               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                               placeholder="যেমন: ৫+ পিস কিনলে ১০% ছাড়">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">বর্তমান প্রোমো টেক্সট (ঐচ্ছিক)</label>
+                        <input type="text" name="current_promo" x-model="form.current_promo"
+                               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                               placeholder="যেমন: ঈদ অফার: ১০% ছাড়">
+                    </div>
+                </div>
+            </div>
+
+            {{-- Step 6: Delivery & Payment --}}
+            <div x-show="currentStep === 6" x-transition class="step-enter">
+                <div class="text-center mb-8">
+                    <div class="w-16 h-16 bg-gradient-to-r from-indigo-500 to-violet-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-900">ডেলিভারি ও পেমেন্ট</h2>
+                    <p class="text-gray-500 mt-2">ডেলিভারি ও পেমেন্ট তথ্য দিন</p>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-xl p-8 space-y-6">
+                    <h3 class="font-semibold text-gray-900 border-b pb-2">ডেলিভারি</h3>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ডেলিভারি এরিয়া ও চার্জ</label>
+                        <textarea name="delivery_areas" x-model="form.delivery_areas" rows="2"
+                                  class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                  placeholder="যেমন: ঢাকা ৬০৳, বাইরে ১২০৳"></textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">ডেলিভারি সময়</label>
+                            <input type="text" name="delivery_time" x-model="form.delivery_time"
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                   placeholder="যেমন: ৩-৫ দিন">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">ডেলিভারি পার্টনার</label>
+                            <input type="text" name="delivery_partner" x-model="form.delivery_partner"
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                   placeholder="যেমন: পাঠাও/স্টেডফাস্ট">
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between py-3">
+                        <div>
+                            <p class="font-medium text-gray-900">Cash on Delivery আছে?</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="cod_available" value="1" x-model="form.cod_available" class="sr-only peer" checked>
+                            <div class="w-14 h-7 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-purple-600"></div>
+                        </label>
+                    </div>
+
+                    <h3 class="font-semibold text-gray-900 border-b pb-2 pt-4">পেমেন্ট</h3>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">গ্রহণযোগ্য পেমেন্ট মেথড</label>
+                        <input type="text" name="accepted_payment_methods" x-model="form.accepted_payment_methods"
+                               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                               placeholder="যেমন: bKash, Nagad, COD, Card">
+                    </div>
+                    <div class="flex items-center justify-between py-3">
+                        <div>
+                            <p class="font-medium text-gray-900">অ্যাডভান্স পেমেন্ট লাগবে?</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="advance_payment_required" value="1" x-model="form.advance_payment_required" class="sr-only peer">
+                            <div class="w-14 h-7 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-purple-600"></div>
+                        </label>
+                    </div>
+                    <div x-show="form.advance_payment_required" x-transition>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">অ্যাডভান্স পারসেন্টেজ (%)</label>
+                        <input type="number" name="advance_payment_percent" x-model="form.advance_payment_percent" min="0" max="100"
+                               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                               placeholder="যেমন: 50">
+                    </div>
+                </div>
+            </div>
+
+            {{-- Step 7: Custom FAQ --}}
+            <div x-show="currentStep === 7" x-transition class="step-enter">
+                <div class="text-center mb-8">
+                    <div class="w-16 h-16 bg-gradient-to-r from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-900">কাস্টম FAQ</h2>
+                    <p class="text-gray-500 mt-2">আপনার বিজনেস-স্পেসিফিক প্রশ্ন-উত্তর যোগ করুন</p>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-xl p-8 space-y-4">
+                    <template x-for="(item, index) in faq" :key="index">
+                        <div class="border border-gray-200 rounded-xl p-4 space-y-3 relative">
+                            <button type="button" @click="removeFaq(index)"
+                                    class="absolute top-2 right-2 text-red-400 hover:text-red-600">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-500 mb-1">প্রশ্ন</label>
+                                <input :name="'faq[' + index + '][question]'" x-model="item.question"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                                       placeholder="শোরুম কোথায়?">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-500 mb-1">উত্তর</label>
+                                <textarea :name="'faq[' + index + '][answer]'" x-model="item.answer" rows="2"
+                                          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                                          placeholder="আমাদের শোরুম ঢাকায় অবস্থিত..."></textarea>
+                            </div>
+                        </div>
+                    </template>
+
+                    <button type="button" @click="addFaq()"
+                            class="w-full border-2 border-dashed border-purple-300 text-purple-600 rounded-xl py-3 hover:bg-purple-50 transition font-medium">
+                        + প্রশ্ন-উত্তর যোগ করুন
+                    </button>
+                </div>
+            </div>
+
+            {{-- Step 8: Escalation Rules --}}
+            <div x-show="currentStep === 8" x-transition class="step-enter">
+                <div class="text-center mb-8">
+                    <div class="w-16 h-16 bg-gradient-to-r from-red-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-900">এসক্যালেশন রুলস</h2>
+                    <p class="text-gray-500 mt-2">কোন কীওয়ার্ডে মানুষকে হ্যান্ডওভার করবে</p>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-xl p-8 space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">এসক্যালেশন কীওয়ার্ড</label>
+                        <input type="text" name="custom_escalation_keywords" x-model="form.custom_escalation_keywords"
+                               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                               placeholder="যেমন: ম্যানেজার, অভিযোগ, রিফান্ড, ক্যান্সেল">
+                        <p class="text-xs text-gray-400 mt-1">কমা দিয়ে আলাদা করুন। এই কীওয়ার্ড এলে AI human agent-কে হ্যান্ডওভার করবে।</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">হিউমান যোগাযোগ তথ্য</label>
+                        <input type="text" name="escalation_contact" x-model="form.escalation_contact"
+                               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                               placeholder="যেমন: 01XXXXXXXXX বা support@email.com">
+                    </div>
+                </div>
+            </div>
+
+            {{-- Step 9: Logo --}}
+            <div x-show="currentStep === 9" x-transition class="step-enter">
+                <div class="text-center mb-8">
+                    <div class="w-16 h-16 bg-gradient-to-r from-teal-500 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-900">কোম্পানি লোগো</h2>
+                    <p class="text-gray-500 mt-2">আপনার ব্যবসার লোগো আপলোড করুন (ঐচ্ছিক)</p>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-xl p-8">
+                    <div class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-purple-400 transition"
+                         x-data="{ dragging: false }"
+                         @dragover.prevent="dragging = true"
+                         @dragleave.prevent="dragging = false"
+                         @drop.prevent="dragging = false; $refs.logoInput.files = $event.dataTransfer.files; form.logo = $event.dataTransfer.files[0]"
+                         :class="{ 'border-purple-500 bg-purple-50': dragging }">
+                        <template x-if="!logoPreview">
+                            <div>
+                                <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                <p class="text-gray-500 mb-2">লোগো এখানে ড্র্যাগ করুন বা</p>
+                                <label class="inline-block cursor-pointer gradient-bg text-white px-6 py-2 rounded-full font-medium hover:opacity-90 transition">
+                                    ফাইল বাছুন
+                                    <input type="file" name="logo" x-ref="logoInput" accept="image/*" class="hidden"
+                                           @change="if($refs.logoInput.files[0]) { logoPreview = URL.createObjectURL($refs.logoInput.files[0]); form.logo = $refs.logoInput.files[0]; }">
+                                </label>
+                                <p class="text-xs text-gray-400 mt-2">PNG, JPG, SVG (সর্বোচ্চ ২MB)</p>
+                            </div>
+                        </template>
+                        <template x-if="logoPreview">
+                            <div>
+                                <img :src="logoPreview" class="max-h-40 mx-auto mb-4 rounded-lg">
+                                <button type="button" @click="logoPreview = null; form.logo = null; $refs.logoInput.value = ''"
+                                        class="text-red-500 hover:text-red-700 text-sm font-medium">সরান</button>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Step Navigation Buttons --}}
+            <div class="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg z-40">
+                <div class="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
+                    <button type="button" @click="prevStep()" x-show="currentStep > 1"
+                            class="flex items-center space-x-2 text-gray-600 hover:text-purple-600 transition font-medium px-6 py-3 rounded-xl hover:bg-gray-100">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                        <span>পূর্ববর্তী</span>
+                    </button>
+                    <div x-show="currentStep === 1"></div>
+
+                    <button type="button" @click="nextStep()" x-show="currentStep < totalSteps"
+                            class="flex items-center space-x-2 gradient-bg text-white px-8 py-3 rounded-xl font-semibold hover:opacity-90 transition">
+                        <span>পরবর্তী</span>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    </button>
+
+                    <button type="submit" x-show="currentStep === totalSteps"
+                            class="flex items-center space-x-2 bg-green-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-green-700 transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        <span>সম্পন্ন করুন</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <script>
+        function onboarding() {
+            return {
+                currentStep: 1,
+                totalSteps: 9,
+                logoPreview: null,
+                categories: @json($categories),
+
+                form: {
+                    name: '', email: '', phone: '', subdomain: '', password: '', password_confirmation: '',
+                    business_name: '', category_id: '', sub_category: '', persona_name: '',
+                    business_hours: '', off_hours_message: '', business_description: '',
+                    formality_level: 'casual', emoji_usage: 'sometimes', language_style: 'banglish', greeting_style: 'হ্যালো',
+                    price_negotiation: false, negotiation_limit: 0, bulk_discount_rule: '', current_promo: '',
+                    delivery_areas: '', delivery_time: '', delivery_partner: '', cod_available: true,
+                    accepted_payment_methods: '', advance_payment_required: false, advance_payment_percent: 0,
+                    custom_escalation_keywords: '', escalation_contact: '',
+                },
+
+                extraFields: {},
+                faq: [{ question: '', answer: '' }],
+
+                init() {
+                    this.loadExistingData();
+                },
+
+                get selectedCategoryName() {
+                    const cat = this.categories.find(c => c.id == this.form.category_id);
+                    return cat ? cat.name : '';
+                },
+
+                get selectedExtraFields() {
+                    const cat = this.categories.find(c => c.id == this.form.category_id);
+                    return cat ? (cat.extra_fields || []) : [];
+                },
+
+                nextStep() {
+                    if (this.currentStep < this.totalSteps) {
+                        this.currentStep++;
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                },
+
+                prevStep() {
+                    if (this.currentStep > 1) {
+                        this.currentStep--;
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                },
+
+                addFaq() {
+                    this.faq.push({ question: '', answer: '' });
+                },
+
+                removeFaq(index) {
+                    this.faq.splice(index, 1);
+                },
+
+                loadExistingData() {
+                    @if(old())
+                        const old = @json(old()->all());
+                        Object.keys(this.form).forEach(key => {
+                            if (old[key] !== undefined) this.form[key] = old[key];
+                        });
+                        if (old.faq) {
+                            try {
+                                this.faq = typeof old.faq === 'string' ? JSON.parse(old.faq) : old.faq;
+                                if (!Array.isArray(this.faq)) this.faq = [{ question: '', answer: '' }];
+                            } catch(e) {
+                                this.faq = [{ question: '', answer: '' }];
+                            }
+                        }
+                        // Load extra fields from old data
+                        Object.keys(old).forEach(key => {
+                            if (key.startsWith('extra_')) {
+                                this.extraFields[key.replace('extra_', '')] = old[key];
+                            }
+                        });
+                    @endif
+                }
+            }
+        }
+    </script>
+</body>
+</html>

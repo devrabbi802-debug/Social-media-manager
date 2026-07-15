@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
             $this->call(ClothingInventorySeeder::class);
         } else {
             $this->call(AdminSeeder::class);
+            $this->call(BusinessCategorySeeder::class);
         }
     }
 }

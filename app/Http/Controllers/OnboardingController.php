@@ -1,0 +1,180 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\BusinessCategory;
+use App\Models\BusinessSetting;
+use App\Models\Tenant;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
+
+class OnboardingController extends Controller
+{
+    public function index()
+    {
+        $categories = BusinessCategory::active()->ordered()->get();
+        return view('onboarding.index', compact('categories'));
+    }
+
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            // Step 1: Account
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255',
+            'phone' => 'required|string|max:20',
+            'subdomain' => 'required|string|min:3|max:50|regex:/^[a-z0-9-]+$/|unique:tenants,id',
+            'password' => 'required|string|min:8|confirmed',
+
+            // Step 2: Business Info
+            'business_name' => 'required|string|max:255',
+            'category_id' => 'required|exists:business_categories,id',
+            'sub_category' => 'nullable|string|max:255',
+            'persona_name' => 'required|string|max:255',
+            'business_hours' => 'required|string|max:255',
+            'off_hours_message' => 'nullable|string|max:500',
+            'business_description' => 'required|string|max:1000',
+
+            // Step 4: Tone
+            'formality_level' => 'required|in:formal,casual',
+            'emoji_usage' => 'required|in:never,sometimes,often',
+            'language_style' => 'required|in:shuddho_bangla,anjonio,banglish',
+            'greeting_style' => 'required|string|max:255',
+
+            // Step 5: Pricing
+            'price_negotiation' => 'nullable|boolean',
+            'negotiation_limit' => 'nullable|integer|min:0|max:100',
+            'bulk_discount_rule' => 'nullable|string|max:500',
+            'current_promo' => 'nullable|string|max:500',
+
+            // Step 6: Delivery & Payment
+            'delivery_areas' => 'nullable|string|max:1000',
+            'delivery_time' => 'nullable|string|max:255',
+            'delivery_partner' => 'nullable|string|max:255',
+            'cod_available' => 'nullable|boolean',
+            'accepted_payment_methods' => 'nullable|string|max:500',
+            'advance_payment_required' => 'nullable|boolean',
+            'advance_payment_percent' => 'nullable|integer|min:0|max:100',
+
+            // Step 7: FAQ
+            'faq' => 'nullable|array',
+            'faq.*.question' => 'nullable|string|max:500',
+            'faq.*.answer' => 'nullable|string|max:1000',
+
+            // Step 8: Escalation
+            'custom_escalation_keywords' => 'nullable|string|max:500',
+            'escalation_contact' => 'nullable|string|max:255',
+
+            // Step 9: Logo
+            'logo' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+        ]);
+
+        // Category extra fields
+        $extraFieldsData = $request->only([
+            'size_chart', 'color_variants', 'fitting_guide', 'return_policy_days',
+            'warranty_period', 'model_serial_required', 'product_condition', 'after_sales_service',
+            'expiry_date_info', 'halal_certification', 'perishable_delivery', 'ingredients_allergens',
+            'expiry_info', 'skin_type_suitability', 'authentic_guarantee', 'usage_instructions',
+            'furniture_assembly_required', 'dimensions_info', 'furniture_delivery_method', 'installation_charge',
+            'digital_delivery_method', 'license_validity', 'refund_policy', 'subscription_type',
+            'made_to_order_days', 'customization_options', 'no_return_policy', 'artisan_info',
+            'prescription_required', 'storage_condition', 'regulatory_disclaimer', 'dosage_info',
+        ]);
+
+        // Clean empty extra fields
+        $extraFieldsData = array_filter($extraFieldsData, fn($v) => $v !== null && $v !== '');
+
+        DB::beginTransaction();
+
+        try {
+            // 1. Create Tenant
+            $tenant = Tenant::create([
+                'id' => $validated['subdomain'],
+                'name' => $validated['business_name'] ?? $validated['name'],
+                'email' => $validated['email'],
+                'phone' => $validated['phone'],
+                'company' => $validated['business_name'] ?? null,
+                'plan' => 'trial',
+                'status' => 'active',
+                'trial_ends_at' => now()->addDays(14),
+            ]);
+
+            // 2. Create Domain
+            $tenant->domains()->create([
+                'domain' => $validated['subdomain'] . '.' . config('app.domain'),
+            ]);
+
+            // 3. Create User in tenant DB + BusinessSettings
+            $tenant->run(function () use ($validated, $extraFieldsData, $request) {
+                $user = \App\Models\User::create([
+                    'name' => $validated['name'],
+                    'email' => $validated['email'],
+                    'phone' => $validated['phone'],
+                    'company' => $validated['business_name'],
+                    'password' => Hash::make($validated['password']),
+                ]);
+
+                // Logo upload
+                $logoPath = null;
+                if ($request->hasFile('logo')) {
+                    $logoPath = $request->file('logo')->store('logos', 'public');
+                }
+
+                // FAQ data
+                $faq = collect($request->input('faq', []))
+                    ->filter(fn($item) => !empty($item['question']) && !empty($item['answer']))
+                    ->values()
+                    ->toArray();
+
+                // 4. Create BusinessSettings
+                BusinessSetting::create([
+                    'user_id' => $user->id,
+                    'business_name' => $validated['business_name'],
+                    'category_id' => $validated['category_id'],
+                    'sub_category' => $validated['sub_category'] ?? null,
+                    'persona_name' => $validated['persona_name'],
+                    'business_hours' => $validated['business_hours'],
+                    'off_hours_message' => $validated['off_hours_message'] ?? null,
+                    'business_description' => $validated['business_description'],
+                    'formality_level' => $validated['formality_level'],
+                    'emoji_usage' => $validated['emoji_usage'],
+                    'language_style' => $validated['language_style'],
+                    'greeting_style' => $validated['greeting_style'],
+                    'price_negotiation' => $request->boolean('price_negotiation'),
+                    'negotiation_limit' => $validated['negotiation_limit'] ?? 0,
+                    'bulk_discount_rule' => $validated['bulk_discount_rule'] ?? null,
+                    'current_promo' => $validated['current_promo'] ?? null,
+                    'delivery_areas' => $validated['delivery_areas'] ?? null,
+                    'delivery_time' => $validated['delivery_time'] ?? null,
+                    'delivery_partner' => $validated['delivery_partner'] ?? null,
+                    'cod_available' => $request->boolean('cod_available', true),
+                    'accepted_payment_methods' => $validated['accepted_payment_methods'] ?? null,
+                    'advance_payment_required' => $request->boolean('advance_payment_required'),
+                    'advance_payment_percent' => $validated['advance_payment_percent'] ?? 0,
+                    'custom_escalation_keywords' => $validated['custom_escalation_keywords'] ?? null,
+                    'escalation_contact' => $validated['escalation_contact'] ?? null,
+                    'extra_fields_data' => !empty($extraFieldsData) ? $extraFieldsData : null,
+                    'faq' => !empty($faq) ? $faq : null,
+                    'logo_path' => $logoPath,
+                ]);
+
+                // Auto-login
+                Auth::login($user);
+            });
+
+            DB::commit();
+
+            return redirect()->to(
+                'http://' . $validated['subdomain'] . '.' . config('app.domain') . '/dashboard'
+            )->with('success', 'আপনার অ্যাকাউন্ট এবং বিজনেস সেটআপ সফলভাবে সম্পন্ন হয়েছে!');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withInput()->withErrors([
+                'error' => 'সেটআপে সমস্যা হয়েছে: ' . $e->getMessage(),
+            ]);
+        }
+    }
+}

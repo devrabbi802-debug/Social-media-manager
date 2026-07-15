@@ -42,4 +42,9 @@ class AiSystemPrompt extends Model
 
         return $prompt;
     }
+
+    public function generateForBusiness(BusinessSetting $businessSetting): string
+    {
+        return $businessSetting->generateSystemPrompt();
+    }
 }
