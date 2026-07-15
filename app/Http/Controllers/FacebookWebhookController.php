@@ -437,7 +437,7 @@ class FacebookWebhookController extends Controller
         $facebookSetting = FacebookSetting::where('page_id', $recipientId)->first()
             ?? FacebookSetting::first();
 
-        if (! $conversation->sender_name && $facebookSetting) {
+        if (! $conversation->sender_name && $facebookSetting && $facebookSetting->page_access_token) {
             $name = $this->fetchSenderName($senderId, $facebookSetting->page_access_token);
             if ($name) {
                 $conversation->update(['sender_name' => $name]);
