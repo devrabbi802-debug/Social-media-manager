@@ -13,6 +13,7 @@ class Message extends Model
         'type',
         'content',
         'image_path',
+        'audio_path',
         'image_analysis',
         'facebook_mid',
     ];
@@ -32,6 +33,11 @@ class Message extends Model
     public function isImage(): bool
     {
         return $this->type === 'image';
+    }
+
+    public function isAudio(): bool
+    {
+        return $this->type === 'audio';
     }
 
     public function isIncoming(): bool

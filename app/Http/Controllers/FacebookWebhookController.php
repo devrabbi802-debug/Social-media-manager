@@ -149,12 +149,22 @@ class FacebookWebhookController extends Controller
         }
 
         $tenant->run(function () use ($tenant, $data, $accountId, $messageText, $senderId, $senderName, $conversationId, $attachments) {
-            // Extract image URLs from attachments
+            // Extract image and audio URLs from attachments
             $imageUrls = [];
+            $audioUrl = null;
             if (is_array($attachments)) {
                 foreach ($attachments as $attachment) {
-                    if (isset($attachment['url']) && str_starts_with($attachment['type'] ?? '', 'image')) {
-                        $imageUrls[] = $attachment['url'];
+                    $url = $attachment['url'] ?? null;
+                    $type = $attachment['type'] ?? '';
+
+                    if (! $url) {
+                        continue;
+                    }
+
+                    if (str_starts_with($type, 'image')) {
+                        $imageUrls[] = $url;
+                    } elseif (str_starts_with($type, 'audio')) {
+                        $audioUrl = $url;
                     }
                 }
             }
@@ -186,6 +196,19 @@ class FacebookWebhookController extends Controller
                     } catch (\Throwable $e) {
                         Log::error('Zernio: Failed to save incoming image', ['error' => $e->getMessage()]);
                     }
+                }
+            } elseif ($audioUrl) {
+                try {
+                    Message::create([
+                        'conversation_id' => $conversation->id,
+                        'direction' => 'incoming',
+                        'type' => 'audio',
+                        'content' => 'ভয়েস মেসেজ পাঠিয়েছে',
+                        'audio_path' => $audioUrl,
+                        'facebook_mid' => $messageId,
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::error('Zernio: Failed to save incoming audio', ['error' => $e->getMessage()]);
                 }
             } elseif ($messageText) {
                 try {
@@ -266,6 +289,7 @@ class FacebookWebhookController extends Controller
                 messageText: $finalText ?? '',
                 pageAccessToken: $facebookSetting->page_access_token ?? '',
                 imageUrls: $finalImageUrls,
+                audioUrl: $audioUrl,
                 zernioAccountId: $facebookSetting->zernio_account_id,
                 zernioApiKey: $facebookSetting->zernio_api_key,
                 zernioConversationId: $conversationId,
@@ -374,14 +398,24 @@ class FacebookWebhookController extends Controller
         $text = $message['text'] ?? null;
         $attachments = $message['attachments'] ?? [];
         $imageUrls = [];
+        $audioUrl = null;
 
         foreach ($attachments as $attachment) {
-            if (($attachment['type'] ?? '') === 'image' && isset($attachment['payload']['url'])) {
-                $imageUrls[] = $attachment['payload']['url'];
+            $type = $attachment['type'] ?? '';
+            $url = $attachment['payload']['url'] ?? null;
+
+            if (! $url) {
+                continue;
+            }
+
+            if ($type === 'image') {
+                $imageUrls[] = $url;
+            } elseif ($type === 'audio') {
+                $audioUrl = $url;
             }
         }
 
-        if (! $text && empty($imageUrls)) {
+        if (! $text && empty($imageUrls) && ! $audioUrl) {
             return;
         }
 
@@ -390,6 +424,7 @@ class FacebookWebhookController extends Controller
             'sender_id' => $senderId,
             'text' => $text,
             'image_count' => count($imageUrls),
+            'has_audio' => $audioUrl !== null,
             'mid' => $mid,
         ]);
 
@@ -426,6 +461,22 @@ class FacebookWebhookController extends Controller
                         'error' => $e->getMessage(),
                     ]);
                 }
+            }
+        } elseif ($audioUrl) {
+            try {
+                Message::create([
+                    'conversation_id' => $conversation->id,
+                    'direction' => 'incoming',
+                    'type' => 'audio',
+                    'content' => 'ভয়েস মেসেজ পাঠিয়েছে',
+                    'audio_path' => $audioUrl,
+                    'facebook_mid' => $mid,
+                ]);
+            } catch (\Throwable $e) {
+                Log::error('Failed to save incoming audio message', [
+                    'sender_id' => $senderId,
+                    'error' => $e->getMessage(),
+                ]);
             }
         } elseif ($text) {
             try {
@@ -517,6 +568,7 @@ class FacebookWebhookController extends Controller
                 messageText: $finalText ?? '',
                 pageAccessToken: $facebookSetting->page_access_token,
                 imageUrls: $finalImageUrls,
+                audioUrl: $audioUrl,
             )->delay(now()->addSeconds($delay));
 
             Log::info('AI reply job dispatched', [

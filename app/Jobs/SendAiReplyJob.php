@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Tenant;
 use App\Services\AiChatService;
+use App\Services\AudioTranscriptionService;
 use App\Services\ClipService;
 use App\Services\ZernioService;
 use Illuminate\Bus\Queueable;
@@ -43,6 +44,7 @@ class SendAiReplyJob implements ShouldQueue
         public string $messageText,
         public string $pageAccessToken,
         public ?array $imageUrls = null,
+        public ?string $audioUrl = null,
         public ?string $zernioAccountId = null,
         public ?string $zernioApiKey = null,
         public ?string $zernioConversationId = null,
@@ -66,8 +68,14 @@ class SendAiReplyJob implements ShouldQueue
             'tenant_id' => $this->tenantId,
             'sender_id' => $this->senderId,
             'has_images' => ! empty($this->imageUrls),
+            'has_audio' => $this->audioUrl !== null,
             'image_urls_count' => count($this->imageUrls ?? []),
         ]);
+
+        // Step 0: Transcribe audio if present and no text provided
+        if ($this->audioUrl && empty($this->messageText)) {
+            $this->transcribeAudio();
+        }
 
         if (empty($this->imageUrls)) {
             sleep(3);
@@ -106,6 +114,46 @@ class SendAiReplyJob implements ShouldQueue
         }
 
         $this->processReply();
+    }
+
+    private function transcribeAudio(): void
+    {
+        $tenant = Tenant::find($this->tenantId);
+
+        if (! $tenant) {
+            return;
+        }
+
+        $tenant->run(function () {
+            $facebookSetting = FacebookSetting::where('connection_type', 'zernio')
+                ->where('zernio_account_id', $this->zernioAccountId)
+                ->first()
+                ?? FacebookSetting::where('page_access_token', $this->pageAccessToken)->first();
+
+            if (! $facebookSetting) {
+                Log::warning('SendAiReplyJob: no facebookSetting for audio transcription', [
+                    'tenant_id' => $this->tenantId,
+                ]);
+
+                return;
+            }
+
+            $transcriptionService = new AudioTranscriptionService;
+            $transcribedText = $transcriptionService->transcribe($this->audioUrl, $facebookSetting->user_id);
+
+            if ($transcribedText) {
+                $this->messageText = $transcribedText;
+                Log::info('SendAiReplyJob: audio transcribed successfully', [
+                    'sender_id' => $this->senderId,
+                    'text' => mb_substr($transcribedText, 0, 100),
+                ]);
+            } else {
+                Log::warning('SendAiReplyJob: audio transcription failed', [
+                    'sender_id' => $this->senderId,
+                ]);
+                $this->messageText = 'দুঃখিত, আমি আপনার ভয়েস মেসেজ বুঝতে পারিনি। আপনি কি লিখে পাঠাতে পারেন?';
+            }
+        });
     }
 
     private function processReply(): void
