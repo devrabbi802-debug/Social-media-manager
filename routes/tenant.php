@@ -106,6 +106,11 @@ Route::middleware([
         Route::get('/facebook/post', [DashboardController::class, 'facebookPost'])->name('facebook.post');
         Route::get('/settings', [DashboardController::class, 'settings'])->name('settings');
         Route::put('/settings/business', [DashboardController::class, 'updateBusinessSettings'])->name('settings.business.update');
+        Route::put('/settings/business-info', [DashboardController::class, 'updateBusinessInfo'])->name('settings.business-info.update');
+        Route::put('/settings/tone', [DashboardController::class, 'updateTone'])->name('settings.tone.update');
+        Route::put('/settings/pricing', [DashboardController::class, 'updatePricing'])->name('settings.pricing.update');
+        Route::put('/settings/faq', [DashboardController::class, 'updateFaq'])->name('settings.faq.update');
+        Route::put('/settings/escalation', [DashboardController::class, 'updateEscalation'])->name('settings.escalation.update');
         Route::get('/leads', [DashboardController::class, 'leads'])->name('leads');
         Route::get('/reports', [DashboardController::class, 'reports'])->name('reports');
         Route::get('/whatsapp/send', [DashboardController::class, 'whatsapp'])->name('whatsapp.send');

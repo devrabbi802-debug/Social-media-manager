@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BusinessCategory;
 use App\Models\BusinessSetting;
 use App\Models\Conversation;
 use App\Models\FacebookSetting;
 use App\Models\Message;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -48,7 +50,12 @@ class DashboardController extends Controller
     public function settings()
     {
         $businessSetting = BusinessSetting::where('user_id', auth()->id())->first();
-        return view('tenant.settings', compact('businessSetting'));
+        $categories = DB::connection('mysql')->table('business_categories')
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+        return view('tenant.settings', compact('businessSetting', 'categories'));
     }
 
     public function updateBusinessSettings(Request $request)
@@ -132,6 +139,121 @@ class DashboardController extends Controller
         ]);
 
         return back()->with('success', 'বিজনেস সেটিংস আপডেট হয়েছে!');
+    }
+
+    public function updateBusinessInfo(Request $request)
+    {
+        $validated = $request->validate([
+            'business_name' => 'required|string|max:255',
+            'persona_name' => 'required|string|max:255',
+            'category_id' => 'nullable|integer',
+            'sub_category' => 'nullable|string|max:255',
+            'business_hours' => 'required|string|max:255',
+            'off_hours_message' => 'nullable|string|max:500',
+            'business_description' => 'required|string|max:1000',
+        ]);
+
+        if (!empty($validated['category_id'])) {
+            $exists = DB::connection('mysql')->table('business_categories')
+                ->where('id', $validated['category_id'])
+                ->exists();
+            if (!$exists) {
+                return back()->withErrors(['category_id' => 'ক্যাটাগরি পাওয়া যায়নি।'])->withInput();
+            }
+        }
+
+        $businessSetting = BusinessSetting::where('user_id', auth()->id())->first();
+        if (!$businessSetting) {
+            return back()->withErrors(['error' => 'বিজনেস সেটিংস পাওয়া যায়নি।']);
+        }
+
+        $businessSetting->update($validated);
+
+        return back()->with('success', 'বিজনেস তথ্য আপডেট হয়েছে!');
+    }
+
+    public function updateTone(Request $request)
+    {
+        $validated = $request->validate([
+            'formality_level' => 'required|in:formal,casual',
+            'emoji_usage' => 'required|in:never,sometimes,often',
+            'language_style' => 'required|in:shuddho_bangla,anjonio,banglish',
+            'greeting_style' => 'required|string|max:255',
+        ]);
+
+        $businessSetting = BusinessSetting::where('user_id', auth()->id())->first();
+        if (!$businessSetting) {
+            return back()->withErrors(['error' => 'বিজনেস সেটিংস পাওয়া যায়নি।']);
+        }
+
+        $businessSetting->update($validated);
+
+        return back()->with('success', 'টোন ও যোগাযোগ সেটিংস আপডেট হয়েছে!');
+    }
+
+    public function updatePricing(Request $request)
+    {
+        $validated = $request->validate([
+            'price_negotiation' => 'nullable|boolean',
+            'negotiation_limit' => 'nullable|integer|min:0|max:100',
+            'bulk_discount_rule' => 'nullable|string|max:500',
+            'current_promo' => 'nullable|string|max:500',
+        ]);
+
+        $businessSetting = BusinessSetting::where('user_id', auth()->id())->first();
+        if (!$businessSetting) {
+            return back()->withErrors(['error' => 'বিজনেস সেটিংস পাওয়া যায়নি।']);
+        }
+
+        $businessSetting->update([
+            'price_negotiation' => $request->boolean('price_negotiation'),
+            'negotiation_limit' => $validated['negotiation_limit'] ?? 0,
+            'bulk_discount_rule' => $validated['bulk_discount_rule'] ?? null,
+            'current_promo' => $validated['current_promo'] ?? null,
+        ]);
+
+        return back()->with('success', 'মূল্য নির্ধারণ সেটিংস আপডেট হয়েছে!');
+    }
+
+    public function updateFaq(Request $request)
+    {
+        $faq = $request->input('faq', []);
+        if (is_string($faq)) {
+            $faq = json_decode($faq, true) ?? [];
+        }
+
+        $faq = collect($faq)
+            ->filter(fn($item) => !empty($item['question']) && !empty($item['answer']))
+            ->values()
+            ->toArray();
+
+        $businessSetting = BusinessSetting::where('user_id', auth()->id())->first();
+        if (!$businessSetting) {
+            return back()->withErrors(['error' => 'বিজনেস সেটিংস পাওয়া যায়নি।']);
+        }
+
+        $businessSetting->update([
+            'faq' => !empty($faq) ? $faq : null,
+        ]);
+
+        return back()->with('success', 'FAQ আপডেট হয়েছে!');
+    }
+
+    public function updateEscalation(Request $request)
+    {
+        $validated = $request->validate([
+            'custom_escalation_keywords' => 'nullable|string|max:500',
+            'escalation_contact' => 'nullable|string|max:255',
+        ]);
+
+        $businessSetting = BusinessSetting::where('user_id', auth()->id())->first();
+        if (!$businessSetting) {
+            return back()->withErrors(['error' => 'বিজনেস সেটিংস পাওয়া যায়নি।']);
+        }
+
+        $businessSetting->update($validated);
+
+        return back()->with('success', 'এসকালেশন রুলস আপডেট হয়েছে!');
     }
 
     public function leads()
