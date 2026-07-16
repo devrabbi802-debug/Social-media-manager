@@ -573,13 +573,13 @@
                             </button>
                             <div>
                                 <label class="block text-xs font-medium text-gray-500 mb-1">প্রশ্ন</label>
-                                <input :name="'faq[' + index + '][question]'" x-model="item.question"
+                                <input x-model="item.question"
                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                                        placeholder="শোরুম কোথায়?">
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-gray-500 mb-1">উত্তর</label>
-                                <textarea :name="'faq[' + index + '][answer]'" x-model="item.answer" rows="2"
+                                <textarea x-model="item.answer" rows="2"
                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                                           placeholder="আমাদের শোরুম ঢাকায় অবস্থিত..."></textarea>
                             </div>
@@ -590,6 +590,7 @@
                             class="w-full border-2 border-dashed border-purple-300 text-purple-600 rounded-xl py-3 hover:bg-purple-50 transition font-medium">
                         + প্রশ্ন-উত্তর যোগ করুন
                     </button>
+                    <input type="hidden" name="faq" :value="JSON.stringify(faq.filter(f => f.question.trim() && f.answer.trim()))">
                 </div>
             </div>
 

@@ -37,6 +37,7 @@ class BusinessSetting extends Model
         'order_process_message',
         'custom_escalation_keywords',
         'escalation_contact',
+        'faq',
         'extra_fields_data',
         'logo_path',
     ];
@@ -47,6 +48,7 @@ class BusinessSetting extends Model
             'extra_fields_data' => 'array',
             'accepted_payment_methods' => 'array',
             'delivery_areas' => 'array',
+            'faq' => 'array',
             'price_negotiation' => 'boolean',
             'cod_available' => 'boolean',
             'advance_payment_required' => 'boolean',

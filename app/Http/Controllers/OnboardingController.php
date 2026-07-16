@@ -40,6 +40,10 @@ class OnboardingController extends Controller
             $decoded = json_decode($request->input('delivery_areas'), true);
             $request->merge(['delivery_areas' => $decoded]);
         }
+        if (is_string($request->input('faq'))) {
+            $decoded = json_decode($request->input('faq'), true);
+            $request->merge(['faq' => $decoded]);
+        }
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
