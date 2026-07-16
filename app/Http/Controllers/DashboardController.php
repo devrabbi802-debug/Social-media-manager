@@ -139,7 +139,7 @@ class DashboardController extends Controller
             'logo_path' => $logoPath,
         ]);
 
-        return back()->with('success', 'বিজনেস সেটিংস আপডেট হয়েছে!');
+        return back()->with(['success' => 'বিজনেস সেটিংস আপডেট হয়েছে!', 'active_tab' => 'delivery']);
     }
 
     public function updateBusinessInfo(Request $request)
@@ -170,7 +170,7 @@ class DashboardController extends Controller
 
         $businessSetting->update($validated);
 
-        return back()->with('success', 'বিজনেস তথ্য আপডেট হয়েছে!');
+        return back()->with(['success' => 'বিজনেস তথ্য আপডেট হয়েছে!', 'active_tab' => 'business']);
     }
 
     public function updateTone(Request $request)
@@ -189,7 +189,7 @@ class DashboardController extends Controller
 
         $businessSetting->update($validated);
 
-        return back()->with('success', 'টোন ও যোগাযোগ সেটিংস আপডেট হয়েছে!');
+        return back()->with(['success' => 'টোন ও যোগাযোগ সেটিংস আপডেট হয়েছে!', 'active_tab' => 'tone']);
     }
 
     public function updatePricing(Request $request)
@@ -213,7 +213,7 @@ class DashboardController extends Controller
             'current_promo' => $validated['current_promo'] ?? null,
         ]);
 
-        return back()->with('success', 'মূল্য নির্ধারণ সেটিংস আপডেট হয়েছে!');
+        return back()->with(['success' => 'মূল্য নির্ধারণ সেটিংস আপডেট হয়েছে!', 'active_tab' => 'pricing']);
     }
 
     public function updateFaq(Request $request)
@@ -237,7 +237,7 @@ class DashboardController extends Controller
             'faq' => !empty($faq) ? $faq : null,
         ]);
 
-        return back()->with('success', 'FAQ আপডেট হয়েছে!');
+        return back()->with(['success' => 'FAQ আপডেট হয়েছে!', 'active_tab' => 'faq']);
     }
 
     public function updateEscalation(Request $request)
@@ -254,7 +254,7 @@ class DashboardController extends Controller
 
         $businessSetting->update($validated);
 
-        return back()->with('success', 'এসকালেশন রুলস আপডেট হয়েছে!');
+        return back()->with(['success' => 'এসকালেশন রুলস আপডেট হয়েছে!', 'active_tab' => 'escalation']);
     }
 
     public function updateProfile(Request $request)
@@ -268,7 +268,7 @@ class DashboardController extends Controller
 
         auth()->user()->update($validated);
 
-        return back()->with('success', 'প্রোফাইল আপডেট হয়েছে!');
+        return back()->with(['success' => 'প্রোফাইল আপডেট হয়েছে!', 'active_tab' => 'profile']);
     }
 
     public function updatePassword(Request $request)
@@ -284,7 +284,7 @@ class DashboardController extends Controller
 
         auth()->user()->update(['password' => $validated['password']]);
 
-        return back()->with('success', 'পাসওয়ার্ড আপডেট হয়েছে!');
+        return back()->with(['success' => 'পাসওয়ার্ড আপডেট হয়েছে!', 'active_tab' => 'password']);
     }
 
     public function leads()

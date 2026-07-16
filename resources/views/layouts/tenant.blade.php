@@ -1,5 +1,6 @@
 @php
     $tenantUser = Auth::user();
+    $businessLogo = \App\Models\BusinessSetting::where('user_id', $tenantUser->id ?? 0)->first();
 @endphp
 
 <!DOCTYPE html>
@@ -78,9 +79,13 @@
             {{-- User Dropdown --}}
             <div class="relative" x-data="{ open: false }">
                 <button @click="open = !open" @click.outside="open = false" class="flex items-center space-x-2 text-gray-600 hover:text-purple-600 transition">
-                    <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                        <span class="text-purple-600 font-bold text-sm">{{ mb_substr($tenantUser->name ?? 'U', 0, 1) }}</span>
-                    </div>
+                    @if($businessLogo && $businessLogo->logo_path)
+                        <img src="{{ $businessLogo->getLogoUrl() }}" alt="Logo" class="w-8 h-8 rounded-full object-cover border border-gray-200">
+                    @else
+                        <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                            <span class="text-purple-600 font-bold text-sm">{{ mb_substr($tenantUser->name ?? 'U', 0, 1) }}</span>
+                        </div>
+                    @endif
                     <span class="text-sm font-medium hidden sm:inline">{{ $tenantUser->name ?? 'User' }}</span>
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
