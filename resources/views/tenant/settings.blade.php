@@ -66,7 +66,7 @@
                         {{-- Profile Tab --}}
                         <div x-show="tab === 'profile'" x-transition>
                             <h2 class="text-lg font-bold text-gray-900 mb-6">@lang('settings.profile_info')</h2>
-                            <form method="POST" action="{{ url('/settings/profile') }}">
+                            <form method="POST" action="{{ route('settings.profile.update') }}">
                                 @csrf
                                 @method('PUT')
                                 <div class="grid md:grid-cols-2 gap-6">
@@ -100,7 +100,7 @@
                         {{-- Password Tab --}}
                         <div x-show="tab === 'password'" x-transition>
                             <h2 class="text-lg font-bold text-gray-900 mb-6">@lang('settings.change_password')</h2>
-                            <form method="POST" action="{{ url('/settings/password') }}">
+                            <form method="POST" action="{{ route('settings.password.update') }}">
                                 @csrf
                                 @method('PUT')
                                 <div class="space-y-4 max-w-md">

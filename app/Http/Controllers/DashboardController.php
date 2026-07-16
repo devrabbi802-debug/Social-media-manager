@@ -9,6 +9,7 @@ use App\Models\FacebookSetting;
 use App\Models\Message;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 
 class DashboardController extends Controller
 {
@@ -254,6 +255,36 @@ class DashboardController extends Controller
         $businessSetting->update($validated);
 
         return back()->with('success', 'এসকালেশন রুলস আপডেট হয়েছে!');
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|max:255',
+            'phone' => 'nullable|string|max:50',
+            'company' => 'nullable|string|max:255',
+        ]);
+
+        auth()->user()->update($validated);
+
+        return back()->with('success', 'প্রোফাইল আপডেট হয়েছে!');
+    }
+
+    public function updatePassword(Request $request)
+    {
+        $validated = $request->validate([
+            'current_password' => 'required',
+            'password' => 'required|min:6|confirmed',
+        ]);
+
+        if (!Hash::check($validated['current_password'], auth()->user()->password)) {
+            return back()->withErrors(['current_password' => 'বর্তমান পাসওয়ার্ড সঠিক নয়।']);
+        }
+
+        auth()->user()->update(['password' => $validated['password']]);
+
+        return back()->with('success', 'পাসওয়ার্ড আপডেট হয়েছে!');
     }
 
     public function leads()

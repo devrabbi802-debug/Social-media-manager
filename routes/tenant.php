@@ -105,6 +105,8 @@ Route::middleware([
         Route::get('/integration', [DashboardController::class, 'integration'])->name('integration');
         Route::get('/facebook/post', [DashboardController::class, 'facebookPost'])->name('facebook.post');
         Route::get('/settings', [DashboardController::class, 'settings'])->name('settings');
+        Route::put('/settings/profile', [DashboardController::class, 'updateProfile'])->name('settings.profile.update');
+        Route::put('/settings/password', [DashboardController::class, 'updatePassword'])->name('settings.password.update');
         Route::put('/settings/business', [DashboardController::class, 'updateBusinessSettings'])->name('settings.business.update');
         Route::put('/settings/business-info', [DashboardController::class, 'updateBusinessInfo'])->name('settings.business-info.update');
         Route::put('/settings/tone', [DashboardController::class, 'updateTone'])->name('settings.tone.update');
