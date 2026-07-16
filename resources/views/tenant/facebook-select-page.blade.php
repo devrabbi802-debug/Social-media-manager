@@ -65,7 +65,7 @@
                             @csrf
                             <input type="hidden" name="page_id" value="{{ $page['id'] }}">
                             <input type="hidden" name="page_name" value="{{ $page['name'] }}">
-                            <input type="hidden" name="access_token" value="{{ $page['access_token'] }}">
+                            <input type="hidden" name="access_token" value="{{ $page['access_token'] ?? '' }}">
                             <input type="hidden" name="zernio_account_id" value="{{ $accountId ?? '' }}">
                             <input type="hidden" name="tempToken" value="{{ $tempToken ?? '' }}">
                             <button type="submit" class="w-full text-left p-4 border-2 border-gray-200 rounded-xl hover:border-purple-500 hover:bg-purple-50 transition flex items-center justify-between group">

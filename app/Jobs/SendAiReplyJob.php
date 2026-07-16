@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\AiSetting;
 use App\Models\AiSystemPrompt;
+use App\Models\BusinessSetting;
 use App\Models\Conversation;
 use App\Models\FacebookSetting;
 use App\Models\Message;
@@ -166,9 +167,7 @@ class SendAiReplyJob implements ShouldQueue
             return;
         }
 
-        $systemPrompt = $this->buildSystemPrompt($tenant);
-
-        $tenant->run(function () use ($tenant, $systemPrompt) {
+        $tenant->run(function () use ($tenant) {
             $facebookSetting = FacebookSetting::where('connection_type', 'zernio')
                 ->where('zernio_account_id', $this->zernioAccountId)
                 ->first()
@@ -182,6 +181,9 @@ class SendAiReplyJob implements ShouldQueue
 
                 return;
             }
+
+            // Build system prompt with tenant-specific business info
+            $systemPrompt = $this->buildSystemPrompt($tenant, $facebookSetting->user_id);
 
             // Step 1: Mark message as seen (customer sees ✓✓)
             $this->sendMarkSeen();
@@ -712,24 +714,30 @@ class SendAiReplyJob implements ShouldQueue
         return $history;
     }
 
-    private function buildSystemPrompt(Tenant $tenant): string
+    private function buildSystemPrompt(Tenant $tenant, ?int $userId = null): string
     {
-        $cacheKey = 'system_prompt_'.$tenant->id;
+        $cacheKey = 'system_prompt_'.$tenant->id.($userId ? '_'.$userId : '');
 
-        return cache()->remember($cacheKey, 300, function () use ($tenant) {
+        return cache()->remember($cacheKey, 300, function () use ($tenant, $userId) {
+            // 1. Get base prompt from admin panel (landlord DB)
             $row = DB::connection('mysql')->table('ai_system_prompts')->first();
-
-            if (! $row) {
-                return (new AiSystemPrompt)->defaultPrompt();
-            }
-
-            $prompt = $row->prompt_text ?? (new AiSystemPrompt)->defaultPrompt();
-
-            return str_replace(
+            $basePrompt = $row->prompt_text ?? (new AiSystemPrompt)->defaultPrompt();
+            $basePrompt = str_replace(
                 ['{company_name}', '{owner_name}'],
                 [$tenant->name ?? 'এই কোম্পানি', $tenant->data['owner_name'] ?? ''],
-                $prompt
+                $basePrompt
             );
+
+            // 2. Append tenant-specific business settings if available
+            if ($userId) {
+                $businessSetting = BusinessSetting::where('user_id', $userId)->first();
+                if ($businessSetting) {
+                    $businessPrompt = $businessSetting->generateSystemPrompt();
+                    $basePrompt .= "\n\n{$businessPrompt}";
+                }
+            }
+
+            return $basePrompt;
         });
     }
 
