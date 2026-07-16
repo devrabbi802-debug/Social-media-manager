@@ -11,7 +11,7 @@ SocialBoost AI — Laravel 13 multi-tenant SaaS for social media management. Mul
 ```bash
 ./start.sh              # PC on korle — Docker + DNS fix + Apache + Ngrok tunnel
 composer setup          # install, key, migrate, npm install, build
-composer dev             # artisan serve + queue:listen + pail + npm run dev (4 processes)
+composer dev             # artisan serve + queue:listen --tries=1 + pail + npm run dev (4 processes via concurrently)
 composer test            # config:clear + artisan test
 php artisan test --filter=TestName
 npx vite build
@@ -34,14 +34,23 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 - **Tenant custom attributes** in `data` JSON column — query: `where('data->status', 'active')`, NOT `where('status', 'active')`
 - **Central domains** (not tenant): `127.0.0.1`, `localhost`, `smm.test`, `socialboost.com`, `www.socialboost.com`
 - **Tenant migrations**: `database/migrations/tenant/` — run via `php artisan tenants:migrate`
+- **Tenant routes**: Loaded by `TenancyServiceProvider::mapRoutes()` in `app/booted` callback, NOT via `withRouting()` — tenant routes coexist with central routes in one route collection
+
+### Route Priority & Domain Blocking
+
+- **Central routes** (`routes/web.php`): Wrapped in `PreventAccessFromNonCentralDomains` middleware — blocks non-existent subdomains (e.g. `rabbi.smm.test` → 404), allows central domains AND valid tenant domains
+- **Webhook routes** (`/webhook/facebook`, `/webhook/zernio`): Outside middleware group — accessible from any domain (Facebook/Zernio calls via tunnel)
+- **Tenant routes** (`routes/tenant.php`): Use `InitializeTenancyByDomain` + `PreventAccessFromCentralDomains` — blocks central domains from accessing tenant routes
+- **`TenantCouldNotBeIdentifiedOnDomainException`** → caught in `bootstrap/app.php`, renders 404
+- **Custom 404 page**: `resources/views/errors/404.blade.php` — Bengali text, gradient styling
+- **Gotcha**: Central routes are registered FIRST (via `withRouting`), tenant routes later (via `TenancyServiceProvider::boot()`). For paths that exist in both files (e.g. `/dashboard`), the central `web.php` version wins. Tenant routes only work because `InitializeTenancyByDomain` middleware switches DB context.
 
 ### Auth System
 
 - **Dual auth**: `web` guard (User, tenant DB) + `admin` guard (Admin, landlord DB)
 - **Admin permissions**: `super_admin` bypasses all. Defined in `config/menu.php`, stored in `admin_user_permissions`
 - **Admin routes loaded via** `then:` callback in `bootstrap/app.php`, NOT through `withRouting()`
-- **`admin` middleware alias** registered in `bootstrap/app.php`
-- **`locale` middleware alias** registered in `bootstrap/app.php` — sets `app()->setLocale()` from user's `locale` column
+- **Middleware aliases** in `bootstrap/app.php`: `admin` → `AdminMiddleware`, `locale` → `SetLocale`, `central` → `PreventAccessFromNonCentralDomains`
 - **User model** uses Laravel 11+ `#[Fillable]`/`#[Hidden]` PHP attributes. **Admin model** uses traditional `$fillable`/`$hidden` arrays — style differs between the two
 - **`Admin::getAllPermissions()`** references `\App\Services\Menu::class` which **does not exist** — will error if called by non-super_admin
 
@@ -53,7 +62,6 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 - **Step validation**: Alpine.js client-side validation blocks "Next" button if required fields empty
 - **Subdomain auto-clean**: `@input` event auto-converts to lowercase, removes spaces/special chars
 - **Category select**: Searchable dropdown with custom category creation (user types name → "➕ যোগ করুন" → creates in `business_categories` table on submit)
-- **Old POST /register closure**: Removed — now only onboarding flow exists
 - **JSON hidden inputs**: `accepted_payment_methods` and `delivery_areas` use `JSON.stringify()` in hidden inputs — controllers decode with `json_decode()` before validation
 
 **8 Steps:**
@@ -76,20 +84,13 @@ php artisan tenants:run migrate    # Run migration for specific tenant
 7. FAQ filtered (empty Q/A removed)
 8. Auto-login + redirect to tenant dashboard
 
-**Validation rules:**
-- Step 1: name, email (valid format), phone, subdomain (lowercase/number/hyphen, available), password (8+ chars, confirmed)
-- Step 2: business_name, category_id OR custom_category_name, persona_name, business_hours, business_description
-- Step 3: formality_level, emoji_usage, language_style, greeting_style
-- Step 5: delivery_areas (array with name+price), accepted_payment_methods (array with name+details), refund_policy, exchange_policy, order_process_message
-- Steps 4, 6-8: all optional
-
 ### Localization (Multi-Language)
 
 - **Languages**: Bengali (`bn`) — default, English (`en`)
 - **Storage**: User's `locale` column in tenant DB `users` table (persistent across sessions)
 - **Middleware**: `SetLocale` (`app/Http/Middleware/SetLocale.php`) — reads `$request->user()->locale`, sets `app()->setLocale()`. Registered as `locale` alias in `bootstrap/app.php`
 - **Route**: `POST /language/switch` (`LanguageController@switch`) — updates user locale, redirects back
-- **Switcher UI**: Topbar — dedicated language dropdown ( globe icon + "বাংলা/English") + profile dropdown toggle
+- **Switcher UI**: Topbar — dedicated language dropdown (globe icon + "বাংলা/English") + profile dropdown toggle
 - **Translation files**: `lang/bn/` and `lang/en/` (18 files each)
   - `sidebar.php`, `common.php`, `tenant.php`, `nav.php`, `dashboard.php`, `settings.php`, `integration.php`, `conversations.php`, `facebook.php`, `ai.php`, `image_match.php`, `products.php`, `categories.php`, `brands.php`, `warehouses.php`, `inventory.php`, `attributes.php`, `auth.php`
 - **Usage in Blade**: `@lang('file.key')` or `__('file.key')`. For dynamic text: `__('file.key', ['var' => $value])`
@@ -167,6 +168,7 @@ docker exec laravel-app php artisan <command>
 - **Tenant views**: `resources/views/tenant/` — `index`, `integration`, `facebook-settings`, `facebook-select-page`, `ai-setup`, `conversations/`, `products/`, `categories/`, `brands/`, `warehouses/`, `inventory/`, `attribute-templates/`, `image-match/`
 - **Admin views**: `resources/views/admin/` (auth, dashboard, users CRUD, tenants CRUD, ai-system-prompt, business-categories CRUD)
 - **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/layouts/tenant.blade.php` (tenant dashboard), `resources/views/admin/layouts/app.blade.php` (admin)
+- **404 page**: `resources/views/errors/404.blade.php` — custom Bengali 404 with gradient styling
 - **Menu config**: `config/menu.php` — add admin sidebar menu groups here
 - **Tenancy config**: `config/tenancy.php` — central domains, DB suffix, tenant model
 - **Services config**: `config/services.php` — Facebook OAuth + Groq + Cerebras + Gemini + CLIP server + Zernio base URL
@@ -174,18 +176,19 @@ docker exec laravel-app php artisan <command>
 - **Tenant migrations**: `database/migrations/tenant/`
 - **Translation files**: `lang/bn/` and `lang/en/` (18 files each — sidebar, common, tenant, nav, dashboard, settings, integration, conversations, facebook, ai, image_match, products, categories, brands, warehouses, inventory, attributes, auth)
 - **Localization middleware**: `app/Http/Middleware/SetLocale.php`
+- **Domain blocking middleware**: `app/Http/Middleware/PreventAccessFromNonCentralDomains.php`
 - **Language controller**: `app/Http/Controllers/Tenant/LanguageController.php`
 - **Onboarding controller**: `app/Http/Controllers/OnboardingController.php`
 - **Subdomain check controller**: `app/Http/Controllers/SubdomainController.php`
-- **Business settings update**: `DashboardController@updateBusinessSettings` (`PUT /settings/business`)
+- **Dashboard controller**: `app/Http/Controllers/DashboardController.php` — handles dashboard, settings (profile/password/business/tone/pricing/faq/escalation), leads, reports, whatsapp, facebook, inventory, integration
 
 ## Missing Views (routes exist, views don't)
 
 These views are referenced in `routes/web.php` but **do not exist on disk**:
 `tenant.facebook`
 
-These views now exist (placeholder pages):
-`tenant.leads`, `tenant.reports`, `tenant.whatsapp`
+These views exist as placeholder pages:
+`tenant.leads`, `tenant.reports`, `tenant.whatsapp`, `tenant.inventory`, `tenant.inventory-add`
 
 `tenant.settings` exists at `resources/views/tenant/settings.blade.php` — includes profile, password, and full business settings (logo, delivery areas, payment methods, refund/exchange policies, order process message).
 
@@ -197,7 +200,7 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 
 ### Landlord DB Tables
 - `tenants` — string PK (subdomain), `data` JSON column (custom attributes like status, plan, trial_ends_at)
-- `domains` — domain→tenant FK mapping
+- `domains` — domain→tenant FK mapping. Used by `PreventAccessFromNonCentralDomains` to validate tenant domains
 - `admins` — admin users (landlord DB, `admin` guard)
 - `admin_user_permissions` — per-admin menu permissions (super_admin bypasses all)
 - `ai_system_prompts` — global AI system prompt (landlord-level)
@@ -243,6 +246,7 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 - **Redis**: queue + cache driver in `.env` (`QUEUE_CONNECTION=redis`, `CACHE_STORE=redis`)
 - **Stock operations** wrapped in `DB::transaction()` — `Product::recalculateStock()` called after variant changes
 - **`InventoryAlert::isLowStock()`** — variant-aware (checks variant stock if variants exist)
+- **Route conflicts**: Central `web.php` routes registered before tenant `tenant.php` routes. For identical paths, central version wins. Tenant routes rely on `InitializeTenancyByDomain` middleware to switch DB context.
 
 ## Product/Inventory Architecture
 
