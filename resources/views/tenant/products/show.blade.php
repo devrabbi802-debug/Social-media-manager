@@ -34,10 +34,7 @@
                         <div class="grid grid-cols-4 gap-4">
                             @foreach($product->images as $image)
                                 <div class="relative">
-                                    <img src="{{ asset('storage/' . $image->image_path) }}" class="w-full h-24 object-cover rounded-lg {{ $image->is_primary ? 'ring-2 ring-purple-500' : '' }}">
-                                    @if($image->is_primary)
-                                        <span class="absolute top-1 left-1 bg-purple-600 text-white text-xs px-1.5 py-0.5 rounded">@lang('products.primary')</span>
-                                    @endif
+                                    <img src="{{ asset('storage/' . $image->image_path) }}" class="w-full h-24 object-cover rounded-lg">
                                 </div>
                             @endforeach
                         </div>
@@ -54,17 +51,94 @@
                 </div>
                 @endif
 
-                {{-- Attributes --}}
+                {{-- Category Extra Fields --}}
                 @if($product->attributeValues->count() > 0)
+                @php
+                    $extraFieldValues = $product->attributeValues->filter(fn($av) =>
+                        $av->attributeTemplate &&
+                        !$av->attributeTemplate->is_global &&
+                        !$av->attributeTemplate->is_variant_option
+                    );
+                    $otherAttributes = $product->attributeValues->filter(fn($av) =>
+                        !$av->attributeTemplate ||
+                        $av->attributeTemplate->is_global ||
+                        $av->attributeTemplate->is_variant_option
+                    );
+                @endphp
+
+                @if($extraFieldValues->count() > 0)
+                <div class="bg-white rounded-2xl p-6 shadow-sm">
+                    <h2 class="text-lg font-bold text-gray-900 mb-1">@lang('products.category_fields')</h2>
+                    <p class="text-sm text-gray-500 mb-4">{{ $businessCategory?->name ?? '' }}</p>
+                    <div class="grid grid-cols-2 gap-4">
+                        @foreach($extraFieldValues as $attr)
+                            <div class="bg-gray-50 rounded-xl p-3">
+                                <p class="text-xs text-gray-500 uppercase">{{ $attr->attributeTemplate->name ?? 'N/A' }}</p>
+                                @if($attr->attributeTemplate && $attr->attributeTemplate->type === 'boolean')
+                                    <p class="text-sm font-medium {{ $attr->value === '1' ? 'text-green-600' : 'text-red-600' }}">
+                                        {{ $attr->value === '1' ? '✓ '.__('common.yes') : '✗ '.__('common.no') }}
+                                    </p>
+                                @else
+                                    <p class="text-sm font-medium text-gray-900">{{ $attr->typed_value }}</p>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+                @endif
+
+                @if($otherAttributes->count() > 0)
                 <div class="bg-white rounded-2xl p-6 shadow-sm">
                     <h2 class="text-lg font-bold text-gray-900 mb-4">@lang('products.attributes')</h2>
                     <div class="grid grid-cols-2 gap-4">
-                        @foreach($product->attributeValues as $attr)
+                        @foreach($otherAttributes as $attr)
                             <div class="bg-gray-50 rounded-xl p-3">
                                 <p class="text-xs text-gray-500 uppercase">{{ $attr->attributeTemplate->name ?? 'N/A' }}</p>
-                                <p class="text-sm font-medium text-gray-900">{{ $attr->value }}</p>
+                                <p class="text-sm font-medium text-gray-900">{{ $attr->typed_value }}</p>
                             </div>
                         @endforeach
+                    </div>
+                </div>
+                @endif
+                @endif
+
+                {{-- Variants --}}
+                @if($product->variants->count() > 0)
+                <div class="bg-white rounded-2xl p-6 shadow-sm">
+                    <h2 class="text-lg font-bold text-gray-900 mb-4">@lang('products.variants') ({{ $product->variants->count() }})</h2>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Attributes</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">@lang('products.price')</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">@lang('products.stock')</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                @foreach($product->variants as $variant)
+                                <tr>
+                                    <td class="px-4 py-3 text-sm font-medium text-gray-900">{{ $variant->sku }}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-600">
+                                        @if(is_array($variant->attributes))
+                                            @foreach($variant->attributes as $name => $value)
+                                                <span class="inline-block bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full mr-1">
+                                                    {{ $name }}: {{ $value }}
+                                                </span>
+                                            @endforeach
+                                        @endif
+                                    </td>
+                                    <td class="px-4 py-3 text-sm font-bold text-gray-900">
+                                        {{ number_format($variant->effective_price, 2) }} BDT
+                                    </td>
+                                    <td class="px-4 py-3 text-sm {{ $variant->stock_quantity <= 0 ? 'text-red-600 font-bold' : 'text-gray-900' }}">
+                                        {{ $variant->stock_quantity }}
+                                    </td>
+                                </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
                     </div>
                 </div>
                 @endif
@@ -75,26 +149,68 @@
                 {{-- Price --}}
                 <div class="bg-white rounded-2xl p-6 shadow-sm">
                     <h2 class="text-lg font-bold text-gray-900 mb-4">@lang('products.pricing')</h2>
-                    <div class="text-3xl font-bold text-purple-600">{{ number_format($product->price, 2) }} BDT</div>
-                    @if($product->cost_price)
-                        <p class="text-sm text-gray-500 mt-1">@lang('products.cost'): {{ number_format($product->cost_price, 2) }} BDT</p>
+                    @if($product->discount_price && $product->discount_price < $product->base_price)
+                        <div class="text-3xl font-bold text-green-600">{{ number_format($product->discount_price, 2) }} BDT</div>
+                        <p class="text-sm text-gray-400 line-through">{{ number_format($product->base_price, 2) }} BDT</p>
+                        <p class="text-xs text-green-600 mt-1">
+                            @lang('products.savings'): {{ number_format($product->base_price - $product->discount_price, 2) }} BDT
+                        </p>
+                    @else
+                        <div class="text-3xl font-bold text-purple-600">{{ number_format($product->base_price, 2) }} BDT</div>
                     @endif
                 </div>
 
-                {{-- Status --}}
+                {{-- Details --}}
                 <div class="bg-white rounded-2xl p-6 shadow-sm">
                     <h2 class="text-lg font-bold text-gray-900 mb-4">@lang('products.details')</h2>
                     <div class="space-y-3">
                         <div class="flex justify-between">
                             <span class="text-sm text-gray-500">@lang('products.stock')</span>
-                            <span class="text-sm font-medium {{ $product->stock_quantity <= $product->low_stock_threshold ? 'text-red-600' : 'text-gray-900' }}">{{ $product->stock_quantity }}</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-sm text-gray-500">@lang('products.status')</span>
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $product->is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800' }}">
-                                {{ $product->is_active ? __('common.active') : __('common.inactive') }}
+                            <span class="text-sm font-medium {{ $product->total_stock <= 0 ? 'text-red-600' : 'text-gray-900' }}">
+                                {{ $product->total_stock }}
+                                @if($product->variants->count() > 0)
+                                    <span class="text-xs text-gray-400">({{ $product->variants->count() }} variants)</span>
+                                @endif
                             </span>
                         </div>
+                        @if($product->unit)
+                        <div class="flex justify-between">
+                            <span class="text-sm text-gray-500">@lang('products.unit')</span>
+                            <span class="text-sm font-medium text-gray-900">{{ $product->unit }}</span>
+                        </div>
+                        @endif
+                        @if($product->weight_kg)
+                        <div class="flex justify-between">
+                            <span class="text-sm text-gray-500">@lang('products.weight_kg')</span>
+                            <span class="text-sm font-medium text-gray-900">{{ $product->weight_kg }} kg</span>
+                        </div>
+                        @endif
+                        @if($product->sku)
+                        <div class="flex justify-between">
+                            <span class="text-sm text-gray-500">SKU</span>
+                            <span class="text-sm font-medium text-gray-900">{{ $product->sku }}</span>
+                        </div>
+                        @endif
+                        @if($product->barcode)
+                        <div class="flex justify-between">
+                            <span class="text-sm text-gray-500">@lang('products.barcode')</span>
+                            <span class="text-sm font-medium text-gray-900">{{ $product->barcode }}</span>
+                        </div>
+                        @endif
+                        <div class="flex justify-between">
+                            <span class="text-sm text-gray-500">@lang('products.status')</span>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                {{ $product->status === 'active' ? 'bg-green-100 text-green-800' :
+                                   ($product->status === 'inactive' ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800') }}">
+                                @lang('products.status_'.$product->status)
+                            </span>
+                        </div>
+                        @if($product->is_featured)
+                        <div class="flex justify-between">
+                            <span class="text-sm text-gray-500">@lang('products.featured')</span>
+                            <span class="text-sm font-medium text-yellow-600">★</span>
+                        </div>
+                        @endif
                         @if($product->category)
                         <div class="flex justify-between">
                             <span class="text-sm text-gray-500">@lang('products.category')</span>
@@ -110,26 +226,17 @@
                     </div>
                 </div>
 
-                {{-- Variants --}}
-                @if($product->variants->count() > 0)
+                {{-- AI Recognition --}}
                 <div class="bg-white rounded-2xl p-6 shadow-sm">
-                    <h2 class="text-lg font-bold text-gray-900 mb-4">@lang('products.variants')</h2>
-                    <div class="space-y-2">
-                        @foreach($product->variants as $variant)
-                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                                <div>
-                                    <p class="text-sm font-medium text-gray-900">{{ $variant->name ?? $variant->sku }}</p>
-                                    <p class="text-xs text-gray-500">{{ $variant->sku }}</p>
-                                </div>
-                                <div class="text-right">
-                                    <p class="text-sm font-bold text-gray-900">{{ number_format($variant->price ?? $product->price, 2) }}</p>
-                                    <p class="text-xs {{ $variant->stock_quantity <= 0 ? 'text-red-600' : 'text-gray-500' }}">{{ $variant->stock_quantity }} @lang('products.in_stock')</p>
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
+                    <h2 class="text-lg font-bold text-gray-900 mb-4">AI</h2>
+                    <form action="{{ route('inventory.products.generate-embeddings', $product) }}" method="POST"
+                          onsubmit="return confirm('{{ __('products.ai_recognize_all_confirm') }}')">
+                        @csrf
+                        <button type="submit" class="w-full bg-indigo-600 text-white px-4 py-2 rounded-xl font-medium hover:bg-indigo-700 transition text-sm">
+                            @lang('products.ai_recognize')
+                        </button>
+                    </form>
                 </div>
-                @endif
             </div>
         </div>
     </div>

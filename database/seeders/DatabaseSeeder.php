@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
         $isTenant = tenant() !== null;
 
         if ($isTenant) {
+            $this->call(AttributeTemplateSeeder::class);
             $this->call(ClothingInventorySeeder::class);
         } else {
             $this->call(AdminSeeder::class);

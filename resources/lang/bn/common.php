@@ -43,6 +43,7 @@ return [
     'back' => 'ফিরে যান',
     'submit' => 'জমা দিন',
     'close' => 'বন্ধ',
+    'done' => 'সম্পন্ন',
     'open' => 'খোলা',
     'enabled' => 'চালু',
     'disabled' => 'বন্ধ',

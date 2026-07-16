@@ -67,7 +67,7 @@ class BusinessSetting extends Model
             return null;
         }
 
-        return BusinessCategory::find($this->category_id);
+        return BusinessCategory::on('mysql')->find($this->category_id);
     }
 
     public function getLogoUrl(): ?string

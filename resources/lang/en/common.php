@@ -43,6 +43,7 @@ return [
     'back' => 'Back',
     'submit' => 'Submit',
     'close' => 'Close',
+    'done' => 'Done',
     'open' => 'Open',
     'enabled' => 'Enabled',
     'disabled' => 'Disabled',

@@ -19,6 +19,7 @@ class AttributeTemplate extends Model
         'is_required',
         'is_global',
         'is_variant_option',
+        'is_active',
         'sort_order',
     ];
 
@@ -27,6 +28,7 @@ class AttributeTemplate extends Model
         'is_required' => 'boolean',
         'is_global' => 'boolean',
         'is_variant_option' => 'boolean',
+        'is_active' => 'boolean',
     ];
 
     protected static function booted(): void

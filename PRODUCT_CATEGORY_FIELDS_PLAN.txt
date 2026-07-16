@@ -1,0 +1,1281 @@
+================================================================================
+    CATEGORY-WISE PRODUCT FIELD PLAN — SocialBoost AI
+    Final Planning Document (v5 — Production Ready)
+================================================================================
+
+## FINAL REVIEW LOG (v5)
+=========================
+
+Review date: 2026-07-16
+Reviewer: Automated gap analysis
+
+ISSUES FOUND AND FIXED:
+1. Sync Job Tenant Context — FIXED (Section 1B updated)
+2. Validation Rule Conflict — FIXED (Section 8.2 updated)
+3. Category Load in Product Edit — FIXED (Section 5.2 updated)
+4. BusinessCategory.created() — FIXED (Section 1B updated)
+5. Variant Option Values Source — FIXED (Section 7.1 updated)
+6. Empty Variant Option Handling — FIXED (Section 2.2.2 updated)
+7. Product Listing Extra Fields — Documented as intentional (Section 12.10)
+8. Barcode Validation on Update — FIXED (Section 8.1 updated)
+
+REMAINING KNOWN LIMITATIONS (acceptable for v1):
+- Custom category field-builder = separate future feature (Decision 8)
+- Value type casting on queries = documented (Section 6.2)
+- No admin UI for managing extra_fields JSON = manual DB update for now
+
+
+## CRITICAL DECISIONS (Pre-Development)
+========================================
+
+Ei decisions gula coding shuru er AGGE finalize korte hobe.
+
+
+### DECISION 1: Extra Fields Storage Model
+-------------------------------------------
+
+FINAL RULE:
+
+  BusinessCategory.extra_fields JSON = FIELD DEFINITION (schema)
+  attribute_templates table = TEMPLATE STORAGE (created ONCE per category)
+  product_attribute_values table = DATA STORAGE (per product)
+
+FLOW:
+  1. BusinessCategory.extra_fields e define thakbe:
+     [
+       {"name": "size_chart", "label": "Size Chart", "type": "textarea", "required": true},
+       {"name": "fabric_type", "label": "Fabric Type", "type": "select", "options": ["Cotton","Polyester"]}
+     ]
+
+  2. AttributeTemplate SEEDER e ekbar create hoy (NOT per product save):
+     - Fashion category → 6 templates (size_chart, color_variants, fitting_guide, etc.)
+     - Electronics category → 8 templates (warranty_period, product_condition, etc.)
+     - UNIQUE constraint: (category_id, slug) — duplicate hobe na
+
+  3. Product save korle SHUDHU ProductAttributeValue create hoy:
+     - Each filled extra field = 1 row in product_attribute_values
+     - References: attribute_template_id (FK) + value (text)
+
+  4. Product edit/update korle:
+     - Existing ProductAttributeValue DELETE for that product
+     - NotUN values recreate koro (full replacement, same as current attribute system)
+
+WHY THIS MODEL:
+- "size_chart" template EKBAR toiri hoy, Fashion product er shomoy template create hoy NA
+- Template create = seeder/setup time. Product save = data only.
+- Duplicate prevention: UNIQUE(category_id, slug, is_global) on attribute_templates
+
+
+### DECISION 1B: JSON ↔ attribute_templates SYNC MECHANISM (CRITICAL)
+----------------------------------------------------------------------
+
+PROBLEM:
+  BusinessCategory.extra_fields JSON edit hole (admin panel theke nobe field add kore),
+  AttributeTemplate table e sync na hole:
+  - Form e noi field dekhabe ✅
+  - Validation pass korbe ✅
+  - Save korle matching template PABE NA → data silently hariye jabe ❌
+
+SOLUTION: Idempotent Sync Job (Tenant-Aware)
+
+  1. BusinessCategory UPDATED/CREATED event listener → SyncCategoryAttributeTemplates job dispatch
+  2. Job runs SYNC for EACH TENANT (since attribute_templates is tenant-level):
+     - Set tenant context → sync templates in that tenant's DB
+     - extra_fields JSON theke template create koro (upsert)
+     - JSON theke missing template → soft delete (is_active = false)
+     - JSON e new field → create template (is_active = true)
+  3. Idempotency: firstOrCreate + updateOrCreate pattern use koro
+
+CODE PSEUDOCODE:
+
+  class SyncCategoryAttributeTemplates implements ShouldQueue
+  {
+      public function handle(BusinessCategory $category): void
+      {
+          // CRITICAL: attribute_templates is TENANT table
+          // Must sync for ALL tenants that use this category
+          
+          $tenants = Tenant::all();
+          
+          foreach ($tenants as $tenant) {
+              $tenant->run(function () use ($category) {
+                  $this->syncForTenant($category);
+              });
+          }
+      }
+      
+      private function syncForTenant(BusinessCategory $category): void
+      {
+          $extraFields = $category->extra_fields ?? [];
+          $fieldNames = collect($extraFields)->pluck('name')->toArray();
+
+          // 1. UPSERT: extra_fields theke templates create/update
+          foreach ($extraFields as $field) {
+              AttributeTemplate::updateOrCreate(
+                  [
+                      'category_id' => $category->id,
+                      'slug'        => Str::slug($field['name']),
+                      'is_global'   => false,
+                  ],
+                  [
+                      'name'              => $field['label'] ?? $field['name'],
+                      'type'              => $field['type'],
+                      'is_required'       => $field['required'] ?? false,
+                      'placeholder'       => $field['placeholder'] ?? null,
+                      'default'           => $field['default'] ?? null,
+                      'options'           => $field['options'] ?? null,
+                      'is_variant_option' => false,
+                      'is_active'         => true,
+                  ]
+              );
+          }
+
+          // 2. SOFT DELETE: JSON theke removed fields → deactivate
+          AttributeTemplate::where('category_id', $category->id)
+              ->where('is_global', false)
+              ->whereNotIn('slug', collect($fieldNames)->map(fn($n) => Str::slug($n)))
+              ->update(['is_active' => false]);
+
+          // 3. HARD DELETE: if template has no product_attribute_values → safe to remove
+          AttributeTemplate::where('category_id', $category->id)
+              ->where('is_global', false)
+              ->where('is_active', false)
+              ->whereDoesntHave('attributeValues')
+              ->delete();
+      }
+  }
+
+  // EventServiceProvider:
+  // Handle BOTH created and updated events
+  BusinessCategory::created(fn($cat) => SyncCategoryAttributeTemplates::dispatch($cat));
+  BusinessCategory::updated(fn($cat) => SyncCategoryAttributeTemplates::dispatch($cat));
+
+NOTE:
+- Seeder runs ONCE (initial setup, creates templates in ALL tenant DBs)
+- Sync job runs EVERY TIME admin edits extra_fields JSON (syncs to ALL tenants)
+- Product save NEVER creates/edits templates — only reads existing ones
+- product_attribute_values e data ache → template soft-delete (preserve data)
+- product_attribute_values e data NAI → template hard-delete (cleanup)
+- NEW category created → sync job creates templates for ALL existing tenants
+
+
+### DECISION 2: stock_quantity Handling
+-----------------------------------------
+
+FINAL RULE:
+
+  SINGLE PRODUCT (no variants):
+    stock_quantity = REQUIRED, user directly fill korbe
+    Rule: stock_quantity => required_if:has_variants,false|integer|min:0
+
+  PRODUCT WITH VARIANTS:
+    stock_quantity = AUTO-CALCULATED (sum of all variant stock_quantity)
+    User ekhane stock fill korbe NA — variant table e fill korbe
+    Controller auto-update korbe: $product->recalculateStock()
+
+  DATABASE DEFAULT:
+    stock_quantity DEFAULT 0
+
+  EDGE CASE: Variant add/remove korle auto-recalculate hobe
+  EDGE CASE: Variant stock change korle product-level stock auto-update hobe
+
+
+### DECISION 3: SKU/Barcode Per-Tenant Uniqueness
+---------------------------------------------------
+
+ARCHITECTURE CONFIRMATION: Database-per-Tenant (stancl/tenancy v3.x)
+
+  SocialBoost AI uses stancl/tenancy with DATABASE-PER-TENANT:
+  - Each tenant has separate database (e.g., tenant1_socialboost, tenant2_socialboost)
+  - products table exists in EACH tenant database separately
+  - So unique:products,sku already works per-tenant automatically
+  - No cross-tenant conflict possible
+
+  VERIFIED:
+  - config/tenancy.php → database config → separate DB per tenant
+  - migrations run via tenants:migrate → per tenant DB
+
+FINAL RULE:
+
+  SKU:    Per-tenant unique (tenant DB theke automatic)
+          Rule: sku => required|string|unique:products,sku
+          No extra column needed — separate databases = separate unique constraints
+          
+  Barcode: Per-tenant unique (same logic)
+           Rule: barcode => nullable|string|unique:products,barcode
+
+  WHY: Tenant A "TSH-RED-S" use korte parbe, Tenant B o "TSH-RED-S" use korte parbe.
+       Separate databases ache, so unique constraint already per-tenant work korbe.
+
+
+### DECISION 4: Digital Product — Unit/Stock/Variant Handling
+--------------------------------------------------------------
+
+FINAL RULE:
+
+  Category = "Digital Product / Service" hole:
+    unit:       NOT REQUIRED (nullable, show koro NA)
+    stock:      NOT REQUIRED (digital product e physical stock nai)
+    variants:   OPTIONAL (user chaile "Basic Plan/Pro Plan" variant add korte parbe)
+    variant.stock_quantity: NOT REQUIRED for Digital (default unlimited)
+
+  IMPLEMENTATION:
+
+  Controller e conditional logic:
+  ```
+  $isDigital = Category::find($request->category_id)?->slug === 'digital-product-service';
+
+  // Unit: required unless Digital
+  if (!$isDigital) {
+      $rules['unit'] = 'required|string|max:50';
+  }
+
+  // Stock: required only if no variants AND not Digital
+  $hasVariants = !empty($request->variants);
+  if (!$hasVariants && !$isDigital) {
+      $rules['stock_quantity'] = 'required|integer|min:0';
+  }
+
+  // Variant stock: required only if not Digital
+  if ($hasVariants && !$isDigital) {
+      $rules['variants.*.stock_quantity'] = 'required_with:variants|integer|min:0';
+  } elseif ($hasVariants && $isDigital) {
+      // Digital variant stock: optional, default 999999 (unlimited)
+      $rules['variants.*.stock_quantity'] = 'nullable|integer|min:0';
+  }
+  ```
+
+  VIEW: Unit dropdown + stock field → conditional hide/show based on category
+        Alpine.js: category == "digital" → hide unit + stock fields
+        Digital variant e stock field optional, default 999999
+
+  STORAGE:
+  - Digital product without variants: stock_quantity = 0 (or user input if provided)
+  - Digital product with variants: each variant.stock_quantity = user input (default 999999)
+  - Product.stock_quantity = SUM(variant.stock) if variants, else user input
+
+
+### DECISION 5: discount_price Sanity Check
+---------------------------------------------
+
+FINAL RULE:
+
+  discount_price MUST be less than or equal to base_price.
+  Rule: discount_price => nullable|numeric|min:0|lte:base_price
+
+  Controller e additional check:
+  ```
+  if ($validated['discount_price'] >= $validated['base_price']) {
+      // Validation error: "Discount price must be less than or equal to base price"
+  }
+  ```
+
+  FRONTEND: Real-time validation — discount_price > base_price hole red border + error message
+  BACKEND: Validation rule enforces this permanently.
+
+
+### DECISION 6: Weight as Common Field (Optional)
+---------------------------------------------------
+
+DECISION: Weight COMMON field hobe, but OPTIONAL for all categories.
+
+  | Field     | Type     | Required                                 | Notes                    |
+  |-----------|----------|------------------------------------------|--------------------------|
+  | weight    | number   | nullable|numeric|min:0                     | Common field, optional   |
+
+  WHY: Shipping cost calculate korte Fashion, Electronics — shob category te weight dorkar.
+  Category-specific weight (Furniture-er weight_kg) → REMOVED from extra fields (duplicate).
+  Common weight field e sobai weight dite parbe, courier integration er jonno useful.
+
+
+### DECISION 7: Variant Combination Cap
+-----------------------------------------
+
+FINAL RULE:
+
+  Variant combination limit = 50 (soft warning), 100 (hard block)
+
+  IMPLEMENTATION:
+  1. Frontend (Alpine.js): matrix generate korar shomoy count koro
+     ```
+     if (combinations.length > 50) {
+         // Show soft warning: "50+ variants generate hocche. Are you sure?"
+         // User can continue OR reduce options
+     }
+     if (combinations.length > 100) {
+         // Block: "Maximum 100 variants allowed. Remove some options."
+     }
+     ```
+
+  2. Backend validation:
+     ```
+     'variants' => 'nullable|array|max:100'
+     ```
+
+  THRESHOLD:
+  - 50+ → Soft warning (yellow banner, continue allowed)
+  - 100+ → Hard block (red error, cannot submit)
+
+
+### DECISION 8: Custom Category Field-Builder
+-----------------------------------------------
+
+ESTIMATE: This is a SEPARATE FEATURE, not part of Phase 2.
+
+  Phase 2 scope: Use existing BusinessCategory.extra_fields definitions.
+  
+  Custom category field-builder:
+  - Admin panel e dynamic form builder UI
+  - Field name, label, type, required, options — all configurable
+  - This is mini form-builder (like Gravity Forms)
+  - EFFORT: 5-7 days EXTRA (separate from main timeline)
+
+  RECOMMENDATION: Phase 2 e custom category er jonno DEFAULT empty extra_fields dho.
+  Admin can add fields later via future admin UI.
+  For now, custom category = standard fields only (no extra fields).
+
+
+### DECISION 9: Phase Ordering
+---------------------------------
+
+REVISED PHASE ORDER:
+
+  Phase 1A: Onboarding Fix (parallel with Phase 1B)
+    - Onboarding controller → dynamic extra fields extraction
+    - Onboarding view → proper extra fields rendering
+    - REASON: Without proper category_id in BusinessSetting, test korte parben na
+
+  Phase 1B: Variant System (common)
+    - AttributeTemplate seeder
+    - Variant UI + matrix generation
+    - Controller variant handling
+
+  Phase 2: Category Extra Fields
+    - Extra fields render (Alpine.js)
+    - ProductAttributeValue save/load
+    - Sync mechanism (JSON ↔ attribute_templates)
+
+  Phase 3: Edit & Show
+    - Product edit + extra fields
+    - Product show + display
+
+  Phase 4: Testing & Polish
+    - Integration testing
+    - Edge case handling
+    - Performance testing (variant matrix, extra fields load)
+
+
+## 1. OVERVIEW
+--------------
+
+Customer onboarding e business category select kore (Fashion, Electronics, etc.)
+→ Product create form e shei category er jonno EXTRA FIELDS show hobe.
+→ VARIANT SYSTEM — shob category te COMMON, sobai Color/Size/Custom use korte parbe.
+
+KEY SEPARATION:
+┌─────────────────────────────────────────────────────────────────┐
+│  COMMON (All Categories)        │  CATEGORY-SPECIFIC (Extra)   │
+│─────────────────────────────────│──────────────────────────────│
+│  Name, Price, SKU, Brand...     │  Size Chart, Warranty...     │
+│  Variant System (Color/Size)    │  (Category onujayi change)   │
+│  Weight (common, optional)      │                              │
+│  Images, Status, Stock          │                              │
+└─────────────────────────────────────────────────────────────────┘
+
+
+## 2. LAYER 1 — COMMON FIELDS (All Categories)
+================================================
+
+Ei fields SHOB CATEGORY te same thakbe. Ekhane variant system o included.
+
+
+### 2.1 Basic Product Fields
+------------------------------
+
+| Field              | Type      | Required                        | DB Column          | Notes                         |
+|--------------------|-----------|---------------------------------|--------------------|-------------------------------|
+| name               | text      | YES                             | name               | Product name                  |
+| description        | textarea  | NO                              | description        | Product description           |
+| base_price         | number    | YES                             | base_price         | Main price (BDT)              |
+| discount_price     | number    | NO, lte:base_price             | discount_price     | Sale price (MUST <= base)     |
+| sku                | text      | YES, unique per tenant          | sku                | Unique SKU code               |
+| barcode            | text      | NO, unique per tenant           | barcode            | Barcode number                |
+| category           | select    | YES                             | category_id        | Tenant categories             |
+| brand              | select    | NO                              | brand_id           | Tenant brands                 |
+| weight             | number    | NO, min:0                       | weight_kg          | Shipping weight (all categories) |
+| stock_quantity     | varies    | DEPENDS ON VARIANT STATUS       | stock_quantity     | See Decision 2                |
+| unit               | varies    | DEPENDS ON CATEGORY             | unit               | See Decision 4                |
+| status             | toggle    | YES                             | status             | active/inactive/out_of_stock  |
+| is_featured        | toggle    | NO                              | is_featured        | Featured product              |
+| images             | file      | NO, max:10 images              | product_images     | Multiple images (max 10)      |
+| meta_title         | text      | NO                              | meta_title         | SEO title                     |
+| meta_description   | text      | NO                              | meta_description   | SEO description               |
+
+
+### 2.2 Variant System (COMMON — All Categories)
+-------------------------------------------------
+
+Ekhane variant gula COMMON. Sob category e same system use hobe.
+User chaile variant add korbe, na chaile single product rakhbe.
+
+
+#### 2.2.1 Variant Options (Global — is_global = true)
+
+| Option Name    | Label (EN)     | Label (BN)    | Default Values                                    | Common Use                        |
+|----------------|----------------|---------------|---------------------------------------------------|-----------------------------------|
+| Color          | Color          | রং            | Red, Blue, Green, Black, White, Navy, Grey, Pink  | Fashion, Electronics, Furniture   |
+| Size           | Size           | সাইজ          | S, M, L, XL, XXL                                  | Fashion, Handicraft               |
+| Material       | Material       | উপকরণ        | Cotton, Polyester, Silk, Leather, Wood, Metal      | Fashion, Furniture, Handicraft    |
+| Storage        | Storage        | স্টোরেজ       | 64GB, 128GB, 256GB, 512GB, 1TB                    | Electronics                       |
+| Flavor         | Flavor         | স্বাদ          | Original, Chocolate, Vanilla, Strawberry           | Food, Cosmetics                   |
+| Shade          | Shade          | শেড           | Light, Medium, Dark, Natural                       | Cosmetics                         |
+| Strength       | Strength       | শক্তি         | 250mg, 500mg, 1g, 2g                              | Pharmacy                          |
+| Pack Size      | Pack Size      | প্যাক সাইজ    | 10s, 30s, 60s, 120s                               | Pharmacy, Food                    |
+
+NOTE: Ei options gula DEFAULT seeder e create hoy. User admin panel theke
+custom option add/edit/delete korte parbe.
+
+
+#### 2.2.2 Variant Flow
+
+```
+Product Create Form
+  └── "Add Variant Option" button
+        └── Click → Modal/Dropdown e available options show
+              └── User selects: Color, Size, etc.
+                    └── Values input koro (comma-separated ya pre-defined)
+                          └── Auto-generate variant matrix
+                                └── Count combinations
+                                      └── 50+ → Soft warning
+                                      └── 100+ → Hard block
+                                └── Each combo = 1 variant (SKU + Price + Stock)
+```
+
+
+#### 2.2.3 Variant Storage
+
+- Variant Options: `attribute_templates` table (is_global = true, is_variant_option = true)
+- Variant Values: `product_variants` table (attributes JSON column)
+- Variant Relational: `variant_attribute_values` table
+- Product-level attributes: `product_attribute_values` table
+
+
+## 3. LAYER 2 — CATEGORY-SPECIFIC EXTRA FIELDS
+=================================================
+
+Ei fields gula MATRO specific category te show hobe.
+Onboarding e je category select kora hoyeche, shei category er extra fields render hobe.
+
+
+### 3.1 👗 FASHION / CLOTHING
+-------------------------------
+
+| Field                | Label (EN)                  | Label (BN)                    | Type      | Required | Options/Default                            |
+|----------------------|-----------------------------|-------------------------------|-----------|----------|--------------------------------------------|
+| size_chart           | Size Chart                  | সাইজ চার্ট                     | textarea  | YES      | S=36, M=38, L=40, XL=42                   |
+| color_variants       | Color Variants Available?   | রঙের ভ্যারিয়েন্ট আছে?            | boolean   | NO       | true/false                                 |
+| fitting_guide        | Fitting Guide               | ফিটিং গাইড                     | textarea  | NO       | "সাইজ চার্ট অনুযায়ী মাপ নিন"               |
+| return_policy_days   | Return Policy (Days)        | রিটার্ন পলিসি (দিন)            | number    | YES      | Default: 3                                 |
+| fabric_type          | Fabric/Material Type        | কাপড়ের ধরন                    | select    | NO       | Cotton, Polyester, Silk, Linen, Denim      |
+| season               | Season                      | ঋতু                           | select    | NO       | Summer, Winter, All Season                 |
+
+AI Prompt Addition: "Size chart dikhao, fabric type bolo, return policy explain koro."
+
+
+### 3.2 📱 ELECTRONICS
+------------------------
+
+| Field                  | Label (EN)                    | Label (BN)                     | Type      | Required | Options/Default                         |
+|------------------------|-------------------------------|--------------------------------|-----------|----------|-----------------------------------------|
+| warranty_period        | Warranty Period               | ওয়ারেন্টি পিরিয়ড                | text      | YES      | "১ বছর"                                 |
+| model_serial_required  | Model/Serial Required?        | মডেল/সিরিয়াল নম্বর লাগবে?       | boolean   | NO       | true/false                              |
+| product_condition      | Product Condition             | প্রোডাক্টের অবস্থা               | select    | YES      | Genuine, Refurbished, Both              |
+| after_sales_service    | After-Sales Service           | আফটার-সেলস সার্ভিস              | textarea  | NO       | "সার্ভিস সেন্টারে জমা দিন"               |
+| wattage                | Wattage (W)                   | ওয়াটেজ (W)                     | number    | NO       |                                         |
+| voltage                | Voltage (V)                   | ভোল্টেজ (V)                     | number    | NO       |                                         |
+| connectivity           | Connectivity                  | সংযোগ প্রকার                    | select    | NO       | WiFi, Bluetooth, USB, HDMI, Type-C      |
+| screen_size            | Screen Size (inch)            | স্ক্রিন সাইজ (ইঞ্চি)              | text      | NO       |                                         |
+
+AI Prompt Addition: "Warranty period, product condition, after-sales service info dao."
+
+
+### 3.3 🍎 FOOD & GROCERY
+----------------------------
+
+| Field                  | Label (EN)                    | Label (BN)                     | Type      | Required | Options/Default                         |
+|------------------------|-------------------------------|--------------------------------|-----------|----------|-----------------------------------------|
+| expiry_date_info       | Has Expiry Date?              | মেয়াদ আছে?                     | boolean   | NO       | true/false                              |
+| halal_certification    | Halal Certified?              | হালাল সার্টিফাইড?               | boolean   | NO       | true/false                              |
+| perishable_delivery    | Perishable Item?              | নষ্ট হয়ে যাওয়া পণ্য?            | boolean   | NO       | true/false                              |
+| ingredients_allergens  | Ingredients / Allergens       | উপাদান / অ্যালার্জেন             | textarea  | NO       | "উপাদান: চাল, ডাল, তেল..."              |
+| origin                 | Country of Origin             | উৎপত্তিস্থান                    | text      | NO       | "বাংলাদেশ"                              |
+| storage_instructions   | Storage Instructions          | সংরক্ষণের নির্দেশনা              | textarea  | NO       |                                         |
+| serving_info           | Serving Info                  | পরিবেশনের তথ্য                  | text      | NO       |                                         |
+
+AI Prompt Addition: "Expiry date, halal certification, ingredients, storage instruction janiye dao."
+
+
+### 3.4 💄 COSMETICS & BEAUTY
+-------------------------------
+
+| Field                  | Label (EN)                    | Label (BN)                     | Type      | Required | Options/Default                         |
+|------------------------|-------------------------------|--------------------------------|-----------|----------|-----------------------------------------|
+| expiry_info            | Has Expiry Date?              | মেয়াদ আছে?                     | boolean   | NO       | true/false                              |
+| skin_type_suitability  | Skin Type                     | ত্বকের ধরন                      | select    | NO       | All, Dry, Oily, Combination, Sensitive |
+| authentic_guarantee    | Original Guarantee?           | অরিজিনাল গ্যারান্টি?             | boolean   | NO       | true/false                              |
+| usage_instructions     | How to Use                    | ব্যবহারের নির্দেশনা              | textarea  | NO       | "দিনে ২ বার মুখে প্রয়োগ করুন"          |
+| volume                 | Volume (ml)                   | পরিমাণ (মি.লি.)                | number    | NO       |                                         |
+| key_ingredients        | Key Ingredients               | মূল উপাদান                      | text      | NO       |                                         |
+| spf_level              | SPF Level                     | SPF লেভেল                       | text      | NO       |                                         |
+
+AI Prompt Addition: "Skin type suitability, usage instructions, authenticity guarantee bolo."
+
+
+### 3.5 🪑 FURNITURE / HOME
+------------------------------
+
+| Field                  | Label (EN)                    | Label (BN)                     | Type      | Required | Options/Default                         |
+|------------------------|-------------------------------|--------------------------------|-----------|----------|-----------------------------------------|
+| assembly_required      | Assembly Required?            | অ্যাসেম্বলি লাগবে?              | boolean   | NO       | true/false                              |
+| dimensions_info        | Dimensions (L x W x H)       | মাপ (লম্বা x চওড়া x উচ্চতা)   | text      | NO       | "লম্বা: ৬ফুট, চওড়া: ৩ফুট"              |
+| delivery_method        | Delivery Method               | ডেলিভারি পদ্ধতি                 | select    | YES      | Truck, Courier, Both                    |
+| installation_charge    | Installation Charge (BDT)     | ইনস্টলেশন চার্জ (৳)             | number    | NO       | Default: 500                            |
+| room_type              | Room Type                     | ঘরের ধরন                       | select    | NO       | Bedroom, Living, Dining, Office         |
+
+NOTE: weight_kg REMOVED — weight now COMMON field in Layer 1.
+
+AI Prompt Addition: "Dimensions, delivery method (truck/courier), installation charge info dao."
+
+
+### 3.6 💻 DIGITAL PRODUCT / SERVICE
+---------------------------------------
+
+| Field                  | Label (EN)                    | Label (BN)                     | Type      | Required | Options/Default                         |
+|------------------------|-------------------------------|--------------------------------|-----------|----------|-----------------------------------------|
+| delivery_method        | Delivery Method               | ডেলিভারি পদ্ধতি                 | select    | YES      | Email, Link, Both                       |
+| license_validity       | License Validity              | লাইসেন্স বৈধতা                  | text      | NO       | "আজীবন / ১ বছর"                        |
+| refund_policy          | Refund Policy                 | রিফান্ড পলিসি                   | textarea  | NO       | "৭ দিনের মধ্যে রিফান্ড"                 |
+| subscription_type      | Subscription?                 | সাবস্ক্রিপশন?                   | boolean   | NO       | true/false                              |
+| download_link          | Download/Access Link          | ডাউনলোড/অ্যাক্সেস লিঙ্ক         | text      | NO       |                                         |
+| file_format            | File Format                   | ফাইল ফরম্যাট                    | text      | NO       | PDF, ZIP, MP4                           |
+| device_limit           | Device Limit                  | ডিভাইস লিমিট                   | number    | NO       |                                         |
+
+NOTE: unit/stock NOT required for Digital (see Decision 4).
+Variant stock optional for Digital (default 999999 unlimited).
+
+AI Prompt Addition: "Delivery method (email/link), license validity, refund policy explain koro."
+
+
+### 3.7 ✂️ HANDICRAFT / CUSTOMIZED
+-------------------------------------
+
+| Field                  | Label (EN)                    | Label (BN)                     | Type      | Required | Options/Default                         |
+|------------------------|-------------------------------|--------------------------------|-----------|----------|-----------------------------------------|
+| made_to_order_days     | Made-to-Order Time (Days)     | তৈরির সময় (দিন)               | number    | YES      | Default: 7                              |
+| customization_options  | Customization Options         | কাস্টমাইজেশন অপশন              | textarea  | NO       | "রং, সাইজ, ডিজাইন পরিবর্তন করা যায়"      |
+| no_return_policy       | No Return (Personalized)?     | রিটার্ন নেই (ব্যক্তিগত)?        | boolean   | NO       | true/false                              |
+| artisan_info           | Artisan/Maker Info            | কারিগর/নির্মাতা তথ্য            | textarea  | NO       | "হাতে তৈরি, গ্রামীণ কারিগরদের দ্বারা"     |
+| material_used          | Material Used                 | ব্যবহৃত উপকরণ                  | text      | NO       |                                         |
+
+AI Prompt Addition: "Made-to-order time, customization options, artisan info, return policy bolo."
+
+
+### 3.8 💊 PHARMACY / HEALTH
+-------------------------------
+
+| Field                  | Label (EN)                    | Label (BN)                     | Type      | Required | Options/Default                         |
+|------------------------|-------------------------------|--------------------------------|-----------|----------|-----------------------------------------|
+| prescription_required   | Prescription Required?        | প্রেসক্রিপশন লাগবে?             | boolean   | NO       | true/false                              |
+| storage_condition      | Storage Condition             | সংরক্ষণের অবস্থা                | text      | NO       | "শুষ্ক স্থানে, রোদ থেকে দূরে"           |
+| regulatory_disclaimer  | Regulatory Disclaimer         | নিয়ামক দায়মুক্তি               | textarea  | NO       | "ডাক্তারের পরামর্শ ছাড়া সেবন করবেন না"  |
+| dosage_info            | Dosage Info Available?        | খোরাকের তথ্য আছে?              | boolean   | NO       | true/false                              |
+| generic_name           | Generic Name                  | জেনেরিক নাম                    | text      | NO       |                                         |
+| drug_form              | Drug Form                     | ওষুধের রূপ                     | select    | NO       | Tablet, Capsule, Syrup, Cream           |
+| active_ingredients     | Active Ingredients            | সক্রিয় উপাদান                   | text      | NO       |                                         |
+| contraindications      | Contraindications             | পারস্পরিক বিপরীততা              | textarea  | NO       |                                         |
+
+AI Prompt Addition: "Prescription requirement, dosage info, storage condition, regulatory disclaimer bolo."
+
+
+## 4. ARCHITECTURE DIAGRAM
+=============================
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                        PRODUCT CREATE FORM                           │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │  LAYER 1: COMMON FIELDS (Always Visible)                      │  │
+│  │                                                                │  │
+│  │  [Name] [Description] [SKU] [Barcode] [Weight]               │  │
+│  │  [Base Price] [Discount Price]  ← discount <= base enforced   │  │
+│  │  [Category ▼] [Brand ▼] [Status] [Featured]                  │  │
+│  │  [Unit ▼] ← hidden if Digital category                        │  │
+│  │  [Stock]  ← auto-filled if variants, manual if single        │  │
+│  │  [Images Upload] (max 10 images)                              │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │  LAYER 1B: VARIANT SYSTEM (Common — User Chooses to Use)      │  │
+│  │                                                                │  │
+│  │  [+ Add Variant Option]                                       │  │
+│  │  ┌──────────────────────────────────────────────────────────┐  │  │
+│  │  │ ☐ Color  ☐ Size  ☐ Material  ☐ Storage                  │  │  │
+│  │  │ ☐ Flavor ☐ Shade ☐ Strength ☐ Pack Size                 │  │  │
+│  │  │ (Category onujayi recommended options highlight hobe)    │  │  │
+│  │  └──────────────────────────────────────────────────────────┘  │  │
+│  │                                                                │  │
+│  │  Variant Matrix (Auto-generated):                              │  │
+│  │  ┌──────────────────────────────────────────────────────┐      │  │
+│  │  │ Color × Size = 8 variants (✅ within limit)          │      │  │
+│  │  │                                                      │      │  │
+│  │  │ ┌──────┬──────┬─────────┬───────┬───────┐           │      │  │
+│  │  │ │ Color│ Size │ SKU     │ Price │ Stock │           │      │  │
+│  │  │ ├──────┼──────┼─────────┼───────┼───────┤           │      │  │
+│  │  │ │ Red  │ S    │ TSH-R-S │ ৳599  │ 50    │           │      │  │
+│  │  │ │ ...  │ ...  │ ...     │ ...   │ ...   │           │      │  │
+│  │  │ └──────┴──────┴─────────┴───────┴───────┘           │      │  │
+│  │  └──────────────────────────────────────────────────────┘      │  │
+│  │                                                                │  │
+│  │  ⚠️ 50+ combos → Soft warning │ 🚫 100+ → Hard block          │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │  LAYER 2: CATEGORY-SPECIFIC EXTRA FIELDS                      │  │
+│  │  (Dynamic — Based on Selected Business Category)               │  │
+│  │                                                                │  │
+│  │  ┌──────────────────────────────────────────────────────────┐  │  │
+│  │  │ 📋 FASHION Extra Fields:                                 │  │  │
+│  │  │                                                          │  │  │
+│  │  │ Size Chart *    [________________________] textarea      │  │  │
+│  │  │ Fabric Type     [Cotton ▼]                  select       │  │  │
+│  │  │ Season          [All Season ▼]              select       │  │  │
+│  │  │ Return Policy * [3] days                    number       │  │  │
+│  │  │ Color Variants? [✓]                         boolean      │  │  │
+│  │  │ Fitting Guide   [________________________] textarea      │  │  │
+│  │  └──────────────────────────────────────────────────────────┘  │  │
+│  │                                                                │  │
+│  │  NOTE: Category change korle ei section auto-update hobe!      │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │  SIDEBAR                                                       │  │
+│  │  [SEO Title] [SEO Description]                                 │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+
+## 5. FLOW: How It Works
+===========================
+
+### 5.1 Onboarding Flow
+```
+User Onboarding → Step 2: Business Info
+  └── Select Business Category (Fashion / Electronics / Food / etc.)
+        └── Category ID stored in BusinessSetting.category_id
+        └── Category's extra_fields JSON stored in BusinessSetting.extra_fields_data
+```
+
+
+### 5.2 Product Create Flow
+```
+Product Controller
+  └── Load user's BusinessSetting → get category_id (landlord DB integer)
+  └── Load BusinessCategory from LANDLORD DB → get extra_fields JSON
+  └── Load Category from TENANT DB by same ID → get category name/slug
+  └── Determine category type (Digital? Physical? — check slug from tenant DB)
+  └── Pass to view: $businessCategory, $category, $extraFields, $isDigital
+
+Product Create View
+  └── Layer 1: Render common fields
+        └── Conditional: hide unit/stock if Digital
+        └── Conditional: stock readonly if variants enabled
+  └── Layer 1B: Render variant system (Color/Size/etc.)
+        └── Default options: Color, Size (user can add more)
+        └── Validate: combinations <= 100
+  └── Layer 2: Render extra fields dynamically from $extraFields
+        └── Alpine.js: category change hole extra fields update hobe
+
+NOTE: Two category models exist:
+  - BusinessCategory (landlord DB) — has extra_fields JSON, used for extra fields definition
+  - Category (tenant DB) — has name/slug, used for product's category FK
+  Both use SAME ID (BusinessCategory.id = Category.id) because seeder creates matching records.
+```
+
+
+### 5.3 Storage Flow (FINAL — Decision 1)
+```
+Form Submit
+  │
+  ├── Common fields → products table
+  │
+  ├── Variants → product_variants table + variant_attribute_values
+  │     └── If variants exist: product.stock_quantity = SUM(variants.stock_quantity)
+  │     └── If no variants: product.stock_quantity = user input
+  │
+  └── Extra fields → product_attribute_values table
+        └── For each filled extra field:
+              └── Find AttributeTemplate by (category_id, field_name)
+              └── Create 1 ProductAttributeValue row:
+                    - attribute_template_id: FK to template
+                    - value: user input (text — see Note below)
+        └── NO new AttributeTemplate created per product
+        └── Templates were created ONCE in seeder
+        └── If template not found → throw ValidationException (data protection)
+```
+
+NOTE on value column: product_attribute_values.value is TEXT type.
+Boolean/number fields stored as string. For queries:
+  - Boolean: whereRaw("value = '1'" or value IN ('true','1','on'))
+  - Number: CAST(value AS DECIMAL) for comparisons
+
+
+## 6. STORAGE MODEL — COMPLETE
+================================
+
+### 6.1 AttributeTemplate (Template — Created ONCE + Synced)
+
+```sql
+attribute_templates:
+├── id (bigint, PK)
+├── category_id (FK → categories.id, NULL for global)
+├── is_global (boolean, default: false)
+├── is_variant_option (boolean, default: false)
+├── name (string)
+├── slug (string)
+├── type (enum: text, number, select, boolean, date)
+├── options (JSON, nullable) -- for select type
+├── is_required (boolean, default: false)
+├── is_active (boolean, default: true) ← for soft-delete on sync
+├── sort_order (integer)
+├── created_at, updated_at
+│
+├── UNIQUE: (category_id, slug, is_global)
+│   NOTE: NULL category_id = global options
+│   MySQL/Postgres: NULL != NULL in unique constraints
+│   SOLUTION: Use firstOrCreate + application-level guard (see Decision 1B)
+│
+└── Relationships:
+    ├── category() → Category (nullable)
+    └── attributeValues() → ProductAttributeValue (for checking data before hard-delete)
+```
+
+
+### 6.2 ProductAttributeValue (Data — Created PER PRODUCT)
+
+```sql
+product_attribute_values:
+├── id (bigint, PK)
+├── product_id (FK → products.id, CASCADE delete)
+├── attribute_template_id (FK → attribute_templates.id, CASCADE delete)
+├── value (text) ← all types stored as text (boolean→'1'/'0', number→'5')
+├── created_at, updated_at
+│
+└── UNIQUE: (product_id, attribute_template_id)
+```
+
+NOTE on value storage:
+  - text: stored as-is ("Hello World")
+  - number: stored as string ("5", "3.14") → CAST for queries
+  - boolean: stored as '1'/'0' (or 'true'/'false') → whereRaw for queries
+  - select: stored as selected option string ("Cotton")
+  - date: stored as date string ("2025-01-15")
+
+Query examples:
+  - Filter by boolean: ->where('value', '1')
+  - Filter by number: ->whereRaw('CAST(value AS DECIMAL) > ?', [7])
+  - Filter by text: ->where('value', 'LIKE', '%keyword%')
+
+
+### 6.3 ProductVariant (Variant Data)
+
+```sql
+product_variants:
+├── id (bigint, PK)
+├── product_id (FK → products.id, CASCADE delete)
+├── sku (string, UNIQUE per tenant)
+├── name (string, nullable)
+├── price (decimal 12,2, nullable)
+├── stock_quantity (integer, default: 0)
+│   └── Digital category: optional, default 999999 (unlimited)
+├── attributes (JSON) -- {"Color": "Red", "Size": "M"}
+├── barcode (string, nullable)
+├── is_active (boolean, default: true)
+├── created_at, updated_at
+```
+
+
+### 6.4 Flow Diagram
+
+```
+BusinessCategory.extra_fields (JSON definition)
+        │
+        ├──► SyncCategoryAttributeTemplates job (runs on JSON edit)
+        │         │
+        │         ├── upsert templates (add new, update existing)
+        │         └── soft-delete removed fields (is_active = false)
+        │
+        └──► AttributeTemplateSeeder (runs ONCE)
+                 │
+                 ├── 9 global variant option templates (Color, Size, etc.)
+                 ├── 6 Fashion extra field templates
+                 ├── 8 Electronics extra field templates
+                 └── etc.
+
+Product Create → User fills form
+        │
+        ├── Product::create() → products table
+        │
+        ├── For each variant:
+        │     ├── ProductVariant::create() → product_variants table
+        │     └── VariantAttributeValue::create() → variant_attribute_values
+        │
+        └── For each extra field filled:
+              └── Find AttributeTemplate by (category_id, slug)
+                    └── If found: ProductAttributeValue::create() → product_attribute_values
+                    └── If NOT found: throw ValidationException
+                        "Field 'care_instructions' not configured. Please contact admin."
+```
+
+
+## 7. VARIANT SYSTEM DETAIL
+==============================
+
+### 7.1 Global Variant Options (Seeder)
+
+SOURCE OF TRUTH:
+- Default options: AttributeTemplate.options JSON column (seeder e create)
+- Custom options: AttributeOption table (admin panel theke add/manage)
+- Product create e: AttributeTemplate.options + AttributeOption combined show hobe
+
+```php
+// AttributeTemplateSeeder — creates ONCE globally
+$variantOptions = [
+    ['name' => 'Color',      'options' => ['Red','Blue','Green','Black','White','Navy','Grey','Pink']],
+    ['name' => 'Size',       'options' => ['S','M','L','XL','XXL']],
+    ['name' => 'Material',   'options' => ['Cotton','Polyester','Silk','Leather','Wood','Metal']],
+    ['name' => 'Storage',    'options' => ['64GB','128GB','256GB','512GB','1TB']],
+    ['name' => 'Flavor',     'options' => ['Original','Chocolate','Vanilla','Strawberry']],
+    ['name' => 'Shade',      'options' => ['Light','Medium','Dark','Natural']],
+    ['name' => 'Strength',   'options' => ['250mg','500mg','1g','2g']],
+    ['name' => 'Pack Size',  'options' => ['10s','30s','60s','120s']],
+];
+
+foreach ($variantOptions as $opt) {
+    // firstOrCreate — idempotent, duplicate guard
+    AttributeTemplate::firstOrCreate(
+        ['slug' => Str::slug($opt['name']), 'is_global' => true],
+        [
+            'category_id'       => null,
+            'is_variant_option' => true,
+            'name'              => $opt['name'],
+            'type'              => 'select',
+            'options'           => $opt['options'],
+        ]
+    );
+}
+```
+
+EMPTY OPTION HANDLING (Decision 7):
+- User selects variant option but enters NO values → frontend validation blocks submit
+- Error: "Please add at least one value for [Color/Size/etc.]"
+- Backend: variants.*.attributes must have non-empty values for selected options
+
+
+### 7.2 Category-Specific Extra Fields (Seeder)
+
+```php
+$fashionFields = [
+    ['name' => 'size_chart',         'type' => 'textarea', 'required' => true,  'placeholder' => 'S=36, M=38, L=40, XL=42'],
+    ['name' => 'color_variants',     'type' => 'boolean',  'required' => false],
+    ['name' => 'fitting_guide',      'type' => 'textarea', 'required' => false],
+    ['name' => 'return_policy_days', 'type' => 'number',   'required' => true,  'default' => '3'],
+    ['name' => 'fabric_type',        'type' => 'select',   'required' => false, 'options' => ['Cotton','Polyester','Silk','Linen','Denim','Other']],
+    ['name' => 'season',             'type' => 'select',   'required' => false, 'options' => ['Summer','Winter','All Season']],
+];
+
+$fashionCategory = Category::where('slug', 'fashion')->first();
+foreach ($fashionFields as $field) {
+    // firstOrCreate — idempotent
+    AttributeTemplate::firstOrCreate(
+        [
+            'category_id'       => $fashionCategory->id,
+            'slug'              => Str::slug($field['name']),
+            'is_global'         => false,
+        ],
+        [
+            'name'              => $field['name'],
+            'is_variant_option' => false,
+            'type'              => $field['type'],
+            'is_required'       => $field['required'] ?? false,
+            'options'           => $field['options'] ?? null,
+            'placeholder'       => $field['placeholder'] ?? null,
+            'default'           => $field['default'] ?? null,
+        ]
+    );
+}
+// Repeat for each category...
+```
+
+
+### 7.3 Recommended Options by Category
+
+| Category     | Recommended Options              | Why                                        |
+|--------------|----------------------------------|--------------------------------------------|
+| Fashion      | Color, Size, Material            | Clothing e color/size essential             |
+| Electronics  | Color, Storage                   | Phone e color/storage common                |
+| Food         | Flavor, Pack Size                | Food e flavor/pack important                |
+| Cosmetics    | Shade, Size                      | Cosmetics e shade common                    |
+| Furniture    | Color, Material                  | Furniture e color/material important        |
+| Digital      | (No physical variants usually)   | Digital products usually no variants        |
+| Handicraft   | Color, Size, Material            | Customization er jonno versatile            |
+| Pharmacy     | Strength, Pack Size              | Medicine e strength/pack common             |
+
+NOTE: User chaile ei options charao any variant add korte parbe.
+
+
+## 8. VALIDATION RULES (FINAL)
+=================================
+
+### 8.1 Common Fields
+```php
+// CREATE rules
+$rules = [
+    'name'              => 'required|string|max:255',
+    'description'       => 'nullable|string',
+    'base_price'        => 'required|numeric|min:0',
+    'discount_price'    => 'nullable|numeric|min:0|lte:base_price',
+    'sku'               => 'required|string|unique:products,sku',
+    'barcode'           => 'nullable|string|unique:products,barcode',
+    'category_id'       => 'required|exists:categories,id',
+    'brand_id'          => 'nullable|exists:brands,id',
+    'weight_kg'         => 'nullable|numeric|min:0',
+    'status'            => 'required|in:active,inactive,out_of_stock',
+    'is_featured'       => 'boolean',
+    'meta_title'        => 'nullable|string|max:255',
+    'meta_description'  => 'nullable|string',
+    'images'            => 'nullable|array|max:10',
+    'images.*'          => 'image|max:5120',
+];
+
+// UPDATE rules — exclude current product from unique check
+$rules['sku'] = 'required|string|unique:products,sku,' . $product->id;
+$rules['barcode'] = 'nullable|string|unique:products,barcode,' . $product->id;
+```
+
+
+### 8.2 Unit & Stock (Conditional — Decision 2 & 4)
+```php
+$isDigital = Category::find($request->category_id)?->slug === 'digital-product-service';
+$hasVariants = !empty($request->variants);
+
+// Unit: required unless Digital
+if (!$isDigital) {
+    $rules['unit'] = 'required|string|max:50';
+}
+
+// CRITICAL: Mutually exclusive stock rules
+// If variants exist → stock auto-calculated, DO NOT validate stock_quantity at all
+// If no variants → stock required for physical, optional for digital
+if (!$hasVariants) {
+    if (!$isDigital) {
+        // Single physical product → stock REQUIRED
+        $rules['stock_quantity'] = 'required|integer|min:0';
+    } else {
+        // Single digital product → stock OPTIONAL
+        $rules['stock_quantity'] = 'nullable|integer|min:0';
+    }
+}
+// NOTE: If $hasVariants is true, stock_quantity is NOT added to rules at all
+// This prevents validation conflict where both required + nullable could fire
+```
+
+
+### 8.3 Variant Fields
+```php
+$rules['variants']                     = 'nullable|array';
+$rules['variants.*.sku']               = 'required_with:variants|string|max:255|unique:product_variants,sku';
+$rules['variants.*.price']             = 'nullable|numeric|min:0';
+$rules['variants.*.attributes']        = 'nullable|array';
+$rules['variants.*.barcode']           = 'nullable|string';
+
+// Digital category → stock optional (default 999999)
+if ($isDigital) {
+    $rules['variants.*.stock_quantity'] = 'nullable|integer|min:0';
+} else {
+    $rules['variants.*.stock_quantity'] = 'required_with:variants|integer|min:0';
+}
+```
+
+### 8.4 Variant Combination Cap (Decision 7)
+```php
+// Backend: validate count
+$rules['variants'] = 'nullable|array|max:100';
+
+// Frontend: soft warning at 50, hard block at 100
+```
+
+
+### 8.5 Category-Specific Extra Fields (Dynamic)
+```php
+// Load extra fields from BusinessCategory
+$extraFields = $businessCategory->extra_fields ?? [];
+$extraRules = [];
+
+foreach ($extraFields as $field) {
+    $rule = 'nullable';  // default
+    if ($field['required'] ?? false) {
+        $rule = 'required';
+    }
+    
+    switch ($field['type']) {
+        case 'text':
+        case 'textarea':
+            $rule .= '|string|max:1000';
+            break;
+        case 'number':
+            $rule .= '|numeric|min:0';
+            break;
+        case 'boolean':
+            $rule .= '|boolean';
+            break;
+        case 'select':
+            if (!empty($field['options'])) {
+                $rule .= '|in:' . implode(',', $field['options']);
+            }
+            break;
+    }
+    
+    $extraRules["extra.{$field['name']}"] = $rule;
+}
+
+$rules = array_merge($rules, $extraRules);
+```
+
+
+## 9. IMPLEMENTATION PHASES (REVISED)
+=======================================
+
+### Phase 1A: Onboarding Fix (Days 1-2)
+-----------------------------------------
+WHY FIRST: Without proper category_id in BusinessSetting, can't test anything.
+
+1. OnboardingController — dynamic extra fields extraction
+   - Remove hardcoded field list
+   - Loop through BusinessCategory.extra_fields
+   - Store only non-empty values
+2. Onboarding view — dynamic extra fields rendering
+   - Step 2/8 e properly render fields from BusinessCategory.extra_fields JSON
+   - Alpine.js: category select hole extra fields auto-show
+
+
+### Phase 1B: Variant System (Days 3-6)
+-----------------------------------------
+1. AttributeTemplateSeeder
+   - 9 global variant option templates (Color, Size, Material, etc.)
+   - Category-specific extra field templates (Fashion: 6, Electronics: 8, etc.)
+   - firstOrCreate for idempotency
+2. Product create view — "Add Variant Option" UI
+   - Modal/dropdown with available options
+   - Variant matrix auto-generation (Alpine.js)
+   - Combination cap: 50 warning, 100 block
+3. ProductController — store method
+   - Handle variants + auto-stock calculation
+   - Handle extra fields save to ProductAttributeValue
+
+
+### Phase 2: Category Extra Fields (Days 7-9)
+-----------------------------------------------
+1. Product create view — dynamic extra fields section
+   - Alpine.js: load fields from $extraFields
+   - Category change → auto-update fields
+   - Conditional hide: unit/stock for Digital
+2. ProductController — save extra fields
+   - Find AttributeTemplate by (category_id, slug)
+   - Create ProductAttributeValue rows
+   - Template not found → ValidationException
+3. discount_price validation (lte:base_price)
+4. SyncCategoryAttributeTemplates job
+   - BusinessCategory.updated event listener
+   - Upsert templates from JSON
+   - Soft-delete removed fields
+
+
+### Phase 3: Edit & Show (Days 10-12)
+----------------------------------------
+1. Product edit — load existing extra fields
+   - Product::attributeValues → display in form
+   - Variant edit: manage existing variants
+   - Digital: stock optional
+2. Product show — display extra fields
+   - Category-specific section
+   - Variant display with stock
+   - Handle text/number/boolean value display
+
+
+### Phase 4: Testing & Polish (Days 13-15)
+---------------------------------------------
+1. Integration test: onboarding → product create → edit → show
+2. Edge cases: custom category, category change mid-form, etc.
+3. Performance: variant matrix generation, extra fields load
+4. Frontend polish: validation messages, loading states
+5. Image max count: enforce max:10 on upload
+
+
+## 10. FILES TO MODIFY
+=========================
+
+### Backend:
+1. `database/seeders/AttributeTemplateSeeder.php` — NEW: all templates
+2. `app/Http/Controllers/ProductController.php` — store/update with all rules
+3. `app/Http/Controllers/OnboardingController.php` — dynamic field extraction
+4. `app/Listeners/SyncCategoryAttributeTemplates.php` — NEW: JSON↔template sync
+5. `app/Providers/EventServiceProvider.php` — BusinessCategory.updated listener
+6. `app/Models/BusinessCategory.php` — extra_fields structure (exists)
+
+### Frontend:
+7. `resources/views/tenant/products/create.blade.php` — full rewrite
+8. `resources/views/tenant/products/edit.blade.php` — full rewrite
+9. `resources/views/tenant/products/show.blade.php` — extra fields display
+10. `resources/views/onboarding/index.blade.php` — dynamic extra fields
+
+### Config:
+11. `config/products.php` — NEW: default variant options, combination limits
+
+
+## 11. TIMELINE (REVISED)
+===========================
+
+Phase 1A (Onboarding Fix):          2 days
+Phase 1B (Variant System):          4 days
+Phase 2 (Category Extra Fields):    3 days
+Phase 3 (Edit & Show):              3 days
+Phase 4 (Testing & Polish):         3 days
+
+TOTAL: ~15 days
+
+NOTE: Phase 2 (Custom Category Admin Field-Builder) is SEPARATE FUTURE FEATURE.
+      Current scope: use existing BusinessCategory.extra_fields definitions only.
+      Custom field-builder effort: 5-7 days extra (separate project).
+
+
+## 12. EDGE CASES
+====================
+
+### 12.1 Custom Category
+- User custom category create korle → No extra fields (empty extra_fields)
+- Variant system still works (global options)
+- Future: Admin panel theke custom category te extra fields add korte parbe
+
+### 12.2 No Category Selected
+- Extra fields section hidden
+- Variant system still works
+- All common fields visible
+
+### 12.3 Category Change Mid-Form
+- Extra fields section auto-update (Alpine.js)
+- Already filled extra fields → warning: "Category changed, previous extra fields will be lost"
+
+### 12.4 Single Product (No Variants)
+- User chaile variant skip korte parbe
+- Single product form e stock_quantity directly fill korbe (REQUIRED for physical)
+- stock_quantity => required_if:has_variants,false
+
+### 12.5 Digital Product + Variants
+- Digital products e usually variant lage na
+- But user chaile (e.g., "Basic Plan/Pro Plan") variant add korte parbe
+- unit/stock fields hidden for Digital category
+- Variant stock optional (default 999999 unlimited)
+
+### 12.6 discount_price > base_price
+- Frontend: real-time validation, red border + error
+- Backend: validation error "Discount price must be less than or equal to base price"
+
+### 12.7 50+ Variant Combinations
+- Frontend soft warning: "50+ variants generate hocche. Are you sure?"
+- User can continue OR reduce options
+- 100+ → Hard block, cannot submit
+
+### 12.8 Weight for Shipping
+- Common field in Layer 1
+- All categories can use for shipping cost calculation
+- Furniture-er weight_kg extra field REMOVED (duplicate)
+
+### 12.9 Value Type Casting
+- product_attribute_values.value is TEXT type
+- Boolean fields: where('value', '1') for true
+- Number fields: whereRaw('CAST(value AS DECIMAL) > ?', [7]) for comparisons
+- Future: may need a typed_value accessor or computed column
+
+### 12.10 Product Listing — Extra Fields Not Shown (Intentional)
+- Product index page shows: name, SKU, price, stock, status, brand, category
+- Extra fields NOT shown in listing (too many columns, performance concern)
+- Extra fields visible in: product show page, product edit form
+- Future: optional column toggle in listing (admin preference)
+
+
+## 13. AI INTEGRATION
+=======================
+
+### AI System Prompt e Extra Fields Add Hobe:
+
+| Category     | AI Prompt Addition                                             |
+|--------------|----------------------------------------------------------------|
+| Fashion      | "Size chart, fabric type, return policy kotha bolo."           |
+| Electronics  | "Warranty period, product condition, after-sales service dao."  |
+| Food         | "Expiry date, halal certification, ingredients janiye dao."     |
+| Cosmetics    | "Skin type, usage instructions, authenticity guarantee bolo."   |
+| Furniture    | "Dimensions, delivery method, installation charge bolo."        |
+| Digital      | "Delivery method, license validity, refund policy explain koro." |
+| Handicraft   | "Made-to-order time, customization options, artisan info bolo." |
+| Pharmacy     | "Prescription requirement, dosage info, storage condition bolo."|
+
+
+## 14. SUMMARY OF ALL FIXES
+==============================
+
+| # | Issue | Resolution | Decision # |
+|---|-------|------------|------------|
+| 1 | Storage model ambiguity | Templates ONCE (seeder), data PER PRODUCT | Decision 1 |
+| 2 | JSON↔template sync missing | SyncCategoryAttributeTemplates job (upsert on edit) | Decision 1B |
+| 3 | stock_quantity contradiction | Auto-calc if variants, required if single | Decision 2 |
+| 4 | Global template duplicate guard | firstOrCreate + application-level guard | Decision 7 note |
+| 5 | SKU platform-wide unique | Already per-tenant (tenant DB), verified | Decision 3 |
+| 6 | Digital product unit/stock | Conditional: hide for Digital, stock optional | Decision 4 |
+| 7 | Digital variant stock | Optional, default 999999 unlimited | Decision 4 |
+| 8 | discount_price no sanity check | lte:base_price validation added | Decision 5 |
+| 9 | Weight needed everywhere | Common field in Layer 1 | Decision 6 |
+| 10 | Variant combination no cap | 50 warning, 100 hard block | Decision 7 |
+| 11 | Custom category field-builder | Separate future feature | Decision 8 |
+| 12 | Phase 4 ordering | Phase 1A = Onboarding first (parallel) | Decision 9 |
+| 13 | No image count limit | max:10 images per product | 8.1 rules |
+| 14 | Value type casting | text column, cast in queries | 6.2 note |
+| 15 | Sync job tenant context | Iterate all tenants, run in tenant context | 1B updated |
+| 16 | stock_quantity validation conflict | Mutually exclusive rules (only one fires) | 8.2 updated |
+| 17 | Category load mismatch | BusinessCategory (landlord) + Category (tenant) | 5.2 updated |
+| 18 | BusinessCategory.created() | Handle both created + updated events | 1B updated |
+| 19 | Variant option values source | AttributeTemplate.options JSON + AttributeOption table | 7.1 updated |
+| 20 | Empty variant option values | Frontend validation blocks submit | 7.1 updated |
+| 21 | Barcode validation on update | Exclude current product from unique check | 8.1 updated |
+| 22 | Product listing extra fields | Documented as intentional (not shown in index) | 12.10 added |
+
+
+## 15. NOTES
+==============
+
+- ALL critical decisions documented in Section "CRITICAL DECISIONS"
+- Code shuru AGGE ei decisions finalize korte hobe
+- Tenant DB = separate database per tenant → SKU/barcode uniqueness already per-tenant
+- AttributeTemplate = schema definition (created once + synced). ProductAttributeValue = data (per product)
+- weight COMMON field — Fashion, Electronics, Food — shob category te shipping er jonno dorkar
+- Variant cap prevents accidental 1000+ variant generation
+- Onboarding fix FIRST ensures test data integrity
+- Custom category field-builder = future feature, not in this scope
+- Sync job prevents data loss when admin edits extra_fields JSON
+- value column TEXT type → query time casting needed for numeric/boolean filters
+
+================================================================================
+    END OF PLAN (FINAL v5 — Production Ready)
+================================================================================
