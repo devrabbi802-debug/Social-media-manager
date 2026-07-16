@@ -371,8 +371,8 @@
 function businessSettings() {
     return {
         advancePayment: {{ ($businessSetting->advance_payment_required ?? false) ? 'true' : 'false' }},
-        paymentMethods: @json($businessSetting->accepted_payment_methods ?? [{ 'name' => '', 'details' => '' }]),
-        deliveryAreas: @json($businessSetting->delivery_areas ?? [{ 'name' => 'Inside Dhaka', 'price' => '' }, { 'name' => 'Outside Dhaka', 'price' => '' }]),
+        paymentMethods: <?php echo json_encode($businessSetting->accepted_payment_methods ?? [['name' => '', 'details' => '']]); ?>,
+        deliveryAreas: <?php echo json_encode($businessSetting->delivery_areas ?? [['name' => 'Inside Dhaka', 'price' => ''], ['name' => 'Outside Dhaka', 'price' => '']]); ?>,
 
         init() {
             if (!Array.isArray(this.paymentMethods) || this.paymentMethods.length === 0) {
