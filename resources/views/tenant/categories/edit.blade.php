@@ -33,7 +33,7 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">@lang('categories.parent')</label>
                     <select name="parent_id" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
                         <option value="">@lang('categories.none')</option>
-                        @foreach($categories as $cat)
+                        @foreach($parentCategories as $cat)
                             @if($cat->id !== $category->id)
                                 <option value="{{ $cat->id }}" {{ old('parent_id', $category->parent_id) == $cat->id ? 'selected' : '' }}>{{ $cat->name }}</option>
                             @endif

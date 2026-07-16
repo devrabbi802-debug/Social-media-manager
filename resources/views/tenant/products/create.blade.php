@@ -261,7 +261,7 @@
 
                     {{-- LAYER 2: CATEGORY EXTRA FIELDS --}}
                     @if(!empty($extraFields))
-                    <div class="bg-white rounded-2xl p-6 shadow-sm" x-show="selectedCategoryId == '{{ $tenantCategory?->id }}'">
+                    <div class="bg-white rounded-2xl p-6 shadow-sm">
                         <h2 class="text-lg font-bold text-gray-900 mb-1">@lang('products.category_fields')</h2>
                         <p class="text-sm text-gray-500 mb-4">{{ $businessCategory->name }} @lang('products.extra_fields_hint')</p>
 

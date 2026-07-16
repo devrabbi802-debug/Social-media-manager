@@ -181,6 +181,11 @@ docker exec laravel-app php artisan <command>
 - **Onboarding controller**: `app/Http/Controllers/OnboardingController.php`
 - **Subdomain check controller**: `app/Http/Controllers/SubdomainController.php`
 - **Dashboard controller**: `app/Http/Controllers/DashboardController.php` — handles dashboard, settings (profile/password/business/tone/pricing/faq/escalation), leads, reports, whatsapp, facebook, inventory, integration
+- **Product controller**: `app/Http/Controllers/Dashboard/ProductController.php` — full CRUD with variant matrix, extra fields, conditional validation
+- **Attribute template controller**: `app/Http/Controllers/Dashboard/AttributeTemplateController.php` — variant options + category extra field templates
+- **Category observer**: `app/Observers/BusinessCategoryObserver.php` — auto-sync extra fields to tenants
+- **Sync job**: `app/Jobs/SyncCategoryAttributeTemplates.php` — cross-tenant template UPSERT/soft-delete
+- **Attribute template seeder**: `database/seeders/AttributeTemplateSeeder.php` — seeds variant options + extra fields
 
 ## Missing Views (routes exist, views don't)
 
@@ -212,13 +217,14 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 - `facebook_settings` — per-user Facebook/Zernio connection config (connection_type enum: `facebook_app`/`zernio`)
 - `ai_settings` — per-user AI API keys (type: `message`/`cerebras`/`image`)
 - `conversations`, `messages` — chat history
-- `categories` (self-FK parent_id), `attribute_templates` (is_variant_option boolean), `brands`, `products`, `product_attribute_values`, `product_variants` (JSON attributes), `product_images`, `variant_images` (JSON embedding column)
+- `categories` (self-FK parent_id), `attribute_templates` (is_variant_option boolean, is_active boolean, placeholder/default columns), `brands`, `products` (weight_kg column), `product_attribute_values`, `product_variants` (JSON attributes), `product_images`, `variant_images` (JSON embedding column)
 - `warehouses`, `stock_movements`, `stock_transfers`, `inventory_alerts`, `attribute_options`
 - `business_settings` — per-user business config from onboarding (category, tone, pricing, delivery areas (JSON array with name+price), payment methods (JSON array with name+details), advance payment settings, refund/exchange policies, order process message, FAQ, extra_fields_data JSON, logo_path)
 
 ### Seeder
 - `AdminSeeder` creates `admin@socialboost.com` / `Admin@123456`, role `super_admin` (idempotent via `updateOrCreate`)
 - `BusinessCategorySeeder` seeds 8 default categories (Fashion, Electronics, Food, Cosmetics, Furniture, Digital, Handicraft, Pharmacy) with category-specific extra_fields JSON
+- `AttributeTemplateSeeder` — seeds 8 global variant options (Color, Size, Material, Storage, Flavor, Shade, Strength, Pack Size) + category-specific extra field templates from BusinessCategory JSON (uses `BusinessCategory::on('mysql')` for landlord DB access)
 
 ## Testing
 
@@ -255,6 +261,68 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 - **Variant attributes** stored as JSON: `{"Color": "Red", "Size": "M"}`
 - **Product-level attributes** stored in `product_attribute_values` table
 - **Stock transfers** create 2 `StockMovement` records (out + in) atomically
+
+### Product Category Fields Plan (v5)
+
+3-layer system for product fields:
+
+**Layer 1 — Common Fields** (product-level, always present):
+`name`, `sku`, `description`, `base_price`, `discount_price`, `stock_quantity`, `unit`, `barcode`, `status`, `is_featured`, `weight_kg`, `category_id`, `brand_id`, `sort_order`, `meta_title`, `meta_description`
+
+**Layer 1B — Variant System** (optional, per-product):
+- **Variant Options**: Global `attribute_templates` where `is_variant_option=true, is_global=true` (Color, Size, Material, etc.) — seeded by `AttributeTemplateSeeder`
+- **Variant Matrix**: Alpine.js cartesian product of selected options → `product_variants` table
+- **Auto-SKU**: `{PRODUCT-SKU}-{OPT1}-{OPT2}` format
+- **Cap**: 50 soft warning (yellow), 100 hard block (red, submit disabled)
+- **Stock auto-calc**: When variants exist, product-level `stock_quantity` is sum of all variant stocks
+
+**Layer 2 — Category-Specific Extra Fields** (dynamic, synced from landlord):
+- **Landlord**: `business_categories.extra_fields` JSON array defines fields per category (name, type, required, options, placeholder, default)
+- **Tenant sync**: `AttributeTemplateSeeder` seeds extra field templates into tenant `attribute_templates` (linked by slug, `is_global=false, is_variant_option=false`)
+- **Auto-sync**: `BusinessCategoryObserver` fires `SyncCategoryAttributeTemplates` job when `extra_fields` changes on create/update
+- **Sync job**: UPSERTS template on extra_fields change, SOFT DELETES removed fields (sets `is_active=false`), HARD DELETES templates with no values
+- **ProductController**: Resolves tenant Category via `Category::where('slug', $businessCategory->slug)->first()` — must use this FK, NOT `businessCategory->id`
+- **Save**: `ProductAttributeValue` records per product (full replacement on update)
+- **Validation**: Dynamic rules built from `extra_fields` JSON — `required` if `field.required=true`
+
+**Conditional Validation**:
+- Digital products (`digital-product`, `digital-product-service`): `unit` nullable, `stock_quantity` nullable
+- When variants exist: `stock_quantity` skipped (auto-calculated from variants)
+- `discount_price`: Must be `lte:base_price`
+
+**Key Gotchas**:
+- `BusinessCategory` lives in **landlord DB** — always `BusinessCategory::on('mysql')->find($id)`
+- `BusinessSetting::category()` method already uses `on('mysql')` internally
+- `attribute_templates.category_id` references **tenant** `categories.id`, NOT `business_categories.id`
+- `AttributeTemplate.type` enum: `text|number|select|boolean|date|textarea` (textarea added via migration)
+- PHP 8.4: Unparenthesized nested ternary `a ? b : c ? d : e` is **forbidden**
+- Alpine.js: All reactive state (`hasVariants`, `showVariantModal`, `combinationCount`, `selectedOptions`) must be inside `x-data` scope
+- Alpine.js: `x-if` must be on `<template>` tags only
+
+### New Files (Product Category Fields)
+
+- `app/Jobs/SyncCategoryAttributeTemplates.php` — Cross-tenant template sync (UPSERT/soft-delete/hard-delete)
+- `app/Observers/BusinessCategoryObserver.php` — Triggers sync on `created` and `updated`
+- `database/seeders/AttributeTemplateSeeder.php` — Seeds 8 global variant options + category-specific extra field templates
+- `database/migrations/tenant/2026_07_16_000001_add_weight_kg_to_products_table.php`
+- `database/migrations/tenant/2026_07_16_000002_add_is_active_to_attribute_templates_table.php`
+- `database/migrations/tenant/2026_07_16_000003_add_placeholder_default_to_attribute_templates_table.php`
+- `database/migrations/tenant/2026_07_16_000004_add_textarea_to_attribute_templates_type_enum.php`
+
+### Modified Files (Product Category Fields)
+
+- `app/Http/Controllers/Dashboard/ProductController.php` — Full rewrite: `create()`, `store()`, `edit()`, `update()`, `show()`, conditional validation, extra fields, variant matrix, tenant Category FK resolution
+- `app/Models/Product.php` — Added `weight_kg` to `$fillable` and `$casts`
+- `app/Models/AttributeTemplate.php` — Added `is_active` to `$fillable`/`$casts`, `placeholder`/`default` attributes
+- `app/Models/BusinessSetting.php` — `category()` uses `on('mysql')`
+- `app/Providers/AppServiceProvider.php` — Registers `BusinessCategoryObserver`
+- `database/seeders/DatabaseSeeder.php` — Routes `AttributeTemplateSeeder` for tenant DBs
+- `resources/views/tenant/products/create.blade.php` — Alpine.js variant matrix, extra fields, discount validation
+- `resources/views/tenant/products/edit.blade.php` — Alpine.js variant modal, matrix, existing variants table, extra fields
+- `resources/views/tenant/products/show.blade.php` — Extra fields display, variants table, correct field names
+- `resources/lang/bn/products.php` — 14 new keys for product fields
+- `resources/lang/en/products.php` — 14 new keys for product fields
+- `resources/lang/bn/common.php` + `resources/lang/en/common.php` — Added `done` key
 
 # Agent Instructions
 
