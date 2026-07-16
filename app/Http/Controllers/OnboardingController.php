@@ -8,7 +8,7 @@ use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class OnboardingController extends Controller
 {
@@ -32,7 +32,6 @@ class OnboardingController extends Controller
 
     public function store(Request $request)
     {
-        // Decode JSON strings from hidden inputs to arrays before validation
         if (is_string($request->input('accepted_payment_methods'))) {
             $decoded = json_decode($request->input('accepted_payment_methods'), true);
             $request->merge(['accepted_payment_methods' => $decoded]);
@@ -43,14 +42,11 @@ class OnboardingController extends Controller
         }
 
         $validated = $request->validate([
-            // Step 1: Account
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255',
             'phone' => 'required|string|max:20',
             'subdomain' => 'required|string|min:3|max:50|regex:/^[a-z0-9-]+$/|unique:tenants,id',
             'password' => 'required|string|min:8|confirmed',
-
-            // Step 2: Business Info
             'business_name' => 'required|string|max:255',
             'category_id' => 'nullable|exists:business_categories,id',
             'custom_category_name' => 'nullable|string|max:255',
@@ -59,20 +55,14 @@ class OnboardingController extends Controller
             'business_hours' => 'required|string|max:255',
             'off_hours_message' => 'nullable|string|max:500',
             'business_description' => 'required|string|max:1000',
-
-            // Step 4: Tone
             'formality_level' => 'required|in:formal,casual',
             'emoji_usage' => 'required|in:never,sometimes,often',
             'language_style' => 'required|in:shuddho_bangla,anjonio,banglish',
             'greeting_style' => 'required|string|max:255',
-
-            // Step 5: Pricing
             'price_negotiation' => 'nullable|boolean',
             'negotiation_limit' => 'nullable|integer|min:0|max:100',
             'bulk_discount_rule' => 'nullable|string|max:500',
             'current_promo' => 'nullable|string|max:500',
-
-            // Step 6: Delivery & Payment
             'delivery_areas' => 'nullable|array',
             'delivery_areas.*.name' => 'required_with:delivery_areas|string|max:255',
             'delivery_areas.*.price' => 'nullable|string|max:255',
@@ -88,21 +78,14 @@ class OnboardingController extends Controller
             'refund_policy' => 'nullable|string|max:1000',
             'exchange_policy' => 'nullable|string|max:1000',
             'order_process_message' => 'nullable|string|max:2000',
-
-            // Step 7: FAQ
             'faq' => 'nullable|array',
             'faq.*.question' => 'nullable|string|max:500',
             'faq.*.answer' => 'nullable|string|max:1000',
-
-            // Step 8: Escalation
             'custom_escalation_keywords' => 'nullable|string|max:500',
             'escalation_contact' => 'nullable|string|max:255',
-
-            // Step 9: Logo
             'logo' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
         ]);
 
-        // Category extra fields
         $extraFieldsData = $request->only([
             'size_chart', 'color_variants', 'fitting_guide', 'return_policy_days',
             'warranty_period', 'model_serial_required', 'product_condition', 'after_sales_service',
@@ -114,21 +97,18 @@ class OnboardingController extends Controller
             'prescription_required', 'storage_condition', 'regulatory_disclaimer', 'dosage_info',
         ]);
 
-        // Validate: either category_id or custom_category_name required
         if (empty($validated['category_id']) && empty($validated['custom_category_name'])) {
             return back()->withInput()->withErrors([
                 'category_id' => 'ক্যাটাগরি বাছুন বা নতুন ক্যাটাগরির নাম লিখুন।',
             ]);
         }
 
-        // Clean empty extra fields
         $extraFieldsData = array_filter($extraFieldsData, fn($v) => $v !== null && $v !== '');
 
-        DB::beginTransaction();
+        $categoryId = $validated['category_id'] ?? null;
+        $tenant = null;
 
         try {
-            // Handle custom category
-            $categoryId = $validated['category_id'] ?? null;
             if (empty($categoryId) && !empty($validated['custom_category_name'])) {
                 $slug = \Illuminate\Support\Str::slug($validated['custom_category_name']);
                 $category = BusinessCategory::firstOrCreate(
@@ -143,7 +123,6 @@ class OnboardingController extends Controller
                 $categoryId = $category->id;
             }
 
-            // 1. Create Tenant
             $tenant = Tenant::create([
                 'id' => $validated['subdomain'],
                 'name' => $validated['business_name'] ?? $validated['name'],
@@ -155,34 +134,46 @@ class OnboardingController extends Controller
                 'trial_ends_at' => now()->addDays(14),
             ]);
 
-            // 2. Create Domain
             $tenant->domains()->create([
                 'domain' => $validated['subdomain'] . '.' . config('app.domain'),
             ]);
+        } catch (\Exception $e) {
+            if ($tenant) {
+                $tenant->delete();
+            }
+            return back()->withInput()->withErrors([
+                'error' => 'সেটআপে সমস্যা হয়েছে: ' . $e->getMessage(),
+            ]);
+        }
 
-            // 3. Create User in tenant DB + BusinessSettings
-            $tenant->run(function () use ($validated, $extraFieldsData, $request, $categoryId) {
+        $createdUser = null;
+        $loginToken = null;
+
+        try {
+            $loginToken = Str::random(64);
+
+            $tenant->run(function () use ($validated, $extraFieldsData, $request, $categoryId, &$createdUser, $loginToken) {
                 $user = \App\Models\User::create([
                     'name' => $validated['name'],
                     'email' => $validated['email'],
                     'phone' => $validated['phone'],
                     'company' => $validated['business_name'],
                     'password' => Hash::make($validated['password']),
+                    'remember_token' => Hash::make($loginToken),
                 ]);
 
-                // Logo upload
+                $createdUser = $user;
+
                 $logoPath = null;
                 if ($request->hasFile('logo')) {
                     $logoPath = $request->file('logo')->store('logos', 'public');
                 }
 
-                // FAQ data
                 $faq = collect($request->input('faq', []))
                     ->filter(fn($item) => !empty($item['question']) && !empty($item['answer']))
                     ->values()
                     ->toArray();
 
-                // 4. Create BusinessSettings
                 BusinessSetting::create([
                     'user_id' => $user->id,
                     'business_name' => $validated['business_name'],
@@ -217,22 +208,26 @@ class OnboardingController extends Controller
                     'faq' => !empty($faq) ? $faq : null,
                     'logo_path' => $logoPath,
                 ]);
-
-                // Auto-login
-                Auth::login($user);
             });
-
-            DB::commit();
-
-            return redirect()->to(
-                'http://' . $validated['subdomain'] . '.' . config('app.domain') . '/dashboard'
-            )->with('success', 'আপনার অ্যাকাউন্ট এবং বিজনেস সেটআপ সফলভাবে সম্পন্ন হয়েছে!');
-
         } catch (\Exception $e) {
-            DB::rollBack();
+            if ($tenant) {
+                $tenant->delete();
+            }
+
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
             return back()->withInput()->withErrors([
                 'error' => 'সেটআপে সমস্যা হয়েছে: ' . $e->getMessage(),
             ]);
         }
+
+        // Cross-domain auto-login via one-time token
+        $tenantDomain = $validated['subdomain'] . '.' . config('app.domain');
+        $email = $validated['email'];
+
+        return redirect()->to(
+            'http://' . $tenantDomain . '/auto-login?email=' . urlencode($email) . '&token=' . $loginToken
+        );
     }
 }

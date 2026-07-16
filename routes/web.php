@@ -43,26 +43,10 @@ Route::post('/webhook/facebook', [FacebookWebhookController::class, 'handle']);
 // Zernio Webhook (central — Zernio calls this for message events)
 Route::post('/webhook/zernio', [FacebookWebhookController::class, 'handleZernio']);
 
-// Auth Routes - Login
+// Auth Routes - Login (redirect to onboarding — tenant users login on their subdomain)
 Route::get('/login', function () {
-    return view('auth.login');
+    return redirect()->route('onboarding');
 })->name('login');
-
-Route::post('/login', function (Request $request) {
-    $credentials = $request->validate([
-        'email' => 'required|email',
-        'password' => 'required',
-    ]);
-
-    if (Auth::attempt($credentials)) {
-        $request->session()->regenerate();
-        return redirect()->intended('/dashboard');
-    }
-
-    return back()->withErrors([
-        'email' => 'ইমেইল বা পাসওয়ার্ড ভুল।',
-    ])->onlyInput('email');
-});
 
 // Auth Routes - Register (redirect to onboarding)
 Route::get('/register', function () {

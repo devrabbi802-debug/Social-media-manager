@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
 use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
@@ -41,6 +43,30 @@ Route::middleware([
 
     // Language Switch
     Route::post('/language/switch', [LanguageController::class, 'switch'])->name('language.switch');
+
+    // Auto-login from onboarding (one-time token)
+    Route::get('/auto-login', function (\Illuminate\Http\Request $request) {
+        $email = $request->query('email');
+        $token = $request->query('token');
+
+        if (! $email || ! $token) {
+            return redirect('/login')->withErrors(['email' => 'লিংক অবৈধ।']);
+        }
+
+        $user = \App\Models\User::where('email', $email)->first();
+
+        if (! $user || ! Hash::check($token, $user->remember_token)) {
+            return redirect('/login')->withErrors(['email' => 'লিংক অবৈধ বা মেয়াদ শেষ।']);
+        }
+
+        // One-time token clear koro
+        $user->update(['remember_token' => null]);
+
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        return redirect('/dashboard')->with('success', 'স্বাগতম! আপনার সেটআপ সম্পন্ন হয়েছে।');
+    })->name('tenant.auto.login');
 
     // Auth Routes
     Route::get('/login', function () {
