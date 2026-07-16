@@ -78,42 +78,6 @@ class SendAiReplyJob implements ShouldQueue
             $this->transcribeAudio();
         }
 
-        if (empty($this->imageUrls)) {
-            sleep(3);
-
-            $conversation = Conversation::where('sender_id', $this->senderId)->first();
-
-            if ($conversation) {
-                $recentImages = Message::where('conversation_id', $conversation->id)
-                    ->where('direction', 'incoming')
-                    ->where('type', 'image')
-                    ->where('created_at', '>=', now()->subSeconds(10))
-                    ->pluck('image_path')
-                    ->toArray();
-
-                if (! empty($recentImages)) {
-                    Log::info('SendAiReplyJob: text job found recent images after wait', [
-                        'sender_id' => $this->senderId,
-                        'image_count' => count($recentImages),
-                    ]);
-                    $this->imageUrls = $recentImages;
-                } else {
-                    $hasRecentReply = Message::where('conversation_id', $conversation->id)
-                        ->where('direction', 'outgoing')
-                        ->where('created_at', '>=', now()->subSeconds(5))
-                        ->exists();
-
-                    if ($hasRecentReply) {
-                        Log::info('SendAiReplyJob: SKIPPED text job - reply already sent', [
-                            'sender_id' => $this->senderId,
-                        ]);
-
-                        return;
-                    }
-                }
-            }
-        }
-
         $this->processReply();
     }
 
@@ -168,6 +132,43 @@ class SendAiReplyJob implements ShouldQueue
         }
 
         $tenant->run(function () use ($tenant) {
+            // Check for recent images/replies INSIDE tenant context
+            if (empty($this->imageUrls)) {
+                sleep(3);
+
+                $conversation = Conversation::where('sender_id', $this->senderId)->first();
+
+                if ($conversation) {
+                    $recentImages = Message::where('conversation_id', $conversation->id)
+                        ->where('direction', 'incoming')
+                        ->where('type', 'image')
+                        ->where('created_at', '>=', now()->subSeconds(10))
+                        ->pluck('image_path')
+                        ->toArray();
+
+                    if (! empty($recentImages)) {
+                        Log::info('SendAiReplyJob: text job found recent images after wait', [
+                            'sender_id' => $this->senderId,
+                            'image_count' => count($recentImages),
+                        ]);
+                        $this->imageUrls = $recentImages;
+                    } else {
+                        $hasRecentReply = Message::where('conversation_id', $conversation->id)
+                            ->where('direction', 'outgoing')
+                            ->where('created_at', '>=', now()->subSeconds(5))
+                            ->exists();
+
+                        if ($hasRecentReply) {
+                            Log::info('SendAiReplyJob: SKIPPED text job - reply already sent', [
+                                'sender_id' => $this->senderId,
+                            ]);
+
+                            return;
+                        }
+                    }
+                }
+            }
+
             $facebookSetting = FacebookSetting::where('connection_type', 'zernio')
                 ->where('zernio_account_id', $this->zernioAccountId)
                 ->first()

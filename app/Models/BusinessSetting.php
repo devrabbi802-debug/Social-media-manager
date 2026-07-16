@@ -81,8 +81,17 @@ class BusinessSetting extends Model
 
     public function generateSystemPrompt(): string
     {
-        $category = $this->category();
-        $categoryName = $category?->name ?? 'সাধারণ';
+        // business_categories is in landlord DB, not tenant DB
+        $categoryName = 'সাধারণ';
+        if ($this->category_id) {
+            $cat = \Illuminate\Support\Facades\DB::connection('mysql')
+                ->table('business_categories')
+                ->where('id', $this->category_id)
+                ->value('name');
+            if ($cat) {
+                $categoryName = $cat;
+            }
+        }
         $extraData = $this->extra_fields_data ?? [];
         $personaName = $this->persona_name ?? 'AI সহকারী';
 
