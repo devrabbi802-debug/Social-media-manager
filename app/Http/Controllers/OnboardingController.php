@@ -159,8 +159,10 @@ class OnboardingController extends Controller
                     'phone' => $validated['phone'],
                     'company' => $validated['business_name'],
                     'password' => Hash::make($validated['password']),
-                    'remember_token' => Hash::make($loginToken),
                 ]);
+
+                // remember_token fillable e nai, tai alada set koro
+                $user->forceFill(['remember_token' => Hash::make($loginToken)])->save();
 
                 $createdUser = $user;
 

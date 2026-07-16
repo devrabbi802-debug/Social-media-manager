@@ -60,7 +60,7 @@ Route::middleware([
         }
 
         // One-time token clear koro
-        $user->update(['remember_token' => null]);
+        $user->forceFill(['remember_token' => null])->save();
 
         Auth::login($user);
         $request->session()->regenerate();
