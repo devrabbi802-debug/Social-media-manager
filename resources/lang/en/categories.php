@@ -34,4 +34,5 @@ return [
     'create_btn' => 'Create Category',
     'edit_title_param' => 'Edit :name',
     'update_btn' => 'Update Category',
+    'is_active' => 'Active',
 ];

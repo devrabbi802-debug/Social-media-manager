@@ -34,4 +34,5 @@ return [
     'create_btn' => 'ক্যাটাগরি তৈরি করুন',
     'edit_title_param' => ':name এডিট করুন',
     'update_btn' => 'ক্যাটাগরি আপডেট করুন',
+    'is_active' => 'সক্রিয়',
 ];

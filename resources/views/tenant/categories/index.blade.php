@@ -31,6 +31,7 @@
                             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">@lang('categories.name')</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">@lang('categories.parent')</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">@lang('categories.products_count')</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">@lang('categories.is_active')</th>
                             <th class="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">@lang('common.actions')</th>
                         </tr>
                     </thead>
@@ -40,6 +41,13 @@
                                 <td class="px-6 py-4 font-medium text-gray-900">{{ $category->name }}</td>
                                 <td class="px-6 py-4 text-sm text-gray-500">{{ $category->parent->name ?? '-' }}</td>
                                 <td class="px-6 py-4 text-sm text-gray-500">{{ $category->products_count ?? 0 }}</td>
+                                <td class="px-6 py-4 text-sm">
+                                    @if($category->is_active)
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">@lang('common.active')</span>
+                                    @else
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">@lang('common.inactive')</span>
+                                    @endif
+                                </td>
                                 <td class="px-6 py-4 text-right text-sm">
                                     <div class="flex items-center justify-end space-x-2">
                                         <a href="{{ route('inventory.categories.edit', $category) }}" class="text-blue-600 hover:text-blue-800 p-1">@lang('common.edit')</a>

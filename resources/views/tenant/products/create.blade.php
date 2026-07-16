@@ -332,36 +332,71 @@
                     {{-- Category --}}
                     <div class="bg-white rounded-2xl p-6 shadow-sm">
                         <h2 class="text-lg font-bold text-gray-900 mb-4">@lang('products.category')</h2>
-                        <select name="category_id"
-                                x-model="selectedCategoryId"
-                                @change="onCategoryChange()"
-                                class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                            <option value="">@lang('products.select_category')</option>
-                            @foreach($categories as $category)
-                                <option value="{{ $category->id }}" {{ old('category_id') == $category->id ? 'selected' : '' }}>
-                                    {{ $category->name }}
-                                </option>
-                                @if($category->children->count())
-                                    @foreach($category->children as $child)
-                                        <option value="{{ $child->id }}" {{ old('category_id') == $child->id ? 'selected' : '' }}>
-                                            &nbsp;&nbsp;{{ $child->name }}
-                                        </option>
-                                    @endforeach
-                                @endif
-                            @endforeach
-                        </select>
+                        <div x-data="{ catOpen: false, catSearch: '' }" class="relative">
+                            <input type="hidden" name="category_id" :value="selectedCategoryId">
+                            <div @click="catOpen = !catOpen"
+                                 class="w-full px-4 py-3 border border-gray-300 rounded-xl cursor-pointer bg-white flex justify-between items-center focus:ring-2 focus:ring-purple-500">
+                                <span :class="selectedCategoryId ? 'text-gray-900' : 'text-gray-400'"
+                                      x-text="selectedCategoryId ? (categoriesFlat.find(c => c.id == selectedCategoryId)?.name || '@lang('products.select_category')') : '@lang('products.select_category')'"></span>
+                                <svg class="w-5 h-5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                </svg>
+                            </div>
+                            <div x-show="catOpen" @click.outside="catOpen = false" x-cloak
+                                 class="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                <div class="sticky top-0 bg-white p-2 border-b">
+                                    <input type="text" x-model="catSearch" @click.stop
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500"
+                                           placeholder="🔍 @lang('common.search')...">
+                                </div>
+                                <div @click.stop="selectedCategoryId = ''; catSearch = ''; catOpen = false; onCategoryChange()"
+                                     class="px-4 py-2 cursor-pointer hover:bg-purple-50 text-sm text-gray-500 border-b">
+                                    @lang('products.select_category')
+                                </div>
+                                <template x-for="cat in categoriesFlat.filter(c => c.name.toLowerCase().includes(catSearch.toLowerCase()))" :key="cat.id">
+                                    <div @click.stop="selectedCategoryId = cat.id; catSearch = ''; catOpen = false; onCategoryChange()"
+                                         class="px-4 py-2 cursor-pointer hover:bg-purple-50 text-sm"
+                                         :class="selectedCategoryId == cat.id ? 'bg-purple-100 text-purple-700 font-medium' : 'text-gray-700'"
+                                         :style="'padding-left:' + (cat.depth * 16 + 16) + 'px'"
+                                         x-text="cat.name"></div>
+                                </template>
+                            </div>
+                        </div>
                         @error('category_id') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                     </div>
 
                     {{-- Brand --}}
                     <div class="bg-white rounded-2xl p-6 shadow-sm">
                         <h2 class="text-lg font-bold text-gray-900 mb-4">@lang('products.brand')</h2>
-                        <select name="brand_id" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                            <option value="">@lang('products.select_brand')</option>
-                            @foreach($brands as $brand)
-                                <option value="{{ $brand->id }}" {{ old('brand_id') == $brand->id ? 'selected' : '' }}>{{ $brand->name }}</option>
-                            @endforeach
-                        </select>
+                        <div x-data="{ brOpen: false, brSearch: '' }" class="relative">
+                            <input type="hidden" name="brand_id" :value="selectedBrandId">
+                            <div @click="brOpen = !brOpen"
+                                 class="w-full px-4 py-3 border border-gray-300 rounded-xl cursor-pointer bg-white flex justify-between items-center focus:ring-2 focus:ring-purple-500">
+                                <span :class="selectedBrandId ? 'text-gray-900' : 'text-gray-400'"
+                                      x-text="selectedBrandId ? (brandsFlat.find(b => b.id == selectedBrandId)?.name || '@lang('products.select_brand')') : '@lang('products.select_brand')'"></span>
+                                <svg class="w-5 h-5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                </svg>
+                            </div>
+                            <div x-show="brOpen" @click.outside="brOpen = false" x-cloak
+                                 class="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                <div class="sticky top-0 bg-white p-2 border-b">
+                                    <input type="text" x-model="brSearch" @click.stop
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500"
+                                           placeholder="🔍 @lang('common.search')...">
+                                </div>
+                                <div @click.stop="selectedBrandId = ''; brSearch = ''; brOpen = false"
+                                     class="px-4 py-2 cursor-pointer hover:bg-purple-50 text-sm text-gray-500 border-b">
+                                    @lang('products.select_brand')
+                                </div>
+                                <template x-for="b in brandsFlat.filter(b => b.name.toLowerCase().includes(brSearch.toLowerCase()))" :key="b.id">
+                                    <div @click.stop="selectedBrandId = b.id; brSearch = ''; brOpen = false"
+                                         class="px-4 py-2 cursor-pointer hover:bg-purple-50 text-sm"
+                                         :class="selectedBrandId == b.id ? 'bg-purple-100 text-purple-700 font-medium' : 'text-gray-700'"
+                                         x-text="b.name"></div>
+                                </template>
+                            </div>
+                        </div>
                         @error('brand_id') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                     </div>
 
@@ -465,6 +500,7 @@ function productForm() {
     return {
         // Form data
         selectedCategoryId: '{{ old("category_id", $tenantCategory?->id ?? "") }}',
+        selectedBrandId: '{{ old("brand_id") }}',
         basePrice: '{{ old("base_price") }}',
         discountPrice: '{{ old("discount_price") }}',
         discountPriceError: '',
@@ -472,6 +508,21 @@ function productForm() {
         // Category info
         isDigital: {{ $isDigital ? 'true' : 'false' }},
         tenantCategoryId: {{ $tenantCategory?->id ?? 'null' }},
+
+        // Searchable dropdown data
+        categoriesFlat: [
+            @foreach($categories as $cat)
+                { id: {{ $cat->id }}, name: @js($cat->name), depth: 0 },
+                @foreach($cat->children as $child)
+                    { id: {{ $child->id }}, name: @js($child->name), depth: 1 },
+                @endforeach
+            @endforeach
+        ],
+        brandsFlat: [
+            @foreach($brands as $brand)
+                { id: {{ $brand->id }}, name: @js($brand->name) },
+            @endforeach
+        ],
 
         // Variant system
         selectedOptions: [],
