@@ -15,4 +15,9 @@ return [
     'stock_transfers' => 'স্টক ট্রান্সফার',
     'stock_alerts' => 'স্টক অ্যালার্ট',
     'attributes' => 'অ্যাট্রিবিউট',
+    'web_setup' => 'ওয়েব সেটআপ',
+    'storefront_preview' => 'স্টোরফ্রন্ট প্রিভিউ',
+    'theme_selection' => 'থিম সিলেকশন',
+    'storefront_settings' => 'স্টোরফ্রন্ট সেটিংস',
+    'banner_management' => 'ব্যানার ম্যানেজমেন্ট',
 ];

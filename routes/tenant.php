@@ -21,6 +21,8 @@ use App\Http\Controllers\Dashboard\WarehouseController;
 use App\Http\Controllers\Dashboard\InventoryController;
 use App\Http\Controllers\Dashboard\ImageMatchController;
 use App\Http\Controllers\Tenant\LanguageController;
+use App\Http\Controllers\StorefrontController;
+use App\Http\Controllers\StorefrontSettingsController;
 
 /*
 |--------------------------------------------------------------------------
@@ -227,5 +229,24 @@ Route::middleware([
         Route::get('/image-match', [ImageMatchController::class, 'index'])->name('image-match.index');
         Route::post('/image-match', [ImageMatchController::class, 'match'])->name('image-match.match');
         Route::post('/image-match/url', [ImageMatchController::class, 'matchUrl'])->name('image-match.url');
+
+        // Storefront Settings (Web Setup)
+        Route::prefix('storefront-settings')->name('storefront-settings.')->group(function () {
+            Route::get('/', [StorefrontSettingsController::class, 'index'])->name('index');
+            Route::put('/', [StorefrontSettingsController::class, 'update'])->name('update');
+            Route::post('/apply-theme', [StorefrontSettingsController::class, 'applyTheme'])->name('apply-theme');
+            Route::post('/upload-logo', [StorefrontSettingsController::class, 'uploadLogo'])->name('upload-logo');
+            Route::post('/upload-favicon', [StorefrontSettingsController::class, 'uploadFavicon'])->name('upload-favicon');
+            Route::post('/banners', [StorefrontSettingsController::class, 'storeBanner'])->name('banners.store');
+            Route::put('/banners/{banner}', [StorefrontSettingsController::class, 'updateBanner'])->name('banners.update');
+            Route::delete('/banners/{banner}', [StorefrontSettingsController::class, 'destroyBanner'])->name('banners.destroy');
+            Route::post('/banners/reorder', [StorefrontSettingsController::class, 'reorderBanners'])->name('banners.reorder');
+        });
     });
+
+    // Storefront catch-all route (LAST - no auth required)
+    // This serves the React SPA for all non-dashboard, non-auth routes
+    Route::get('/', [StorefrontController::class, 'index'])->name('storefront.home');
+    Route::get('/{path}', [StorefrontController::class, 'index'])
+        ->where('path', '.*')->name('storefront.spa');
 });

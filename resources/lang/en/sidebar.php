@@ -15,4 +15,9 @@ return [
     'stock_transfers' => 'Stock Transfers',
     'stock_alerts' => 'Stock Alerts',
     'attributes' => 'Attributes',
+    'web_setup' => 'Web Setup',
+    'storefront_preview' => 'Storefront Preview',
+    'theme_selection' => 'Theme Selection',
+    'storefront_settings' => 'Storefront Settings',
+    'banner_management' => 'Banner Management',
 ];

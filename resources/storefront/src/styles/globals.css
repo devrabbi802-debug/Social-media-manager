@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-primary: #3B82F6;
+  --color-secondary: #10B981;
+  --color-accent: #F59E0B;
+  --color-background: #FFFFFF;
+  --color-text: #1F2937;
+  --color-header_bg: #1F2937;
+  --color-footer_bg: #111827;
+  --color-surface: #F9FAFB;
+  --color-border: #E5E7EB;
+  --font-family: 'Hind Siliguri', sans-serif;
+  --heading-font: 'Hind Siliguri', sans-serif;
+  --font-size-base: 16px;
+  --line-height: 1.6;
+  --card-style: 0.5rem;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--color-background);
+  color: var(--color-text);
+  line-height: var(--line-height);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-white px-6 py-2 rounded-lg hover:opacity-90 transition font-medium;
+  }
+  
+  .btn-secondary {
+    @apply bg-secondary text-white px-6 py-2 rounded-lg hover:opacity-90 transition font-medium;
+  }
+  
+  .card {
+    @apply bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden;
+  }
+  
+  .card-hover {
+    @apply card hover:shadow-md transition-shadow duration-200;
+  }
+}
