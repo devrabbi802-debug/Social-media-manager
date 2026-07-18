@@ -1,0 +1,964 @@
+================================================================================
+        GET ERP STORE - E-COMMERCE STOREFRONT - FULL IMPLEMENTATION PLAN
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+ 1. Architecture Overview
+ 2. Routing Architecture
+ 3. Tenant Dashboard - Web Setup Menu
+ 4. Directory Structure
+ 5. Database Changes
+ 6. API Endpoints
+ 7. Theme System (2 Themes: Modern + Classic)
+ 8. React Homepage Components
+ 9. Build & Serve Process
+10. Implementation Phases
+11. Future Features
+
+================================================================================
+1. ARCHITECTURE OVERVIEW
+================================================================================
+
+Current State:
+- Laravel 13 multi-tenant SaaS (database-per-tenant)
+- Blade + Alpine.js + Tailwind CDN (server-rendered)
+- No React, no API routes, no SPA framework
+- E-commerce tables exist: products, categories, brands, variants, images
+
+Target State:
+- React SPA for tenant storefront (resources/storefront/)
+- Laravel API backend for data
+- Theme customization system (tenant dashboard theke change korte parbe)
+- Root URL serves storefront, /dashboard serves admin
+
+Flow:
+  Tenant Subdomain Request (rabbi.smm.test)
+    -> Laravel detects subdomain
+    -> Initializes tenancy (switches DB)
+    -> Route: "/" -> Returns Blade view that loads React app
+    -> React fetches data from API
+    -> Renders e-commerce storefront
+
+  Dashboard Request (rabbi.smm.test/dashboard)
+    -> Laravel detects subdomain
+    -> Initializes tenancy (switches DB)
+    -> Route: "/dashboard" -> Auth middleware -> Blade dashboard view
+    -> Admin manages products, themes, settings
+
+================================================================================
+2. ROUTING ARCHITECTURE
+================================================================================
+
+URL Structure:
+--------------
+
+URL                                         | Auth?  | What Loads
+--------------------------------------------|--------|----------------------------------
+rabbi.smm.test/                             | No     | React E-Commerce Storefront
+rabbi.smm.test/login                        | No     | Login page
+rabbi.smm.test/auto-login?email=&token=     | No     | One-time auto-login
+rabbi.smm.test/dashboard                    | Yes    | Admin dashboard
+rabbi.smm.test/dashboard/inventory/products | Yes    | Product management
+rabbi.smm.test/dashboard/settings           | Yes    | Business settings
+rabbi.smm.test/storefront-settings          | Yes    | Theme customizer
+
+CRITICAL: Route Order (tenant.php)
+-----------------------------------
+Routes MUST be registered in this exact order:
+
+  1. Auth routes (login, logout, auto-login) - NO middleware
+  2. Dashboard routes (auth required, /dashboard prefix)
+  3. Storefront settings routes (auth required, /storefront-settings prefix)
+  4. Storefront catch-all route (NO auth, LAST)
+
+Why: If catch-all "/" is registered first, it will swallow /dashboard,
+/login, /storefront-settings etc.
+
+Route Definition (tenant.php):
+-------------------------------
+
+// STEP 1: Auth routes (no middleware)
+Route::get('/login', ...);
+Route::post('/login', ...);
+Route::post('/logout', ...);
+Route::get('/auto-login', ...);
+Route::post('/language/switch', ...);
+
+// STEP 2: Dashboard routes (auth required)
+Route::middleware(['auth'])->prefix('dashboard')->group(function () {
+    Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/settings', ...);
+    Route::prefix('inventory')->group(function () {
+        Route::get('/products', ...);
+        // ... all inventory routes
+    });
+    // ... all other dashboard routes
+});
+
+// STEP 3: Storefront settings (auth required)
+Route::middleware(['auth'])->prefix('storefront-settings')
+    ->name('storefront-settings.')->group(function () {
+    Route::get('/', [...])->name('index');
+    Route::put('/', [...])->name('update');
+    Route::post('/apply-theme', [...])->name('apply-theme');
+    Route::post('/upload-logo', [...])->name('upload-logo');
+    Route::post('/upload-banner', [...])->name('upload-banner');
+});
+
+// STEP 4: Storefront catch-all (LAST - no auth)
+Route::get('/', [StorefrontController::class, 'index'])->name('storefront.home');
+Route::get('/{path}', [StorefrontController::class, 'index'])
+    ->where('path', '.*')->name('storefront.spa');
+
+StorefrontController (app/Http/Controllers/StorefrontController.php):
+---------------------------------------------------------------------
+class StorefrontController extends Controller
+{
+    public function index()
+    {
+        // Resolve owner: use is_owner column, fallback to first user
+        $ownerId = cache()->remember(
+            "tenant_{tenancy()->tenant->id}_owner_id",
+            3600,
+            fn() => User::where('is_owner', true)->first()?->id
+                     ?? User::first()?->id
+        );
+
+        $storefront = StorefrontSettings::where('user_id', $ownerId)->first();
+        $themeConfig = $storefront?->resolvedTheme(); // merges preset + overrides
+
+        return view('storefront', compact('storefront', 'themeConfig'));
+    }
+}
+
+NOTE: Owner Resolution Strategy:
+  Option A (Recommended): Add is_owner BOOLEAN column to users table
+    - Migration: $table->boolean('is_owner')->default(false);
+    - First user during onboarding gets is_owner = true
+    - Query: User::where('is_owner', true)->first()
+
+  Option B: Store owner_id in tenant config (tenants.data JSON)
+    - Already have data JSON column on tenants table
+    - Store: { "owner_id": 5 }
+    - Query: tenancy()->tenant->data['owner_id']
+
+Blade View (resources/views/storefront.blade.php):
+---------------------------------------------------
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ $storefront->store_name ?? config('app.name') }}</title>
+
+    <!-- FOWT Prevention: Inject theme vars BEFORE any CSS loads -->
+    @if($storefront && $themeConfig)
+    <script>
+        (function() {
+            var config = {!! json_encode($themeConfig) !!};
+            if (config.colors) {
+                Object.keys(config.colors).forEach(function(k) {
+                    document.documentElement.style.setProperty('--color-' + k, config.colors[k]);
+                });
+            }
+            if (config.typography) {
+                Object.keys(config.typography).forEach(function(k) {
+                    // Convert underscore to hyphen: font_family -> font-family
+                    var cssVar = '--' + k.replace(/_/g, '-');
+                    document.documentElement.style.setProperty(cssVar, config.typography[k]);
+                });
+            }
+        })();
+    </script>
+    @endif
+
+    <!-- Vite Assets (standard Laravel directive) -->
+    @vite(['resources/storefront/src/main.jsx'])
+</head>
+<body>
+    <div id="root"></div>
+</body>
+</html>
+
+================================================================================
+3. TENANT DASHBOARD - WEB SETUP MENU
+================================================================================
+
+Sidebar Menu Addition:
+-----------------------
+Tenant dashboard sidebar e "Web Setup" naamak ekta notun section add hobe.
+Existing inventory section er niche thakbe.
+
+Current Sidebar Menu:
+  - Dashboard
+  - Integration
+  - AI Setup
+  - Conversations
+  - Image Match
+  - [Inventory Section]
+
+New Sidebar Menu (After adding Web Setup):
+  - Dashboard
+  - Integration
+  - AI Setup
+  - Conversations
+  - Image Match
+  - [Inventory Section]
+  - -------------------
+  - [Web Setup Section]
+    - Storefront Preview    (new tab e khule dekhbe)
+    - Theme Selection      (2 theme grid + apply)
+    - Storefront Settings  (general settings)
+    - Banner Management    (hero + promo banners)
+
+Web Setup Menu Items:
+----------------------
+
+1. STOREFRONT PREVIEW
+   Route: / (target="_blank")
+   Icon: External link
+   Description: Storefront ta new tab e khule dekhbe
+   No auth required (public storefront)
+
+2. THEME SELECTION
+   Route: /storefront-settings (tab: theme)
+   Icon: Palette
+   Description: Theme grid dekhabe, select + apply korte parbe
+   Auth required
+   Features:
+   - 2 ta preset theme er thumbnail (modern, classic)
+   - Click kore theme select korte parbe
+   - "Apply Theme" button e theme apply hobe
+   - Live preview panel thakbe
+   - Current active theme highlight thakbe
+
+3. STOREFRONT SETTINGS
+   Route: /storefront-settings (tab: general)
+   Icon: Cog
+   Description: Store name, logo, colors, fonts, layout
+   Auth required
+   Features:
+   - Store name input
+   - Logo upload (drag & drop)
+   - Favicon upload
+   - Primary/Secondary/Accent color pickers
+   - Font selector dropdown
+   - Layout toggle (grid/list/masonry)
+   - Products per row selector (2/3/4)
+
+4. BANNER MANAGEMENT
+   Route: /storefront-settings (tab: banners)
+   Icon: Photo
+   Description: Hero slider + promo banner manage
+   Auth required
+   Features:
+   - Hero banner slider (add/edit/delete/reorder)
+   - Each slide: image upload, title, subtitle, button text, link
+   - Promo banner (single image + link)
+   - Image upload with preview
+   - Drag & drop reorder
+
+Translation Keys (lang/bn/sidebar.php):
+-----------------------------------------
+'web_setup' => 'ওয়েব সেটআপ',
+'storefront_preview' => 'স্টোরফ্রন্ট প্রিভিউ',
+'theme_selection' => 'থিম সিলেকশন',
+'storefront_settings' => 'স্টোরফ্রন্ট সেটিংস',
+'banner_management' => 'ব্যানার ম্যানেজমেন্ট',
+
+================================================================================
+4. DIRECTORY STRUCTURE
+================================================================================
+
+resources/storefront/
+|-- index.html                     # Vite entry HTML
+|-- package.json                   # React dependencies
+|-- vite.config.js                 # Vite config with proxy
+|-- tailwind.config.js             # Tailwind with CSS variables
+|-- postcss.config.js              # PostCSS for Tailwind
+|-- public/
+|   +-- images/                    # Static assets
+|
++-- src/
+    |-- main.jsx                   # React entry point
+    |-- App.jsx                    # Root component with Router
+    |
+    |-- api/
+    |   +-- client.js              # Axios instance (base URL, interceptors)
+    |
+    |-- contexts/
+    |   +-- ThemeContext.jsx        # Theme provider (colors, fonts, layout)
+    |
+    |-- hooks/
+    |   |-- useProducts.js          # Fetch products with filters
+    |   |-- useCategories.js        # Fetch categories
+    |   |-- useBrands.js            # Fetch brands
+    |   |-- useFeatured.js          # Fetch featured products
+    |   +-- useTheme.js             # Fetch + apply theme settings
+    |
+    |-- components/
+    |   |-- layout/
+    |   |   |-- Header.jsx          # Logo, search, cart icon, nav
+    |   |   +-- Footer.jsx          # Links, social, newsletter
+    |   |
+    |   |-- home/
+    |   |   |-- HeroBanner.jsx      # Image slider / single banner
+    |   |   |-- CategoryGrid.jsx    # Category cards (6 items)
+    |   |   |-- FeaturedProducts.jsx # Product carousel/grid
+    |   |   |-- BrandShowcase.jsx   # Brand logos slider
+    |   |   |-- PromoBanner.jsx     # Custom promotional banner
+    |   |   +-- Newsletter.jsx      # Email subscription
+    |   |
+    |   +-- ui/
+    |       |-- Button.jsx          # Themed button
+    |       |-- Badge.jsx           # Product badges (new, sale)
+    |       |-- SearchBar.jsx       # Search with autocomplete
+    |       +-- Skeleton.jsx        # Loading skeleton base
+    |
+    |-- pages/
+    |   |-- Home.jsx                # Home page (all sections)
+    |   +-- NotFound.jsx            # 404 page
+    |
+    |-- utils/
+    |   +-- themeUtils.js           # Theme merge, CSS var generation
+    |
+    +-- styles/
+        +-- globals.css             # Tailwind imports + custom CSS vars
+
+================================================================================
+5. DATABASE CHANGES
+================================================================================
+
+APPROACH:
+---------
+  - NO separate themes table
+  - Theme configs hardcoded in ThemeController (2 ta theme)
+  - storefront_settings (tenant DB) stores: selected theme slug + overrides
+  - Simple, no cross-database complexity
+
+NEW TABLE: storefront_settings (Tenant DB)
+-------------------------------------------
+Stores theme/design preferences for each tenant's storefront.
+
+CREATE TABLE storefront_settings (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL UNIQUE,
+
+    -- Theme Selection (slug string, NOT FK)
+    -- Values: 'modern' or 'classic'
+    -- Config loaded from ThemeController hardcoded array
+    theme_slug VARCHAR(50) DEFAULT 'modern',
+    theme_overrides JSON NULL,
+
+    -- Brand Identity
+    store_name VARCHAR(255) NULL,
+    store_logo VARCHAR(255) NULL,
+    store_favicon VARCHAR(255) NULL,
+
+    -- Layout Options
+    layout_style ENUM('grid', 'list', 'masonry') DEFAULT 'grid',
+    products_per_row INT DEFAULT 4,
+    products_per_row_mobile INT DEFAULT 2,
+    show_header_slider BOOLEAN DEFAULT TRUE,
+    show_brands_section BOOLEAN DEFAULT TRUE,
+    show_newsletter BOOLEAN DEFAULT TRUE,
+
+    -- Footer Content
+    footer_about_text TEXT NULL,
+    footer_logo VARCHAR(255) NULL,
+    facebook_url VARCHAR(255) NULL,
+    instagram_url VARCHAR(255) NULL,
+    youtube_url VARCHAR(255) NULL,
+    whatsapp_number VARCHAR(20) NULL,
+    footer_copyright_text VARCHAR(255) NULL,
+
+    -- Contact Info
+    contact_phone VARCHAR(20) NULL,
+    contact_email VARCHAR(255) NULL,
+    contact_address TEXT NULL,
+
+    -- Custom Code (escape hatches)
+    custom_css TEXT NULL,
+
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+Migration file:
+  - database/migrations/tenant/xxxx_create_storefront_settings_table.php
+
+Theme configs are hardcoded in ThemeController:
+
+  const THEMES = [
+      'modern' => [
+          'name' => 'Modern',
+          'thumbnail' => '/images/themes/modern.jpg',
+          'config' => [
+              'colors' => [
+                  'primary' => '#3B82F6',
+                  'secondary' => '#10B981',
+                  'accent' => '#F59E0B',
+                  'background' => '#FFFFFF',
+                  'text' => '#1F2937',
+                  'header_bg' => '#1F2937',
+                  'footer_bg' => '#111827',
+                  'surface' => '#F9FAFB',
+                  'border' => '#E5E7EB',
+              ],
+              'typography' => [
+                  'font_family' => 'Hind Siliguri',
+                  'heading_font' => 'Hind Siliguri',
+                  'font_size_base' => 16,
+                  'line_height' => 1.6,
+              ],
+              'components' => [
+                  'card_style' => 'shadow',
+                  'button_style' => 'rounded',
+              ],
+          ],
+      ],
+      'classic' => [
+          'name' => 'Classic',
+          'thumbnail' => '/images/themes/classic.jpg',
+          'config' => [
+              'colors' => [
+                  'primary' => '#2563EB',
+                  'secondary' => '#059669',
+                  'accent' => '#D97706',
+                  'background' => '#FFFFFF',
+                  'text' => '#111827',
+                  'header_bg' => '#FFFFFF',
+                  'footer_bg' => '#F3F4F6',
+                  'surface' => '#F9FAFB',
+                  'border' => '#D1D5DB',
+              ],
+              'typography' => [
+                  'font_family' => 'Hind Siliguri',
+                  'heading_font' => 'Hind Siliguri',
+                  'font_size_base' => 16,
+                  'line_height' => 1.6,
+              ],
+              'components' => [
+                  'card_style' => 'border',
+                  'button_style' => 'sharp',
+              ],
+          ],
+      ],
+  ];
+
+================================================================================
+
+NEW TABLE: storefront_banners (Tenant DB)
+------------------------------------------
+Separate table for hero slider banners. Allows proper CRUD with IDs.
+
+CREATE TABLE storefront_banners (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    storefront_settings_id BIGINT UNSIGNED NOT NULL,
+    title VARCHAR(255) NULL,
+    subtitle TEXT NULL,
+    image VARCHAR(255) NULL,
+    link VARCHAR(255) NULL,
+    btn_text VARCHAR(100) NULL,
+    sort_order INT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+    FOREIGN KEY (storefront_settings_id) REFERENCES storefront_settings(id) ON DELETE CASCADE
+);
+
+Why separate table instead of JSON:
+  - Each banner has unique ID for targeted update/delete
+  - Proper sort_order for drag & drop reorder
+  - Cleaner CRUD operations
+  - JSON array replacement is messy for individual items
+
+================================================================================
+6. API ENDPOINTS
+================================================================================
+
+CRITICAL: Subdomain NOT needed in API URLs.
+  - Tenant middleware already resolves tenant from subdomain
+  - DB is already switched when request hits controller
+  - No need to pass {sub} again in URL
+
+PUBLIC ENDPOINTS (No Auth Required)
+------------------------------------
+These routes go in routes/api.php WITH tenant middleware.
+
+Route::prefix('storefront')->middleware('tenancy')->group(function () {
+    Route::get('/config', [StorefrontApiController::class, 'config']);
+    Route::get('/home', [StorefrontApiController::class, 'home']);
+    Route::get('/products', [StorefrontApiController::class, 'products']);
+    Route::get('/products/{slug}', [StorefrontApiController::class, 'product']);
+    Route::get('/categories', [StorefrontApiController::class, 'categories']);
+    Route::get('/brands', [StorefrontApiController::class, 'brands']);
+    Route::get('/featured', [StorefrontApiController::class, 'featured']);
+});
+
+Method  | Endpoint                        | Description
+--------|---------------------------------|----------------------------------
+GET     | /api/storefront/config          | Store theme + business info
+GET     | /api/storefront/home            | All home page data (combined)
+GET     | /api/storefront/products        | Product list (pagination, filters)
+GET     | /api/storefront/products/{slug} | Single product detail
+GET     | /api/storefront/categories      | All active categories
+GET     | /api/storefront/brands          | All active brands
+GET     | /api/storefront/featured        | Featured products only
+
+THEME ENDPOINTS (Public)
+-------------------------
+Method  | Endpoint                        | Description
+--------|---------------------------------|----------------------------------
+GET     | /api/themes                     | List all available themes
+
+NOTE: React gets full theme config from /api/storefront/config
+which already merges preset + tenant overrides.
+
+Query Parameters for /products:
+  ?category=slug          Filter by category
+  ?brand=slug             Filter by brand
+  ?min_price=100          Min price
+  ?max_price=5000         Max price
+  ?sort=price_asc         Sort (price_asc, price_desc, newest)
+  ?page=1                 Pagination page
+  ?per_page=12            Items per page
+
+IMPORTANT: /api/storefront/home response MUST filter:
+  - banners: only is_active = true
+  - products: only status = 'active'
+  - categories: only is_active = true
+  - brands: only is_active = true
+
+Query Parameters for /products:
+  ?category=slug          Filter by category
+  ?brand=slug             Filter by brand
+  ?min_price=100          Min price
+  ?max_price=5000         Max price
+  ?sort=price_asc         Sort (price_asc, price_desc, newest)
+  ?page=1                 Pagination page
+  ?per_page=12            Items per page
+
+CART ENDPOINTS (Cookie-based, NOT URL session_id)
+---------------------------------------------------
+CRITICAL: Cart uses httpOnly signed cookie for session identity.
+Session ID is NEVER exposed in URL (prevents IDOR).
+
+Method  | Endpoint                        | Description
+--------|---------------------------------|----------------------------------
+GET     | /api/cart                       | Get cart items (reads cookie)
+POST    | /api/cart/add                   | Add item to cart
+PUT     | /api/cart/{itemId}              | Update quantity
+DELETE  | /api/cart/{itemId}              | Remove item
+DELETE  | /api/cart                       | Clear cart
+
+Cookie Setup:
+  // On first visit, generate signed token
+  $cartToken = Str::random(40);
+  Cookie::queue('cart_session', $cartToken, 525600); // 1 year
+
+POST Body for /add:
+{
+    "product_id": 1,
+    "variant_id": 2,        // optional
+    "quantity": 2
+}
+
+TENANT ADMIN ENDPOINTS (Auth Required)
+---------------------------------------
+These go in tenant.php routes under /storefront-settings prefix.
+
+Method  | Endpoint                              | Description
+--------|---------------------------------------|----------------------------
+GET     | /storefront-settings                  | Settings page (Blade)
+PUT     | /storefront-settings                  | Update settings
+POST    | /storefront-settings/apply-theme      | Apply a preset theme
+POST    | /storefront-settings/customize-theme  | Save theme overrides
+POST    | /storefront-settings/reset-theme      | Reset to theme defaults
+POST    | /storefront-settings/upload-logo      | Upload logo
+POST    | /storefront-settings/upload-favicon   | Upload favicon
+POST    | /storefront-settings/banners          | Create banner
+PUT     | /storefront-settings/banners/{id}     | Update banner
+DELETE  | /storefront-settings/banners/{id}     | Delete banner
+POST    | /storefront-settings/banners/reorder  | Reorder banners
+
+================================================================================
+7. THEME SYSTEM (2 THEMES)
+================================================================================
+
+Architecture:
+--------------
+Theme = Preset (hardcoded in controller) + Tenant Overrides (tenant DB) + Custom CSS
+
+Three-Layer Resolution:
+  Layer 1: Pre-built Theme Presets (hardcoded in ThemeController)
+    -> "modern", "classic" (2 themes, easy to add more later)
+
+  Layer 2: Tenant Customizations (storefront_settings in tenant DB)
+    -> theme_id -> which preset to use
+    -> theme_overrides -> override specific values (JSON)
+    -> custom_css -> escape hatch
+
+  Layer 3: Runtime Hot-Swap (React Context + CSS Variables)
+    -> No page reload, instant visual change
+
+Theme Inheritance (Resolution Order):
+--------------------------------------
+  1. Default CSS variables (hardcoded in globals.css)
+  2. Preset theme values (from themes.config JSON)
+  3. Tenant overrides (storefront_settings.theme_overrides JSON)
+  4. Custom CSS injection (storefront_settings.custom_css)
+
+  Last wins! So tenant can override anything.
+
+NOTE: No flat color columns (primary_color, secondary_color etc.) in
+storefront_settings. Only theme_overrides JSON. This avoids confusion
+about which value wins. Single source of truth.
+
+Built-in Theme Presets (Seed 2, structure supports 5+):
+--------------------------------------------------------
+
+1. MODERN (Default)
+   - Dark header (#1F2937), vibrant primary (#3B82F6)
+   - Shadow cards, rounded buttons (0.5rem)
+   - Hind Siliguri font, medium spacing
+   - Best for: Tech, fashion, general stores
+
+2. CLASSIC
+   - Clean white header, subtle borders
+   - Border cards, sharp corners
+   - Traditional feel, light spacing
+   - Best for: Books, office supplies, formal stores
+
+Theme Selector UI (Admin Dashboard):
+--------------------------------------
++-----------------------------------------+
+|  Storefront Settings > Theme Selection  |
++-----------------------------------------+
+|                                         |
+|  +-----------+    +-----------+        |
+|  |  MODERN   |    |  CLASSIC  |        |
+|  |  [thumb]  |    |  [thumb]  |        |
+|  |  * Active |    |           |        |
+|  +-----------+    +-----------+        |
+|                                         |
+|  [Apply Theme]  [Customize]  [Preview] |
+|                                         |
++-----------------------------------------+
+|  Quick Customization:                   |
+|  Primary Color: [#3B82F6] [Picker]     |
+|  Font: [Hind Siliguri v]               |
+|  Card Style: [Shadow] [Border] [Flat]  |
+|  Button Style: [Rounded] [Pill] [Sharp]|
++-----------------------------------------+
+
+Hot-Swap (React):
+------------------
+const switchTheme = async (themeSlug) => {
+    const res = await api.get('/themes');
+    const newConfig = res.data.find(t => t.slug === themeSlug);
+    setTheme({ preset: newConfig.config, overrides: {} });
+    await api.post('/storefront-settings/apply-theme', {
+        theme_slug: themeSlug  // NOT theme_id
+    });
+};
+
+FOWT Prevention:
+-----------------
+Inline script in <head> (shown in Section 2 Blade template) injects
+CSS vars BEFORE any external CSS loads. No flash of wrong colors.
+
+Theme Caching:
+---------------
+  // Laravel - Theme configs are hardcoded in ThemeController::THEMES
+  // No DB query needed. Static array, instant access.
+  // If adding more themes later, just add to the array.
+
+================================================================================
+8. REACT HOMEPAGE COMPONENTS
+================================================================================
+
+App
++-- ThemeProvider                    # Wraps everything
+    +-- BrowserRouter
+        |-- Routes
+        |   |-- "/" -> Home
+        |   +-- "*" -> NotFound
+        |
+        +-- Layout
+            |-- Header
+            |   |-- Logo (from store_logo)
+            |   |-- Navigation (categories)
+            |   |-- SearchBar
+            |   +-- CartIcon (with badge count)
+            |
+            |-- <Outlet /> (page content)
+            |
+            +-- Footer
+                |-- Store Info
+                |-- Quick Links
+                |-- Social Links
+                +-- Copyright
+
+Home Page Sections:
+--------------------
++-----------------------------------------+
+|               HEADER                    |
++-----------------------------------------+
+|                                         |
+|           HERO BANNER SLIDER            |
+|     (from storefront_banners table)     |
+|                                         |
++-----------------------------------------+
+|                                         |
+|          CATEGORY GRID (6)              |
+|   +-----+ +-----+ +-----+             |
+|   | Cat | | Cat | | Cat |             |
+|   +-----+ +-----+ +-----+             |
+|   +-----+ +-----+ +-----+             |
+|   | Cat | | Cat | | Cat |             |
+|   +-----+ +-----+ +-----+             |
+|                                         |
++-----------------------------------------+
+|                                         |
+|         FEATURED PRODUCTS (8)           |
+|   +----+ +----+ +----+ +----+        |
+|   |    | |    | |    | |    |        |
+|   +----+ +----+ +----+ +----+        |
+|   +----+ +----+ +----+ +----+        |
+|   |    | |    | |    | |    |        |
+|   +----+ +----+ +----+ +----+        |
+|                                         |
++-----------------------------------------+
+|                                         |
+|           BRAND SHOWCASE                |
+|   [Logo] [Logo] [Logo] [Logo] [Logo]   |
+|                                         |
++-----------------------------------------+
+|                                         |
+|           PROMO BANNER                  |
+|      (from storefront_settings)         |
+|                                         |
++-----------------------------------------+
+|                                         |
+|           NEWSLETTER SIGNUP             |
+|    [Enter email] [Subscribe]            |
+|                                         |
++-----------------------------------------+
+|               FOOTER                    |
++-----------------------------------------+
+
+================================================================================
+9. BUILD & SERVE PROCESS
+================================================================================
+
+Development Mode:
+-----------------
+Terminal 1: Laravel API Server
+  php artisan serve --host=0.0.0.0
+
+Terminal 2: React Dev Server
+  cd resources/storefront
+  npm run dev
+  # Runs on http://localhost:5173
+  # Proxies /api/* to Laravel
+
+Vite Config (resources/storefront/vite.config.js):
+  import { defineConfig } from 'vite';
+  import react from '@vitejs/plugin-react';
+
+  export default defineConfig({
+      plugins: [react()],
+      root: '.',
+      server: {
+          port: 5173,
+          proxy: {
+              '/api': {
+                  target: 'http://localhost:8000',
+                  changeOrigin: true,
+              },
+          },
+      },
+      build: {
+          outDir: '../../public/storefront',
+          emptyOutDir: true,
+      },
+  });
+
+Production Build:
+-----------------
+  cd resources/storefront
+  npm run build
+
+  Output: public/storefront/ (index.html + assets/)
+
+Laravel Serves (tenant.php):
+------------------------------
+Single strategy: Blade view loads React via @vite directive.
+
+  Route::get('/', function () {
+      $ownerId = \App\Models\User::first()->id;
+      $storefront = StorefrontSettings::where('user_id', $ownerId)->first();
+      $theme = $storefront?->theme;
+      return view('storefront', compact('storefront', 'theme'));
+  })->name('storefront.home');
+
+  // SPA catch-all (must be LAST route)
+  Route::get('/{path}', function ($path) {
+      $ownerId = \App\Models\User::first()->id;
+      $storefront = StorefrontSettings::where('user_id', $ownerId)->first();
+      $theme = $storefront?->theme;
+      return view('storefront', compact('storefront', 'theme'));
+  })->where('path', '.*')->name('storefront.spa');
+
+Dev: @vite reads from Vite dev server (HMR)
+Prod: @vite reads from public/build/manifest.json (hashed assets)
+
+NO separate /storefront/assets/{file} route needed.
+NO static file serving logic. Laravel handles everything.
+
+Docker Setup:
+--------------
+Add new service to docker-compose.yml:
+
+  storefront-node:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    volumes:
+      - .:/app
+      - /app/node_modules
+    working_dir: /app/resources/storefront
+    ports:
+      - "5173:5173"
+    command: npm run dev
+
+================================================================================
+10. IMPLEMENTATION PHASES (SIMPLIFIED - HOMEPAGE ONLY)
+================================================================================
+
+PHASE 1: Setup & Foundation (Day 1)
+------------------------------------
+  [ ] Create resources/storefront/ directory
+  [ ] Initialize React project with Vite
+  [ ] Install dependencies (react, react-dom, axios, tailwindcss)
+  [ ] Configure Vite proxy for Laravel API
+  [ ] Set up Tailwind with CSS variables
+  [ ] Create ThemeContext provider
+  [ ] Create api/client.js with axios instance
+  [ ] Create storefront_settings migration (tenant DB)
+  [ ] Create storefront_banners migration (tenant DB)
+  [ ] Create ThemeController (hardcoded configs)
+  [ ] Create StorefrontController (Blade view, owner resolution)
+  [ ] Create StorefrontApiController (API endpoints)
+  [ ] Create StorefrontSettingsController
+  [ ] Add routes (api.php + tenant.php) in correct order
+  [ ] Create Blade view (storefront.blade.php)
+
+PHASE 2: Theme System (Day 2)
+------------------------------
+  [ ] ThemeContext with CSS variable injection
+  [ ] Theme API (GET /themes - list only)
+  [ ] Apply theme endpoint
+  [ ] FOWT prevention in Blade
+  [ ] Test: change theme -> verify instant visual change
+
+PHASE 3: Homepage (Day 3-5) - MAIN FOCUS
+------------------------------------------
+  [ ] Layout components (Header, Footer)
+  [ ] Home page structure
+  [ ] HeroBanner component (slider from storefront_banners)
+  [ ] CategoryGrid component
+  [ ] FeaturedProducts component
+  [ ] ProductCard component
+  [ ] BrandShowcase component
+  [ ] PromoBanner component
+  [ ] Newsletter component
+  [ ] Wire up API calls in hooks
+  [ ] Responsive design
+  [ ] Theme-aware (cards change with theme)
+
+PHASE 4: Admin Setup (Day 6)
+------------------------------
+  [ ] Storefront settings Blade view (Web Setup menu)
+  [ ] Theme selector UI (2 themes)
+  [ ] Store name, logo upload
+  [ ] Banner CRUD (storefront_banners table)
+  [ ] Banner drag & drop reorder
+
+Future Phases (Pore Add Hobe):
+--------------------------------
+  [ ] Product listing page
+  [ ] Product detail page
+  [ ] Category/Brand pages
+  [ ] Cart system (cookie-based)
+  [ ] Checkout
+  [ ] User accounts
+  [ ] More themes (minimal, bold, elegant)
+  [ ] 404 page
+  [ ] Testimonials (add testimonial management UI)
+  [ ] Production build testing
+  [ ] Docker integration
+
+================================================================================
+11. FUTURE FEATURES (Pore Add Hobe)
+================================================================================
+
+Ekhon shudhu homepage ache. Baki sob pore add korte hobe:
+
+Pages:
+  - Product listing page (filters, sorting)
+  - Product detail page (images, variants, reviews)
+  - Category page
+  - Brand page
+  - Cart page (cookie-based session)
+  - Checkout page
+  - User login/register
+  - Order history
+
+More Themes:
+  - Minimal theme
+  - Bold theme
+  - Elegant theme
+  - Seasonal themes (Ramadan, Eid)
+
+Cart & Checkout:
+  - Cookie-based cart (httpOnly signed cookie)
+  - Multiple payment (bKash, Nagad, COD)
+  - Order confirmation
+  - Order tracking
+
+Advanced:
+  - Product reviews & ratings
+  - Wishlist
+  - Coupon/discount codes
+  - SEO meta tags
+  - Google Analytics
+  - Facebook Pixel
+  - Testimonial management UI
+
+================================================================================
+END OF PLAN
+================================================================================
+
+CREATED: July 18, 2026
+PROJECT: Get ERP Store - E-Commerce Storefront
+STATUS: Planning Phase
+VERSION: 6.0 (All bugs fixed, simplified API)
+
+SCOPE:
+  - React frontend (resources/storefront/)
+  - 2 themes hardcoded in controller (modern, classic)
+  - NO themes table in landlord DB
+  - Only storefront_settings + storefront_banners in tenant DB
+  - Homepage only (baki pore add hobe)
+  - Theme selection in tenant dashboard (Web Setup menu)
+  - API backend for data (no subdomain in URL)
+  - Cookie-based cart (no IDOR)
+  - Separate banners table (proper CRUD)
+  - Single route serving strategy (Blade + @vite)
+  - StorefrontController for Blade (no duplicate logic)
+  - is_owner column for owner resolution

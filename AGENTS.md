@@ -2,7 +2,7 @@
 
 ## Project
 
-SocialBoost AI — Laravel 13 multi-tenant SaaS for social media management. Bengali/English UI, MySQL production, SQLite in-memory tests. `stancl/tenancy` v3.10 (database-per-tenant, subdomain-based).
+Get ERP Store — Laravel 13 multi-tenant SaaS for e-commerce management. Bengali/English UI, MySQL production, SQLite in-memory tests. `stancl/tenancy` v3.10 (database-per-tenant, subdomain-based).
 
 **Local Dev URL**: `http://smm.test/`
 
@@ -39,6 +39,19 @@ php artisan tenants:seed           # Seed all tenant databases
 - **Webhook routes** (`/webhook/facebook`, `/webhook/zernio`): Outside middleware group — accessible from any domain (Facebook/Zernio calls via ngrok tunnel)
 - **Tenant routes** (`routes/tenant.php`): Use `InitializeTenancyByDomain` + `PreventAccessFromCentralDomains` — blocks central domains from accessing tenant routes
 - **Gotcha**: Central routes registered FIRST via `withRouting`, tenant routes later via `TenancyServiceProvider::boot()`. For identical paths (e.g. `/dashboard`), the central `web.php` version wins. Tenant routes rely on `InitializeTenancyByDomain` middleware to switch DB context.
+
+### Tenant URL Structure
+
+- **`/{subdomain}.smm.test/`** → React E-Commerce Storefront (public)
+- **`/{subdomain}.smm.test/dashboard`** → Admin Dashboard (auth required)
+- **`/{subdomain}.smm.test/products`** → Product listing (public)
+- **`/{subdomain}.smm.test/products/{slug}`** → Product detail (public)
+- **`/{subdomain}.smm.test/category/{slug}`** → Category page (public)
+- **`/{subdomain}.smm.test/cart`** → Cart page (public)
+- **`/{subdomain}.smm.test/checkout`** → Checkout (public)
+- **`/{subdomain}.smm.test/login`** → Login page (public)
+- **`/{subdomain}.smm.test/storefront-settings`** → Theme customizer (auth)
+- **`/{subdomain}.smm.test/dashboard/inventory/products`** → Product management (auth)
 
 ### Auth System
 
@@ -102,18 +115,31 @@ docker exec laravel-app php artisan <command>
 - Tailwind CSS v4 via `@tailwindcss/vite` plugin (no `tailwind.config.js` — config in CSS)
 - **Public layouts**: Tailwind CDN + Alpine.js (not Vite)
 - **Tenant/Admin**: Tailwind CDN (dashboard sidebar layout)
+- **React Storefront**: `resources/storefront/` — React SPA with Vite + Tailwind CSS v4
 - Bengali font: Hind Siliguri (Google Fonts), Instrument Sans (Vite fonts plugin via `bunny()`)
 - `app.js` is empty — no JS bundled via Vite yet
+
+### React Storefront
+
+- **Location**: `resources/storefront/` — React SPA with Vite + Tailwind CSS v4
+- **Theme System**: 2 pre-built themes (modern, classic) hardcoded in ThemeController + tenant overrides
+- **Database**: `storefront_settings` (tenant DB) stores per-tenant theme config, `storefront_banners` (tenant DB) stores hero banners. Theme configs hardcoded in `ThemeController` (no themes table).
+- **Theme Resolution**: Default CSS vars → Preset theme → Tenant overrides → Custom CSS → Live preview
+- **Hot-Swap**: CSS variables on `<html>` — no page reload needed for theme changes
+- **FOWT Prevention**: Inject CSS vars inline in Blade `<head>` before React loads
+- **API Routes**: `/api/storefront/config`, `/api/storefront/home`, `/api/themes` (no subdomain in URL, tenant middleware handles it)
+- **Theme Customizer**: Floating panel (admin only) with color pickers, font selector, card/button style toggles
 
 ## Key Paths
 
 - **Public views**: `resources/views/` (welcome, features, pricing, about, contact, auth)
 - **Onboarding views**: `resources/views/onboarding/` — single-step Alpine.js form
-- **Tenant views**: `resources/views/tenant/` — index, integration, facebook-settings, facebook-select-page, ai-setup, conversations/, products/, categories/, brands/, warehouses/, inventory/, attribute-templates/, image-match/
+- **Tenant views**: `resources/views/tenant/` — index, integration, facebook-settings, facebook-select-page, ai-setup, conversations/, products/, categories/, brands/, warehouses/, inventory/, attribute-templates/, image-match/, storefront-settings/
 - **Admin views**: `resources/views/admin/` (auth, dashboard, users CRUD, tenants CRUD, ai-system-prompt, business-categories CRUD)
+- **React Storefront**: `resources/storefront/` — src/components/, src/pages/, src/contexts/, src/hooks/
 - **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/layouts/tenant.blade.php` (tenant), `resources/views/admin/layouts/app.blade.php` (admin)
 - **Config**: `config/menu.php` (admin sidebar), `config/tenancy.php` (central domains, DB suffix), `config/services.php` (Facebook + Groq + Cerebras + Gemini + CLIP + Zernio)
-- **Controllers**: `DashboardController` (settings, leads, reports, whatsapp, facebook, inventory, integration), `ProductController` (CRUD + variants + extra fields), `AttributeTemplateController` (variant options + category templates)
+- **Controllers**: `DashboardController` (settings, leads, reports, whatsapp, facebook, inventory, integration), `ProductController` (CRUD + variants + extra fields), `AttributeTemplateController` (variant options + category templates), `ThemeController` (themes API), `StorefrontController` (storefront API), `StorefrontSettingsController` (admin CRUD)
 - **Middleware**: `app/Http/Middleware/PreventAccessFromNonCentralDomains.php`, `app/Http/Middleware/SetLocale.php`
 
 ## Database
@@ -122,7 +148,7 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 
 **Landlord**: `tenants` (string PK subdomain, `data` JSON), `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `business_categories` (with `extra_fields` JSON), `cache`, `jobs`, `sessions`
 
-**Tenant**: `users` (`#[Fillable]` attributes, `locale` column default `bn`), `facebook_settings` (connection_type enum: `facebook_app`/`zernio`), `ai_settings` (type: `message`/`cerebras`/`image`), `conversations`, `messages`, `categories` (self-FK parent_id), `attribute_templates` (is_variant_option, is_active, placeholder/default), `brands`, `products` (weight_kg), `product_attribute_values`, `product_variants` (JSON attributes), `product_images`, `variant_images` (JSON embedding), `warehouses`, `stock_movements`, `stock_transfers`, `inventory_alerts`, `attribute_options`, `business_settings` (delivery areas JSON, payment methods JSON, FAQ JSON, extra_fields_data JSON, logo_path)
+**Tenant**: `users` (`#[Fillable]` attributes, `locale` column default `bn`), `facebook_settings` (connection_type enum: `facebook_app`/`zernio`), `ai_settings` (type: `message`/`cerebras`/`image`), `conversations`, `messages`, `categories` (self-FK parent_id), `attribute_templates` (is_variant_option, is_active, placeholder/default), `brands`, `products` (weight_kg), `product_attribute_values`, `product_variants` (JSON attributes), `product_images`, `variant_images` (JSON embedding), `warehouses`, `stock_movements`, `stock_transfers`, `inventory_alerts`, `attribute_options`, `business_settings` (delivery areas JSON, payment methods JSON, FAQ JSON, extra_fields_data JSON, logo_path), `storefront_settings` (theme_slug, theme_overrides JSON, custom_css), `storefront_banners` (hero slider banners with sort_order)
 
 **Seeders**: `AdminSeeder` (`admin@socialboost.com` / `Admin@123456`, super_admin), `BusinessCategorySeeder` (8 categories with extra_fields JSON), `AttributeTemplateSeeder` (8 global variant options + category-specific extra field templates)
 
