@@ -40,12 +40,13 @@ npx vite preview                    # Preview built storefront
 
 ### Route Priority & Domain Blocking
 
-- **Central routes** (`routes/web.php`): Wrapped in `PreventAccessFromNonCentralDomains` — blocks non-existent subdomains. Does NOT block valid tenant domains.
+- **Central routes** (`routes/web.php`): Wrapped in `PreventAccessFromNonCentralDomains` — **only allows central domains** (tenant domains get 404). This ensures central routes (welcome page, features, etc.) don't match on tenant subdomains.
+- **Landing page** (`GET /`): **Domain-constrained** to each central domain via `Route::domain($domain)`. Prevents Laravel's exact-match priority from serving the welcome view on tenant subdomains.
 - **Webhook routes** (`/webhook/facebook`, `/webhook/zernio`): Outside middleware group — accessible from any domain
 - **`facebook/zernio/test-webhook`** route has unusual middleware: `['web', InitializeTenancyByDomain::class, 'auth']` — initializes tenancy AND requires auth on a central route
 - **Tenant routes** (`routes/tenant.php`): Use `InitializeTenancyByDomain` + `PreventAccessFromCentralDomains`
 - **API routes** (`routes/api.php`): Registered via `withRouting(api: ...)` in `bootstrap/app.php`. Include tenancy middleware.
-- **Gotcha**: Central routes registered FIRST via `withRouting`, tenant routes later via `TenancyServiceProvider::boot()`. For identical paths, central version wins.
+- **Gotcha**: Central routes registered FIRST via `withRouting`, tenant routes later via `TenancyServiceProvider::boot()`. Exact `GET /` would win over `/{path?}` — that's why the landing page uses domain constraints.
 
 ### Admin Panel Prefix (CRITICAL)
 
@@ -67,7 +68,7 @@ Routes in `tenant.php` MUST be registered in this exact order:
 2. Auth routes inside `$adminPrefix` (auto-login, login, logout) — NO auth middleware
 3. Dashboard/inventory/AI/facebook/storefront-settings routes inside `$adminPrefix` with `auth` middleware
 4. Register/onboarding redirects on tenant (block customers from signup)
-5. **Storefront catch-all** (NO auth, LAST) — `GET /` and `GET /{path}`
+5. **Storefront catch-all** (NO auth, LAST) — `GET /{path?}` with optional param
 
 If catch-all is registered first, it swallows `/dashboard`, `/login`, `/storefront-settings` etc.
 
@@ -149,7 +150,7 @@ docker exec laravel-app php artisan <command>
 - **Hot-Swap**: CSS variables on `<html>` — no page reload needed for theme changes
 - **FOWT Prevention**: Inject CSS vars inline in Blade `<head>` before React loads
 - **API Routes** (`routes/api.php`): `/api/storefront/{config,home,products,products/{slug},categories,brands,featured}`, `/api/themes`
-- **Storefront catch-all** (`routes/tenant.php`): LAST route — `GET /` and `GET /{path}` serve Blade view with React SPA. Registered AFTER dashboard/auth/storefront-settings routes.
+- **Storefront catch-all** (`routes/tenant.php`): LAST route — `GET /{path?}` with optional param serves Blade view with React SPA. Registered AFTER dashboard/auth/storefront-settings routes.
 - **Theme Customizer**: `/{adminPrefix}/storefront-settings` — 3 tabs: Theme Selection, General Settings, Banner Management
 - **Theme colors**: Include `header_text` for contrast — dark headers get white text, white headers get dark text.
 - **Build**: `cd resources/storefront && npx vite build` → outputs to `public/storefront/` (NOT `public/build/`)
@@ -209,11 +210,11 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 - **`attribute_templates.category_id`** references tenant `categories.id`, NOT `business_categories.id`
 - **PHP 8.4**: Unparenthesized nested ternary `a ? b : c ? d : e` is **forbidden**
 - **Alpine.js**: Reactive state must be inside `x-data` scope; `x-if` must be on `<template>` tags only
-- **Route conflicts**: Central `web.php` routes registered before tenant `tenant.php` routes. For identical paths, central version wins.
+- **Route conflicts**: Central `web.php` routes registered before tenant `tenant.php` routes. For identical paths, central version wins. `GET /` uses domain constraints to prevent matching on tenant subdomains.
 - **CLIP server URL**: `http://localhost:8089` (local) vs `http://clip-server:8089` (Docker)
 - **Storefront `storefront_settings`**: One row per tenant, NO user_id column. Do `StorefrontSettings::first()`, NOT `where('user_id', ...)`.
 - **Storefront asset loading**: `@vite` directive does NOT work — build outputs to `public/storefront/` not `public/build/`. Blade template tries manifest.json first, then glob fallback.
-- **Storefront route order**: Catch-all `/{path}` in `tenant.php` MUST be last route — it swallows all unmatched paths. Dashboard/auth/storefront-settings routes must come before it.
+- **Storefront route order**: Catch-all `/{path?}` in `tenant.php` MUST be last route — it swallows all unmatched paths. Dashboard/auth/storefront-settings routes must come before it.
 - **Storefront theme `header_text`**: Required for contrast. Dark `header_bg` → `header_text: #FFFFFF`, white `header_bg` → `header_text: #111827`.
 - **Storefront uploads NOT tenant-isolated**: All tenants share `public/storefront/` directory. Unique filenames prevent collisions but there's no tenant-level file isolation.
 - **`TenantCouldNotBeIdentifiedOnDomainException`** caught globally in `bootstrap/app.php` → returns 404.

@@ -17,13 +17,16 @@ Route::get('/webhook/facebook', [FacebookWebhookController::class, 'verify']);
 Route::post('/webhook/facebook', [FacebookWebhookController::class, 'handle']);
 Route::post('/webhook/zernio', [FacebookWebhookController::class, 'handleZernio']);
 
-// Central routes — only accessible on central domains
-Route::middleware(PreventAccessFromNonCentralDomains::class)->group(function () {
-
-    // Landing Page
-    Route::get('/', function () {
+// Landing Page — domain-constrained to central domains only
+// This prevents the route from matching on tenant subdomains (where storefront catch-all handles /)
+foreach (config('tenancy.central_domains') as $domain) {
+    Route::domain($domain)->get('/', function () {
         return view('welcome');
     });
+}
+
+// Central routes — only accessible on central domains
+Route::middleware(PreventAccessFromNonCentralDomains::class)->group(function () {
 
     // Features Page
     Route::get('/features', function () {

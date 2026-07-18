@@ -12,18 +12,12 @@ class PreventAccessFromNonCentralDomains
     {
         $host = $request->getHost();
 
-        // Central domains — always allow
+        // Only central domains are allowed
         if (in_array($host, config('tenancy.central_domains'))) {
             return $next($request);
         }
 
-        // Check if domain exists in tenant domains table (landlord DB)
-        $domainExists = DB::table('domains')->where('domain', $host)->exists();
-
-        if (!$domainExists) {
-            abort(404);
-        }
-
-        return $next($request);
+        // Block all non-central domains (tenant domains use their own routes)
+        abort(404);
     }
 }
