@@ -10,8 +10,8 @@ Get ERP Store — Laravel 13 multi-tenant SaaS for e-commerce management. Bengal
 
 ```bash
 ./start.sh              # Docker + DNS fix + Apache + CLIP server + Ngrok tunnel
-composer setup          # install, key:generate, migrate, npm install, build
-composer dev            # artisan serve + queue:listen + pail + npm run dev (4 procs via concurrently)
+composer setup          # install, key:generate, migrate, npm install --ignore-scripts, build
+composer dev            # artisan serve + queue:listen(--tries=1 --timeout=0) + pail + npm run dev (4 procs via concurrently)
 composer test           # config:clear + artisan test
 php artisan test --filter=TestName
 
@@ -23,6 +23,7 @@ php artisan tenants:seed           # Seed all tenant databases
 cd resources/storefront
 npm install
 npx vite build                      # Build React SPA -> public/storefront/
+npx vite preview                    # Preview built storefront
 ```
 
 ## Architecture
@@ -41,6 +42,7 @@ npx vite build                      # Build React SPA -> public/storefront/
 
 - **Central routes** (`routes/web.php`): Wrapped in `PreventAccessFromNonCentralDomains` — blocks non-existent subdomains. Does NOT block valid tenant domains.
 - **Webhook routes** (`/webhook/facebook`, `/webhook/zernio`): Outside middleware group — accessible from any domain
+- **`facebook/zernio/test-webhook`** route has unusual middleware: `['web', InitializeTenancyByDomain::class, 'auth']` — initializes tenancy AND requires auth on a central route
 - **Tenant routes** (`routes/tenant.php`): Use `InitializeTenancyByDomain` + `PreventAccessFromCentralDomains`
 - **API routes** (`routes/api.php`): Registered via `withRouting(api: ...)` in `bootstrap/app.php`. Include tenancy middleware.
 - **Gotcha**: Central routes registered FIRST via `withRouting`, tenant routes later via `TenancyServiceProvider::boot()`. For identical paths, central version wins.
@@ -70,7 +72,7 @@ If catch-all is registered first, it swallows `/dashboard`, `/login`, `/storefro
 - **Admin routes loaded via** `then:` callback in `bootstrap/app.php`, NOT through `withRouting()`
 - **Middleware aliases** in `bootstrap/app.php`: `admin` → `AdminMiddleware`, `locale` → `SetLocale`, `central` → `PreventAccessFromNonCentralDomains`
 - **User model** uses Laravel 11+ `#[Fillable]`/`#[Hidden]` PHP attributes. **Admin model** uses traditional `$fillable`/`$hidden` arrays
-- **`Admin::getAllPermissions()`** references `\App\Services\Menu::class` which **does not exist** — will error if called by non-super_admin
+- **`Admin::getAllPermissions()`** references `\App\Services\Menu::class` which **does not exist** — will error for `super_admin` role (dead variable `$menu`, code continues but throws BindingResolutionException)
 
 ### Onboarding
 
@@ -91,6 +93,7 @@ If catch-all is registered first, it swallows `/dashboard`, `/login`, `/storefro
 ### AI Integration
 
 - **3-tier fallback chain**: **Groq → Cerebras → Gemini**
+- **Groq model**: `llama-3.3-70b-versatile` | **Cerebras**: `gpt-oss-120b` | **Gemini**: `gemini-3.1-flash-lite`
 - **CLIP Server** (local Python FastAPI) for image recognition — `http://localhost:8089` (local) / `http://clip-server:8089` (Docker)
 - **`AiChatService`** (`app/Services/`) — Multi-provider wrapper, key rotation within each provider before falling back to next
 - **`SendAiReplyJob`** — queued on `facebook` queue, 5 tries, 15s backoff, 180s timeout
@@ -114,9 +117,9 @@ docker compose down
 docker exec laravel-app php artisan <command>
 ```
 
-- **7 services**: app, mysql (3307), node (5173), redis, phpmyadmin (8080), worker, clip-server (8089)
-- **Worker container**: Supervisor → `php artisan horizon` (`docker/supervisord.conf`)
-- **Entrypoint** (`docker-entrypoint.sh`): waits for MySQL → composer install → npm install → key:generate → migrate → serve
+- **7 services**: app (8000), mysql (3307), node (5173), redis (6379), phpmyadmin (8080), worker, clip-server (8089)
+- **Worker container**: Supervisor → `php artisan horizon` (`docker/supervisord.conf`). Uses pre-built image `socialmediamanager-app:latest` (not built from Dockerfile like `app` service)
+- **Entrypoint** (`docker-entrypoint.sh`): waits for MySQL → composer install (only if `vendor/` missing) → npm install (only if `node_modules/` missing) → key:generate → migrate → serve
 - `.env` uses `DB_HOST=mysql` (Docker service name), `.env.example` defaults to PostgreSQL
 
 ### Frontend
@@ -142,6 +145,15 @@ docker exec laravel-app php artisan <command>
 - **Theme colors**: Include `header_text` for contrast — dark headers get white text, white headers get dark text.
 - **Build**: `cd resources/storefront && npx vite build` → outputs to `public/storefront/` (NOT `public/build/`)
 - **Asset loading**: `@vite` directive does NOT work for storefront (different output dir). Blade template uses glob to find `public/storefront/assets/index-*.js` and `index-*.css`.
+- **Data flow**: Blade injects `window.__STOREFRONT_DATA__` with snake_case keys (`store_name`, `store_logo`, `theme`). React reads via `config?.store_name`, `config?.store_logo`. API also returns snake_case.
+- **`App.jsx` fallback** uses camelCase (`storeName`) — inconsistent with snake_case convention. Only affects error fallback path.
+
+### Storefront Uploads
+
+- **Upload folders**: `storefront/logos/`, `storefront/favicons/`, `storefront/banners/` — all under `Storage::disk('public')`
+- **NOT tenant-isolated**: The `public` disk is NOT in tenancy `disks` array (`config/tenancy.php:108`). All tenants share the same `public/storefront/` directory. Laravel's `store()` generates unique filenames to avoid collisions.
+- **Product image API**: `StorefrontApiController` returns raw `$img->path` (NOT full Storage URL) for product/variant images. Logo/favicon return full URLs via `Storage::disk('public')->url()`.
+- **`footer_logo`** field exists in DB, model `$fillable`, and API response — but has NO upload UI/route in `StorefrontSettingsController`.
 
 ## Key Paths
 
@@ -161,7 +173,7 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 
 **Landlord**: `tenants` (string PK subdomain, `data` JSON), `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `business_categories` (with `extra_fields` JSON), `cache`, `jobs`, `sessions`
 
-**Tenant**: `users` (`#[Fillable]` attributes, `locale` column default `bn`), `facebook_settings` (connection_type enum: `facebook_app`/`zernio`), `ai_settings` (type: `message`/`cerebras`/`image`), `conversations`, `messages`, `categories` (self-FK parent_id), `attribute_templates` (is_variant_option, is_active, placeholder/default), `brands`, `products` (weight_kg), `product_attribute_values`, `product_variants` (JSON attributes), `product_images`, `variant_images` (JSON embedding), `warehouses`, `stock_movements`, `stock_transfers`, `inventory_alerts`, `attribute_options`, `business_settings` (delivery areas JSON, payment methods JSON, FAQ JSON, extra_fields_data JSON, logo_path), `storefront_settings` (theme_slug, theme_overrides JSON, layout_style, products_per_row, show_header_slider, show_brands_section, show_newsletter, contact/social/footer fields, custom_css), `storefront_banners` (title, subtitle, image, link, btn_text, sort_order, is_active, FK to storefront_settings)
+**Tenant**: `users` (`#[Fillable]` attributes, `locale` column default `bn`), `facebook_settings` (connection_type enum: `facebook_app`/`zernio`), `ai_settings` (type: `message`/`cerebras`/`image`), `conversations`, `messages`, `categories` (self-FK parent_id), `attribute_templates` (is_variant_option, is_active, placeholder/default), `brands`, `products` (weight_kg, is_featured), `product_attribute_values`, `product_variants` (JSON attributes), `product_images`, `variant_images` (JSON embedding), `warehouses`, `stock_movements`, `stock_transfers`, `inventory_alerts`, `attribute_options`, `business_settings` (delivery areas JSON, payment methods JSON, FAQ JSON, extra_fields_data JSON, logo_path), `storefront_settings` (theme_slug, theme_overrides JSON, store_logo, store_favicon, footer_logo, layout_style, products_per_row, show_header_slider, show_brands_section, show_newsletter, contact/social/footer fields, custom_css), `storefront_banners` (title, subtitle, image, link, btn_text, sort_order, is_active, FK to storefront_settings)
 
 **Seeders**: `AdminSeeder` (`admin@socialboost.com` / `Admin@123456`, super_admin), `BusinessCategorySeeder` (8 categories with extra_fields JSON), `AttributeTemplateSeeder` (8 global variant options + category-specific extra field templates)
 
@@ -192,6 +204,9 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 - **Storefront asset loading**: `@vite` directive does NOT work — build outputs to `public/storefront/` not `public/build/`. Blade template uses glob fallback.
 - **Storefront route order**: Catch-all `/{path}` in `tenant.php` MUST be last route — it swallows all unmatched paths. Dashboard/auth/storefront-settings routes must come before it.
 - **Storefront theme `header_text`**: Required for contrast. Dark `header_bg` → `header_text: #FFFFFF`, white `header_bg` → `header_text: #111827`.
+- **Storefront uploads NOT tenant-isolated**: All tenants share `public/storefront/` directory. Unique filenames prevent collisions but there's no tenant-level file isolation.
+- **`TenantCouldNotBeIdentifiedOnDomainException`** caught globally in `bootstrap/app.php` → returns 404.
+- **`docker-entrypoint.sh` conditional installs**: Composer and npm installs only run if `vendor/` or `node_modules/` directories are missing.
 
 # Agent Instructions
 
