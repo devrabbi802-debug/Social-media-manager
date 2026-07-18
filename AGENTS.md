@@ -14,11 +14,15 @@ composer setup          # install, key:generate, migrate, npm install, build
 composer dev            # artisan serve + queue:listen + pail + npm run dev (4 procs via concurrently)
 composer test           # config:clear + artisan test
 php artisan test --filter=TestName
-npx vite build
 
 # Multi-Tenancy
 php artisan tenants:migrate        # Migrate all tenant databases
 php artisan tenants:seed           # Seed all tenant databases
+
+# Storefront (from resources/storefront/)
+cd resources/storefront
+npm install
+npx vite build                      # Build React SPA -> public/storefront/
 ```
 
 ## Architecture
@@ -26,7 +30,7 @@ php artisan tenants:seed           # Seed all tenant databases
 ### Multi-Tenancy
 
 - **Landlord DB** (`socialboost`): `tenants`, `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `business_categories`, `cache`, `jobs`, `sessions`
-- **Tenant DB** (`{subdomain}_socialboost`): `users`, `facebook_settings`, `ai_settings`, `conversations`, `messages`, `categories`, `attribute_templates`, `brands`, `products`, `product_attribute_values`, `product_variants`, `product_images`, `warehouses`, `stock_movements`, `inventory_alerts`, `stock_transfers`, `variant_images`, `business_settings`
+- **Tenant DB** (`{subdomain}_socialboost`): `users`, `facebook_settings`, `ai_settings`, `conversations`, `messages`, `categories`, `attribute_templates`, `brands`, `products`, `product_attribute_values`, `product_variants`, `product_images`, `warehouses`, `stock_movements`, `inventory_alerts`, `stock_transfers`, `variant_images`, `business_settings`, `storefront_settings`, `storefront_banners`
 - **Users table does NOT exist in landlord DB** — never `User::count()` from central routes
 - **Tenant custom attributes** in `data` JSON column — query: `where('data->status', 'active')`, NOT `where('status', 'active')`
 - **Central domains**: `127.0.0.1`, `localhost`, `smm.test`, `socialboost.com`, `www.socialboost.com`
@@ -35,23 +39,29 @@ php artisan tenants:seed           # Seed all tenant databases
 
 ### Route Priority & Domain Blocking
 
-- **Central routes** (`routes/web.php`): Wrapped in `PreventAccessFromNonCentralDomains` — blocks non-existent subdomains (e.g. `rabbi.smm.test` → 404). **Does NOT block valid tenant domains** — a tenant visiting `smm.test/dashboard` gets the central view (no tenant context)
-- **Webhook routes** (`/webhook/facebook`, `/webhook/zernio`): Outside middleware group — accessible from any domain (Facebook/Zernio calls via ngrok tunnel)
-- **Tenant routes** (`routes/tenant.php`): Use `InitializeTenancyByDomain` + `PreventAccessFromCentralDomains` — blocks central domains from accessing tenant routes
-- **Gotcha**: Central routes registered FIRST via `withRouting`, tenant routes later via `TenancyServiceProvider::boot()`. For identical paths (e.g. `/dashboard`), the central `web.php` version wins. Tenant routes rely on `InitializeTenancyByDomain` middleware to switch DB context.
+- **Central routes** (`routes/web.php`): Wrapped in `PreventAccessFromNonCentralDomains` — blocks non-existent subdomains. Does NOT block valid tenant domains.
+- **Webhook routes** (`/webhook/facebook`, `/webhook/zernio`): Outside middleware group — accessible from any domain
+- **Tenant routes** (`routes/tenant.php`): Use `InitializeTenancyByDomain` + `PreventAccessFromCentralDomains`
+- **API routes** (`routes/api.php`): Registered via `withRouting(api: ...)` in `bootstrap/app.php`. Include tenancy middleware.
+- **Gotcha**: Central routes registered FIRST via `withRouting`, tenant routes later via `TenancyServiceProvider::boot()`. For identical paths, central version wins.
+
+### Tenant Route Order (CRITICAL)
+
+Routes in `tenant.php` MUST be registered in this exact order:
+
+1. Auth routes (login, logout, auto-login, language switch) — NO auth middleware
+2. Dashboard routes (auth required, `/dashboard` prefix)
+3. Storefront settings routes (auth required, `/storefront-settings` prefix)
+4. **Storefront catch-all** (NO auth, LAST) — `GET /` and `GET /{path}`
+
+If catch-all is registered first, it swallows `/dashboard`, `/login`, `/storefront-settings` etc.
 
 ### Tenant URL Structure
 
 - **`/{subdomain}.smm.test/`** → React E-Commerce Storefront (public)
 - **`/{subdomain}.smm.test/dashboard`** → Admin Dashboard (auth required)
-- **`/{subdomain}.smm.test/products`** → Product listing (public)
-- **`/{subdomain}.smm.test/products/{slug}`** → Product detail (public)
-- **`/{subdomain}.smm.test/category/{slug}`** → Category page (public)
-- **`/{subdomain}.smm.test/cart`** → Cart page (public)
-- **`/{subdomain}.smm.test/checkout`** → Checkout (public)
-- **`/{subdomain}.smm.test/login`** → Login page (public)
 - **`/{subdomain}.smm.test/storefront-settings`** → Theme customizer (auth)
-- **`/{subdomain}.smm.test/dashboard/inventory/products`** → Product management (auth)
+- **`/{subdomain}.smm.test/login`** → Login page (public)
 
 ### Auth System
 
@@ -68,7 +78,6 @@ php artisan tenants:seed           # Seed all tenant databases
 - **POST /register** removed — all registration through `OnboardingController@store`
 - **Flow**: Single-step Alpine.js form → validate all → `Tenant::create()` + `Domain::create()` → `$tenant->run()` creates User + BusinessSetting → cross-domain auto-login via one-time token in `remember_token` → redirect to `{subdomain}.smm.test/dashboard`
 - **Auto-login token**: `Str::random(64)` stored as Hash in `remember_token`, consumed once at `/auto-login?email=...&token=...`
-- **Custom category**: If `custom_category_name` provided (no `category_id`), creates in `business_categories` with slug, icon 📦, sort_order 99
 
 ### Localization
 
@@ -76,7 +85,7 @@ php artisan tenants:seed           # Seed all tenant databases
 - **Storage**: User's `locale` column in tenant DB `users` table
 - **Middleware**: `SetLocale` reads `$request->user()->locale`, sets `app()->setLocale()`
 - **Switcher**: `POST /language/switch` — updates locale, redirects back
-- **Translation files**: `lang/bn/` and `lang/en/` (sidebar, common, tenant, nav, dashboard, settings, integration, conversations, facebook, ai, image_match, products, categories, brands, warehouses, inventory, attributes, auth)
+- **Translation files**: `lang/bn/` and `lang/en/`
 - **Blade usage**: `@lang('file.key')` or `__('file.key')`. Dynamic: `__('file.key', ['var' => $value])`
 
 ### AI Integration
@@ -115,31 +124,35 @@ docker exec laravel-app php artisan <command>
 - Tailwind CSS v4 via `@tailwindcss/vite` plugin (no `tailwind.config.js` — config in CSS)
 - **Public layouts**: Tailwind CDN + Alpine.js (not Vite)
 - **Tenant/Admin**: Tailwind CDN (dashboard sidebar layout)
-- **React Storefront**: `resources/storefront/` — React SPA with Vite + Tailwind CSS v4
-- Bengali font: Hind Siliguri (Google Fonts), Instrument Sans (Vite fonts plugin via `bunny()`)
+- **React Storefront**: `resources/storefront/` — React SPA with Vite + Tailwind CSS v3 (has own `tailwind.config.js`)
+- Bengali font: Hind Siliguri (Google Fonts)
 - `app.js` is empty — no JS bundled via Vite yet
 
 ### React Storefront
 
-- **Location**: `resources/storefront/` — React SPA with Vite + Tailwind CSS v4
-- **Theme System**: 2 pre-built themes (modern, classic) hardcoded in ThemeController + tenant overrides
-- **Database**: `storefront_settings` (tenant DB) stores per-tenant theme config, `storefront_banners` (tenant DB) stores hero banners. Theme configs hardcoded in `ThemeController` (no themes table).
-- **Theme Resolution**: Default CSS vars → Preset theme → Tenant overrides → Custom CSS → Live preview
+- **Location**: `resources/storefront/` — React SPA with Vite + Tailwind CSS v3
+- **Theme System**: 2 pre-built themes (modern, classic) hardcoded in `ThemeController::THEMES` array. No themes table.
+- **Database**: `storefront_settings` (one row per tenant, NO user_id) stores theme_slug + overrides + layout/contact/social/footer settings. `storefront_banners` stores hero banners with sort_order.
+- **Theme Resolution**: Default CSS vars → Preset theme → Tenant overrides → Custom CSS
 - **Hot-Swap**: CSS variables on `<html>` — no page reload needed for theme changes
 - **FOWT Prevention**: Inject CSS vars inline in Blade `<head>` before React loads
-- **API Routes**: `/api/storefront/config`, `/api/storefront/home`, `/api/themes` (no subdomain in URL, tenant middleware handles it)
-- **Theme Customizer**: Floating panel (admin only) with color pickers, font selector, card/button style toggles
+- **API Routes** (`routes/api.php`): `/api/storefront/{config,home,products,products/{slug},categories,brands,featured}`, `/api/themes`
+- **Storefront catch-all** (`routes/tenant.php`): LAST route — `GET /` and `GET /{path}` serve Blade view with React SPA. Registered AFTER dashboard/auth/storefront-settings routes.
+- **Theme Customizer**: `/storefront-settings` — 3 tabs: Theme Selection, General Settings, Banner Management
+- **Theme colors**: Include `header_text` for contrast — dark headers get white text, white headers get dark text.
+- **Build**: `cd resources/storefront && npx vite build` → outputs to `public/storefront/` (NOT `public/build/`)
+- **Asset loading**: `@vite` directive does NOT work for storefront (different output dir). Blade template uses glob to find `public/storefront/assets/index-*.js` and `index-*.css`.
 
 ## Key Paths
 
 - **Public views**: `resources/views/` (welcome, features, pricing, about, contact, auth)
 - **Onboarding views**: `resources/views/onboarding/` — single-step Alpine.js form
-- **Tenant views**: `resources/views/tenant/` — index, integration, facebook-settings, facebook-select-page, ai-setup, conversations/, products/, categories/, brands/, warehouses/, inventory/, attribute-templates/, image-match/, storefront-settings/
+- **Tenant views**: `resources/views/tenant/` — index, integration, facebook-settings, ai-setup, conversations/, products/, categories/, brands/, warehouses/, inventory/, attribute-templates/, image-match/, storefront-settings/
 - **Admin views**: `resources/views/admin/` (auth, dashboard, users CRUD, tenants CRUD, ai-system-prompt, business-categories CRUD)
-- **React Storefront**: `resources/storefront/` — src/components/, src/pages/, src/contexts/, src/hooks/
-- **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/layouts/tenant.blade.php` (tenant), `resources/views/admin/layouts/app.blade.php` (admin)
+- **React Storefront**: `resources/storefront/` — src/components/{layout,home,ui}/, src/pages/, src/contexts/, src/hooks/, src/api/, src/utils/
+- **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/layouts/tenant.blade.php` (tenant), `resources/views/admin/layouts/app.blade.php` (admin), `resources/views/storefront.blade.php` (React SPA entry)
 - **Config**: `config/menu.php` (admin sidebar), `config/tenancy.php` (central domains, DB suffix), `config/services.php` (Facebook + Groq + Cerebras + Gemini + CLIP + Zernio)
-- **Controllers**: `DashboardController` (settings, leads, reports, whatsapp, facebook, inventory, integration), `ProductController` (CRUD + variants + extra fields), `AttributeTemplateController` (variant options + category templates), `ThemeController` (themes API), `StorefrontController` (storefront API), `StorefrontSettingsController` (admin CRUD)
+- **Controllers**: `DashboardController`, `ProductController`, `AttributeTemplateController`, `ThemeController` (hardcoded themes API), `StorefrontController` (serves Blade/React SPA), `StorefrontApiController` (public API), `StorefrontSettingsController` (admin CRUD for settings/banners)
 - **Middleware**: `app/Http/Middleware/PreventAccessFromNonCentralDomains.php`, `app/Http/Middleware/SetLocale.php`
 
 ## Database
@@ -148,7 +161,7 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 
 **Landlord**: `tenants` (string PK subdomain, `data` JSON), `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `business_categories` (with `extra_fields` JSON), `cache`, `jobs`, `sessions`
 
-**Tenant**: `users` (`#[Fillable]` attributes, `locale` column default `bn`), `facebook_settings` (connection_type enum: `facebook_app`/`zernio`), `ai_settings` (type: `message`/`cerebras`/`image`), `conversations`, `messages`, `categories` (self-FK parent_id), `attribute_templates` (is_variant_option, is_active, placeholder/default), `brands`, `products` (weight_kg), `product_attribute_values`, `product_variants` (JSON attributes), `product_images`, `variant_images` (JSON embedding), `warehouses`, `stock_movements`, `stock_transfers`, `inventory_alerts`, `attribute_options`, `business_settings` (delivery areas JSON, payment methods JSON, FAQ JSON, extra_fields_data JSON, logo_path), `storefront_settings` (theme_slug, theme_overrides JSON, custom_css), `storefront_banners` (hero slider banners with sort_order)
+**Tenant**: `users` (`#[Fillable]` attributes, `locale` column default `bn`), `facebook_settings` (connection_type enum: `facebook_app`/`zernio`), `ai_settings` (type: `message`/`cerebras`/`image`), `conversations`, `messages`, `categories` (self-FK parent_id), `attribute_templates` (is_variant_option, is_active, placeholder/default), `brands`, `products` (weight_kg), `product_attribute_values`, `product_variants` (JSON attributes), `product_images`, `variant_images` (JSON embedding), `warehouses`, `stock_movements`, `stock_transfers`, `inventory_alerts`, `attribute_options`, `business_settings` (delivery areas JSON, payment methods JSON, FAQ JSON, extra_fields_data JSON, logo_path), `storefront_settings` (theme_slug, theme_overrides JSON, layout_style, products_per_row, show_header_slider, show_brands_section, show_newsletter, contact/social/footer fields, custom_css), `storefront_banners` (title, subtitle, image, link, btn_text, sort_order, is_active, FK to storefront_settings)
 
 **Seeders**: `AdminSeeder` (`admin@socialboost.com` / `Admin@123456`, super_admin), `BusinessCategorySeeder` (8 categories with extra_fields JSON), `AttributeTemplateSeeder` (8 global variant options + category-specific extra field templates)
 
@@ -161,7 +174,7 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 - **`storage/framework/views/`** excluded from Vite watch but NOT gitignored
 - **No `pint.json`** — Laravel Pint uses defaults
 - **No CI workflows** configured
-- **No `tailwind.config.js`** — Tailwind v4 uses CSS-based config
+- **`tailwind.config.js` exists ONLY in `resources/storefront/`** — main app uses Tailwind v4 CSS-based config
 - **Registration validation** does NOT use `unique:users,email` (users are per-tenant)
 - **Facebook OAuth**: HTTP not allowed — use ngrok HTTPS URL
 - **Facebook test users**: Dev mode only testers/admins trigger webhooks
@@ -175,6 +188,10 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 - **Alpine.js**: Reactive state must be inside `x-data` scope; `x-if` must be on `<template>` tags only
 - **Route conflicts**: Central `web.php` routes registered before tenant `tenant.php` routes. For identical paths, central version wins.
 - **CLIP server URL**: `http://localhost:8089` (local) vs `http://clip-server:8089` (Docker)
+- **Storefront `storefront_settings`**: One row per tenant, NO user_id column. Do `StorefrontSettings::first()`, NOT `where('user_id', ...)`.
+- **Storefront asset loading**: `@vite` directive does NOT work — build outputs to `public/storefront/` not `public/build/`. Blade template uses glob fallback.
+- **Storefront route order**: Catch-all `/{path}` in `tenant.php` MUST be last route — it swallows all unmatched paths. Dashboard/auth/storefront-settings routes must come before it.
+- **Storefront theme `header_text`**: Required for contrast. Dark `header_bg` → `header_text: #FFFFFF`, white `header_bg` → `header_text: #111827`.
 
 # Agent Instructions
 
