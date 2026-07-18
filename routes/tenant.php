@@ -250,9 +250,22 @@ Route::middleware([
         });
     });
 
+    // Block register/onboarding routes on tenant — customers don't need these
+    Route::get('/register', function () { return redirect('/'); })->name('register');
+    Route::post('/register', function () { return redirect('/'); });
+    Route::get('/onboarding', function () { return redirect('/'); })->name('onboarding');
+    Route::post('/onboarding', function () { return redirect('/'); });
+
+    // Root URL — auth check: logged in → dashboard, not logged in → login
+    Route::get('/', function () use ($adminPrefix) {
+        if (auth()->check()) {
+            return redirect(route('dashboard'));
+        }
+        return redirect(route('login'));
+    })->name('home');
+
     // Storefront catch-all route (LAST - no auth required)
     // This serves the React SPA for all non-dashboard, non-auth routes
-    Route::get('/', [StorefrontController::class, 'index'])->name('storefront.home');
     Route::get('/{path}', [StorefrontController::class, 'index'])
         ->where('path', '.*')->name('storefront.spa');
 });
