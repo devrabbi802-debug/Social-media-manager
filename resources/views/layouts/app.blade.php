@@ -30,13 +30,8 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
                 <div class="flex items-center">
-                    <a href="/" class="flex items-center space-x-2">
-                        <div class="w-10 h-10 gradient-bg rounded-xl flex items-center justify-center">
-                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                            </svg>
-                        </div>
-                        <span class="text-xl font-bold gradient-text">SocialBoost AI</span>
+                    <a href="/" class="flex items-center">
+                        <img src="{{ asset('images/logo.png') }}" alt="SocialBoost AI" class="h-10 w-auto object-contain">
                     </a>
                 </div>
 
@@ -116,13 +111,8 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
                 <div>
-                    <div class="flex items-center space-x-2 mb-4">
-                        <div class="w-10 h-10 gradient-bg rounded-xl flex items-center justify-center">
-                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                            </svg>
-                        </div>
-                        <span class="text-xl font-bold">SocialBoost AI</span>
+                    <div class="mb-4">
+                        <img src="{{ asset('images/logo.png') }}" alt="SocialBoost AI" class="h-10 w-auto object-contain">
                     </div>
                     <p class="text-gray-400">AI-চালিত সোশ্যাল মিডিয়া ম্যানেজমেন্ট এবং ইনভেন্টরি ম্যানেজমেন্ট প্ল্যাটফর্ম</p>
                 </div>

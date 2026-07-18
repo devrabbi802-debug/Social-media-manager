@@ -29,15 +29,7 @@
     <aside :class="mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'" class="fixed left-0 top-0 bottom-0 w-64 bg-slate-900 text-white z-50 transform transition-transform duration-300 overflow-y-auto">
         {{-- Logo --}}
         <div class="h-16 flex items-center px-5 border-b border-white/10">
-            <div class="w-9 h-9 bg-emerald-500 rounded-xl flex items-center justify-center mr-3">
-                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                </svg>
-            </div>
-            <div>
-                <span class="text-sm font-bold tracking-tight">SocialBoost</span>
-                <span class="block text-slate-400 font-medium" style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em">Admin Panel</span>
-            </div>
+            <img src="{{ asset('images/logo.png') }}" alt="SocialBoost" class="h-9 w-auto object-contain">
         </div>
 
         {{-- Navigation --}}
