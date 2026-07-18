@@ -256,11 +256,9 @@ Route::middleware([
     Route::get('/onboarding', function () { return redirect('/'); })->name('onboarding');
     Route::post('/onboarding', function () { return redirect('/'); });
 
-    // Root URL — serve storefront SPA (same as catch-all)
-    Route::get('/', [StorefrontController::class, 'index'])->name('home');
-
     // Storefront catch-all route (LAST - no auth required)
     // This serves the React SPA for all non-dashboard, non-auth routes
-    Route::get('/{path}', [StorefrontController::class, 'index'])
+    // Optional {path?} param ensures "/" matches (path=null) without overwriting central GET /
+    Route::get('/{path?}', [StorefrontController::class, 'index'])
         ->where('path', '.*')->name('storefront.spa');
 });
