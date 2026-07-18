@@ -47,23 +47,29 @@ npx vite preview                    # Preview built storefront
 - **API routes** (`routes/api.php`): Registered via `withRouting(api: ...)` in `bootstrap/app.php`. Include tenancy middleware.
 - **Gotcha**: Central routes registered FIRST via `withRouting`, tenant routes later via `TenancyServiceProvider::boot()`. For identical paths, central version wins.
 
+### Admin Panel Prefix (CRITICAL)
+
+- Tenant dashboard/admin routes are NOT at `/dashboard` — they're under `/{APP_ADMIN_PANEL_PREFIX}/`
+- **`.env.example`** has `ADMIN_PANEL_PREFIX=ax7k9m`, actual **`.env`** has `ADMIN_PANEL_PREFIX=supermaster`
+- The prefix is read via `$adminPrefix = config('app.admin_panel_prefix', 'ax7k9m')` in `routes/tenant.php:39`
+- **Correct tenant URLs**:
+  - `/{subdomain}.smm.test/supermaster/dashboard` → Admin Dashboard (auth required)
+  - `/{subdomain}.smm.test/supermaster/storefront-settings` → Theme customizer (auth)
+  - `/{subdomain}.smm.test/supermaster/login` → Login page (public)
+  - `/{subdomain}.smm.test/` → React E-Commerce Storefront (public)
+- **Central admin panel** is separate: `/{centralDomain}/rootadmin/dashboard` (uses `admin` guard, landlord DB)
+
 ### Tenant Route Order (CRITICAL)
 
 Routes in `tenant.php` MUST be registered in this exact order:
 
-1. Auth routes (login, logout, auto-login, language switch) — NO auth middleware
-2. Dashboard routes (auth required, `/dashboard` prefix)
-3. Storefront settings routes (auth required, `/storefront-settings` prefix)
-4. **Storefront catch-all** (NO auth, LAST) — `GET /` and `GET /{path}`
+1. Language switch (`POST /language/switch`) — NO auth, outside `$adminPrefix`
+2. Auth routes inside `$adminPrefix` (auto-login, login, logout) — NO auth middleware
+3. Dashboard/inventory/AI/facebook/storefront-settings routes inside `$adminPrefix` with `auth` middleware
+4. Register/onboarding redirects on tenant (block customers from signup)
+5. **Storefront catch-all** (NO auth, LAST) — `GET /` and `GET /{path}`
 
 If catch-all is registered first, it swallows `/dashboard`, `/login`, `/storefront-settings` etc.
-
-### Tenant URL Structure
-
-- **`/{subdomain}.smm.test/`** → React E-Commerce Storefront (public)
-- **`/{subdomain}.smm.test/dashboard`** → Admin Dashboard (auth required)
-- **`/{subdomain}.smm.test/storefront-settings`** → Theme customizer (auth)
-- **`/{subdomain}.smm.test/login`** → Login page (public)
 
 ### Auth System
 
@@ -72,14 +78,15 @@ If catch-all is registered first, it swallows `/dashboard`, `/login`, `/storefro
 - **Admin routes loaded via** `then:` callback in `bootstrap/app.php`, NOT through `withRouting()`
 - **Middleware aliases** in `bootstrap/app.php`: `admin` → `AdminMiddleware`, `locale` → `SetLocale`, `central` → `PreventAccessFromNonCentralDomains`
 - **User model** uses Laravel 11+ `#[Fillable]`/`#[Hidden]` PHP attributes. **Admin model** uses traditional `$fillable`/`$hidden` arrays
-- **`Admin::getAllPermissions()`** references `\App\Services\Menu::class` which **does not exist** — will error for `super_admin` role (dead variable `$menu`, code continues but throws BindingResolutionException)
+- **`Admin::getAllPermissions()`** calls `app(\App\Services\Menu::class)` — **class does not exist** (dead `$menu` variable, code continues via `config('menu.groups')` but throws `BindingResolutionException`)
 
 ### Onboarding
 
 - **Route**: `GET /register` and `GET /login` both redirect to `/onboarding` (no separate register page)
 - **POST /register** removed — all registration through `OnboardingController@store`
-- **Flow**: Single-step Alpine.js form → validate all → `Tenant::create()` + `Domain::create()` → `$tenant->run()` creates User + BusinessSetting → cross-domain auto-login via one-time token in `remember_token` → redirect to `{subdomain}.smm.test/dashboard`
+- **Flow**: Single-step Alpine.js form → validate all → `Tenant::create()` + `Domain::create()` → `$tenant->run()` creates User + BusinessSetting → cross-domain auto-login via one-time token in `remember_token` → redirect to `{subdomain}.smm.test/{adminPrefix}/dashboard`
 - **Auto-login token**: `Str::random(64)` stored as Hash in `remember_token`, consumed once at `/auto-login?email=...&token=...`
+- **On tenant subdomains**, register/onboarding GET/POST redirect to `/` (storefront)
 
 ### Localization
 
@@ -121,6 +128,7 @@ docker exec laravel-app php artisan <command>
 - **Worker container**: Supervisor → `php artisan horizon` (`docker/supervisord.conf`). Uses pre-built image `socialmediamanager-app:latest` (not built from Dockerfile like `app` service)
 - **Entrypoint** (`docker-entrypoint.sh`): waits for MySQL → composer install (only if `vendor/` missing) → npm install (only if `node_modules/` missing) → key:generate → migrate → serve
 - `.env` uses `DB_HOST=mysql` (Docker service name), `.env.example` defaults to PostgreSQL
+- **PHP 8.4** in Dockerfile (`php:8.4-cli`), composer.json requires `^8.3`
 
 ### Frontend
 
@@ -130,6 +138,7 @@ docker exec laravel-app php artisan <command>
 - **React Storefront**: `resources/storefront/` — React SPA with Vite + Tailwind CSS v3 (has own `tailwind.config.js`)
 - Bengali font: Hind Siliguri (Google Fonts)
 - `app.js` is empty — no JS bundled via Vite yet
+- **Vite version mismatch**: Main app uses Vite 8.x (`package.json`), storefront uses Vite 5.x (`resources/storefront/package.json`) — separate `node_modules` needed
 
 ### React Storefront
 
@@ -141,10 +150,10 @@ docker exec laravel-app php artisan <command>
 - **FOWT Prevention**: Inject CSS vars inline in Blade `<head>` before React loads
 - **API Routes** (`routes/api.php`): `/api/storefront/{config,home,products,products/{slug},categories,brands,featured}`, `/api/themes`
 - **Storefront catch-all** (`routes/tenant.php`): LAST route — `GET /` and `GET /{path}` serve Blade view with React SPA. Registered AFTER dashboard/auth/storefront-settings routes.
-- **Theme Customizer**: `/storefront-settings` — 3 tabs: Theme Selection, General Settings, Banner Management
+- **Theme Customizer**: `/{adminPrefix}/storefront-settings` — 3 tabs: Theme Selection, General Settings, Banner Management
 - **Theme colors**: Include `header_text` for contrast — dark headers get white text, white headers get dark text.
 - **Build**: `cd resources/storefront && npx vite build` → outputs to `public/storefront/` (NOT `public/build/`)
-- **Asset loading**: `@vite` directive does NOT work for storefront (different output dir). Blade template uses glob to find `public/storefront/assets/index-*.js` and `index-*.css`.
+- **Asset loading**: `@vite` directive does NOT work for storefront (different output dir). Blade template uses manifest.json first, then glob fallback to find `public/storefront/assets/index-*.js` and `index-*.css`.
 - **Data flow**: Blade injects `window.__STOREFRONT_DATA__` with snake_case keys (`store_name`, `store_logo`, `theme`). React reads via `config?.store_name`, `config?.store_logo`. API also returns snake_case.
 - **`App.jsx` fallback** uses camelCase (`storeName`) — inconsistent with snake_case convention. Only affects error fallback path.
 
@@ -179,6 +188,8 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 
 ## Gotchas
 
+- **Admin panel prefix is configurable** — `.env` has `supermaster`, `.env.example` has `ax7k9m`. All admin/dashboard/storefront-settings URLs use this prefix, NOT bare `/dashboard`.
+- **`.env.example` is incomplete** — missing `GROQ_MODEL`, `GEMINI_MODEL`, `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`, `APP_DOMAIN`. Has `KILO_MODEL` which `.env` doesn't use. DB defaults to PostgreSQL, queue/cache to `database` — actual `.env` uses MySQL, Redis.
 - **`app.js` is empty** — no JS bundled via Vite yet
 - **`.env.example` defaults to PostgreSQL** — actual `.env` uses MySQL
 - **`APP_LOCALE=en`** — Bengali hardcoded in Blade templates, not via locale config
@@ -201,12 +212,15 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 - **Route conflicts**: Central `web.php` routes registered before tenant `tenant.php` routes. For identical paths, central version wins.
 - **CLIP server URL**: `http://localhost:8089` (local) vs `http://clip-server:8089` (Docker)
 - **Storefront `storefront_settings`**: One row per tenant, NO user_id column. Do `StorefrontSettings::first()`, NOT `where('user_id', ...)`.
-- **Storefront asset loading**: `@vite` directive does NOT work — build outputs to `public/storefront/` not `public/build/`. Blade template uses glob fallback.
+- **Storefront asset loading**: `@vite` directive does NOT work — build outputs to `public/storefront/` not `public/build/`. Blade template tries manifest.json first, then glob fallback.
 - **Storefront route order**: Catch-all `/{path}` in `tenant.php` MUST be last route — it swallows all unmatched paths. Dashboard/auth/storefront-settings routes must come before it.
 - **Storefront theme `header_text`**: Required for contrast. Dark `header_bg` → `header_text: #FFFFFF`, white `header_bg` → `header_text: #111827`.
 - **Storefront uploads NOT tenant-isolated**: All tenants share `public/storefront/` directory. Unique filenames prevent collisions but there's no tenant-level file isolation.
 - **`TenantCouldNotBeIdentifiedOnDomainException`** caught globally in `bootstrap/app.php` → returns 404.
 - **`docker-entrypoint.sh` conditional installs**: Composer and npm installs only run if `vendor/` or `node_modules/` directories are missing.
+- **Worker uses pre-built image** (`socialmediamanager-app:latest`) — NOT rebuilt when you `docker compose up --build` the `app` service. Rebuild worker separately if Dockerfile changes.
+- **Facebook client secrets in `.env`** are hardcoded — NOT in `.env.example`. Will need re-adding after fresh clone.
+- **Admin panel login**: `/{centralDomain}/rootadmin/login` (central admin, landlord DB) vs `/{subdomain}.smm.test/{adminPrefix}/login` (tenant user, tenant DB). Two completely separate auth systems.
 
 # Agent Instructions
 
