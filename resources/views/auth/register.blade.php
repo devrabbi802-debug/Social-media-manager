@@ -15,7 +15,7 @@
                 <span class="text-2xl font-bold gradient-text">SocialBoost AI</span>
             </a>
             <h2 class="text-3xl font-bold text-gray-900">অ্যাকাউন্ট তৈরি করুন</h2>
-            <p class="mt-2 text-gray-600">ইতিমধ্যে অ্যাকাউন্ট আছে? <a href="{{ url('/login') }}" class="text-purple-600 hover:text-purple-700 font-medium">এখানে লগইন করুন</a></p>
+            <p class="mt-2 text-gray-600">ইতিমধ্যে অ্যাকাউন্ট আছে? <a href="{{ route('login') }}" class="text-purple-600 hover:text-purple-700 font-medium">এখানে লগইন করুন</a></p>
         </div>
 
         <div class="bg-white rounded-2xl shadow-xl p-8">

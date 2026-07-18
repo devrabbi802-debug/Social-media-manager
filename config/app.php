@@ -120,6 +120,8 @@ return [
     |
     */
 
+    'admin_panel_prefix' => env('ADMIN_PANEL_PREFIX', 'ax7k9m'),
+
     'maintenance' => [
         'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
         'store' => env('APP_MAINTENANCE_STORE', 'database'),

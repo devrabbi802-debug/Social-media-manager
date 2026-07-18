@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 export default function BrandShowcase({ brands = [] }) {
   if (brands.length === 0) {
@@ -11,9 +12,9 @@ export default function BrandShowcase({ brands = [] }) {
         <h2 className="text-2xl font-bold text-center mb-8">Our Brands</h2>
         <div className="flex flex-wrap justify-center items-center gap-8">
           {brands.map((brand) => (
-            <a
+            <Link
               key={brand.id}
-              href={`/brand/${brand.slug}`}
+              to={`/brand/${brand.slug}`}
               className="group"
             >
               <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100 hover:shadow-md transition">
@@ -29,7 +30,7 @@ export default function BrandShowcase({ brands = [] }) {
                   </span>
                 )}
               </div>
-            </a>
+            </Link>
           ))}
         </div>
       </div>

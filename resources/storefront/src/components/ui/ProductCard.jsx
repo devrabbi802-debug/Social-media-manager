@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { ShoppingCart } from 'lucide-react';
 
 export default function ProductCard({ product }) {
@@ -19,7 +20,7 @@ export default function ProductCard({ product }) {
 
   return (
     <div className="card-hover group">
-      <a href={`/products/${slug}`}>
+      <Link to={`/products/${slug}`}>
         <div className="relative aspect-square bg-gray-100 overflow-hidden">
           {image ? (
             <img
@@ -47,7 +48,7 @@ export default function ProductCard({ product }) {
             )}
           </div>
         </div>
-      </a>
+      </Link>
 
       <div className="p-4">
         {/* Category & Brand */}
@@ -58,11 +59,11 @@ export default function ProductCard({ product }) {
         </div>
 
         {/* Name */}
-        <a href={`/products/${slug}`}>
+        <Link to={`/products/${slug}`}>
           <h3 className="font-medium text-gray-900 hover:text-primary transition line-clamp-2 mb-2">
             {name}
           </h3>
-        </a>
+        </Link>
 
         {/* Price */}
         <div className="flex items-center justify-between">

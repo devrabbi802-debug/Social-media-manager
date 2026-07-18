@@ -55,7 +55,7 @@
                                 </svg>
                             </button>
                             <div x-show="open" x-transition class="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border py-2 z-50">
-                                <a href="{{ url('/dashboard') }}" class="block px-4 py-2 text-gray-700 hover:bg-purple-50 hover:text-purple-600 transition">ড্যাশবোর্ড</a>
+                                <a href="{{ route('dashboard') }}" class="block px-4 py-2 text-gray-700 hover:bg-purple-50 hover:text-purple-600 transition">ড্যাশবোর্ড</a>
                                 <hr class="my-1">
                                 <form method="POST" action="{{ route('logout') }}">
                                     @csrf
@@ -64,7 +64,7 @@
                             </div>
                         </div>
                     @else
-                        <a href="{{ url('/login') }}" class="text-gray-600 hover:text-purple-600 transition font-medium">লগইন</a>
+                        <a href="{{ route('login') }}" class="text-gray-600 hover:text-purple-600 transition font-medium">লগইন</a>
                         <a href="{{ url('/onboarding') }}" class="gradient-bg text-white px-6 py-2 rounded-full font-medium hover:opacity-90 transition">Let's Start</a>
                     @endauth
                 </div>
@@ -88,13 +88,13 @@
                 <a href="{{ url('/contact') }}" class="block text-gray-600 hover:text-purple-600">যোগাযোগ</a>
                 <hr>
                 @auth
-                    <a href="{{ url('/dashboard') }}" class="block text-purple-600 font-medium">ড্যাশবোর্ড</a>
+                        <a href="{{ route('dashboard') }}" class="block text-purple-600 font-medium">ড্যাশবোর্ড</a>
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
                         <button type="submit" class="block w-full text-left text-red-600 font-medium">লগআউট</button>
                     </form>
                 @else
-                    <a href="{{ url('/login') }}" class="block text-gray-600">লগইন</a>
+                        <a href="{{ route('login') }}" class="block text-gray-600">লগইন</a>
                     <a href="{{ url('/onboarding') }}" class="block gradient-bg text-white px-6 py-2 rounded-full text-center font-medium">Let's Start</a>
                 @endauth
             </div>

@@ -18,7 +18,7 @@ export default function Home() {
       try {
         setLoading(true);
         const response = await api.get('/storefront/home');
-        setData(response.data || response);
+        setData(response);
       } catch (err) {
         setError(err.message);
       } finally {

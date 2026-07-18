@@ -12,7 +12,7 @@
                     <h1 class="text-2xl font-bold text-gray-900">@lang('image_match.result_title')</h1>
                     <p class="text-gray-600">{{ $sourceImage }}</p>
                 </div>
-                <a href="{{ url('/dashboard') }}" class="text-gray-600 hover:text-purple-600">
+                <a href="{{ route('dashboard') }}" class="text-gray-600 hover:text-purple-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
                     </svg>
@@ -36,7 +36,7 @@
                     <button onclick="toggleAllBoxes()" class="flex-1 px-4 py-2 border border-gray-300 rounded-xl text-sm font-medium hover:bg-gray-50 transition">
                         @lang('image_match.toggle_boxes')
                     </button>
-                    <a href="{{ url('/dashboard') }}" class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-medium hover:bg-purple-700 transition text-center">
+                    <a href="{{ route('dashboard') }}" class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-medium hover:bg-purple-700 transition text-center">
                         @lang('image_match.new_search')
                     </a>
                 </div>

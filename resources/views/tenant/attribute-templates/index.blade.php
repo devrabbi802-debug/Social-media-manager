@@ -24,7 +24,7 @@
         @endif
 
         <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
-            @if($templates->count() > 0)
+            @if($attributes->count() > 0)
                 <table class="w-full">
                     <thead class="bg-gray-50">
                         <tr>
@@ -35,7 +35,7 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200">
-                        @foreach($templates as $template)
+                        @foreach($attributes as $template)
                             <tr class="hover:bg-gray-50">
                                 <td class="px-6 py-4 font-medium text-gray-900">{{ $template->name }}</td>
                                 <td class="px-6 py-4 text-sm text-gray-500">{{ $template->type }}</td>
@@ -61,7 +61,7 @@
                     </tbody>
                 </table>
                 <div class="px-6 py-4 border-t">
-                    {{ $templates->links() }}
+                    {{ $attributes->links() }}
                 </div>
             @else
                 <div class="text-center py-12">

@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Search, ShoppingCart, Menu, X, ChevronDown } from 'lucide-react';
 
 export default function Header({ storeName, storeLogo, categories = [] }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const navigate = useNavigate();
 
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      window.location.href = `/products?search=${encodeURIComponent(searchQuery)}`;
+      navigate(`/products?search=${encodeURIComponent(searchQuery)}`);
+      setSearchOpen(false);
     }
   };
 
@@ -19,18 +22,18 @@ export default function Header({ storeName, storeLogo, categories = [] }) {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div className="flex items-center">
-            <a href="/" className="flex items-center space-x-2">
+            <Link to="/" className="flex items-center space-x-2">
               {storeLogo ? (
                 <img src={storeLogo} alt={storeName} className="h-8 w-auto object-contain" />
               ) : (
                 <span className="text-xl font-bold">{storeName || 'Store'}</span>
               )}
-            </a>
+            </Link>
           </div>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
-            <a href="/" className="hover:text-primary transition">Home</a>
+            <Link to="/" className="hover:text-primary transition">Home</Link>
             <div className="relative group">
               <button className="flex items-center space-x-1 hover:text-primary transition">
                 <span>Categories</span>
@@ -39,18 +42,18 @@ export default function Header({ storeName, storeLogo, categories = [] }) {
               {categories.length > 0 && (
                 <div className="absolute top-full left-0 mt-2 w-48 bg-white text-gray-900 rounded-lg shadow-lg py-2 hidden group-hover:block">
                   {categories.map((cat) => (
-                    <a
+                    <Link
                       key={cat.id}
-                      href={`/category/${cat.slug}`}
+                      to={`/category/${cat.slug}`}
                       className="block px-4 py-2 hover:bg-gray-100 transition"
                     >
                       {cat.name}
-                    </a>
+                    </Link>
                   ))}
                 </div>
               )}
             </div>
-            <a href="/products" className="hover:text-primary transition">All Products</a>
+            <Link to="/products" className="hover:text-primary transition">All Products</Link>
           </nav>
 
           {/* Right Side */}
@@ -64,12 +67,12 @@ export default function Header({ storeName, storeLogo, categories = [] }) {
             </button>
 
             {/* Cart */}
-            <a href="/cart" className="p-2 hover:opacity-80 rounded-lg transition relative">
+            <Link to="/cart" className="p-2 hover:opacity-80 rounded-lg transition relative">
               <ShoppingCart className="w-5 h-5" />
               <span className="absolute -top-1 -right-1 bg-primary text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
                 0
               </span>
-            </a>
+            </Link>
 
             {/* Mobile Menu Toggle */}
             <button
@@ -106,16 +109,17 @@ export default function Header({ storeName, storeLogo, categories = [] }) {
         {mobileMenuOpen && (
           <div className="md:hidden py-4 border-t" style={{ borderColor: 'var(--color-header_text, #FFFFFF)' + '33' }}>
             <nav className="flex flex-col space-y-2">
-              <a href="/" className="py-2 hover:text-primary transition">Home</a>
-              <a href="/products" className="py-2 hover:text-primary transition">All Products</a>
+              <Link to="/" className="py-2 hover:text-primary transition" onClick={() => setMobileMenuOpen(false)}>Home</Link>
+              <Link to="/products" className="py-2 hover:text-primary transition" onClick={() => setMobileMenuOpen(false)}>All Products</Link>
               {categories.map((cat) => (
-                <a
+                <Link
                   key={cat.id}
-                  href={`/category/${cat.slug}`}
+                  to={`/category/${cat.slug}`}
                   className="py-2 hover:text-primary transition"
+                  onClick={() => setMobileMenuOpen(false)}
                 >
                   {cat.name}
-                </a>
+                </Link>
               ))}
             </nav>
           </div>

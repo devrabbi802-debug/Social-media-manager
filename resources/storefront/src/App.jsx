@@ -3,6 +3,10 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import Layout from './components/layout/Layout';
 import Home from './pages/Home';
+import Products from './pages/Products';
+import ProductDetail from './pages/ProductDetail';
+import Category from './pages/Category';
+import Brand from './pages/Brand';
 import NotFound from './pages/NotFound';
 import api from './api/client';
 
@@ -22,7 +26,7 @@ export default function App() {
 
         // Otherwise fetch from API
         const response = await api.get('/storefront/config');
-        setConfig(response.data || response);
+          setConfig(response);
       } catch (err) {
         console.error('Failed to load config:', err);
         // Use default config
@@ -55,6 +59,10 @@ export default function App() {
         <Layout config={config}>
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/products" element={<Products />} />
+            <Route path="/products/:slug" element={<ProductDetail />} />
+            <Route path="/category/:slug" element={<Category />} />
+            <Route path="/brand/:slug" element={<Brand />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Layout>

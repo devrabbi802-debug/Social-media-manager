@@ -11,7 +11,7 @@
                     <h1 class="text-2xl font-bold text-gray-900">@lang('facebook.page_select_title')</h1>
                     <p class="text-gray-600">@lang('facebook.page_select_subtitle')</p>
                 </div>
-                <a href="{{ url('/integration') }}" class="text-gray-600 hover:text-purple-600">
+                <a href="{{ route('integration') }}" class="text-gray-600 hover:text-purple-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
                     </svg>
@@ -103,7 +103,7 @@
                     <li>• @lang('facebook.pages_add_help2')</li>
                     <li>• @lang('facebook.pages_add_help3')</li>
                 </ul>
-                <a href="{{ url('/integration') }}" class="inline-flex items-center px-6 py-3 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition">
+                <a href="{{ route('integration') }}" class="inline-flex items-center px-6 py-3 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition">
                     @lang('facebook.go_back')
                 </a>
             </div>

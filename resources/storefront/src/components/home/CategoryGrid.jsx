@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 export default function CategoryGrid({ categories = [] }) {
   if (categories.length === 0) {
@@ -11,9 +12,9 @@ export default function CategoryGrid({ categories = [] }) {
         <h2 className="text-2xl font-bold text-center mb-8">Shop by Category</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {categories.map((category) => (
-            <a
+            <Link
               key={category.id}
-              href={`/category/${category.slug}`}
+              to={`/category/${category.slug}`}
               className="group"
             >
               <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100 hover:shadow-md transition">
@@ -37,7 +38,7 @@ export default function CategoryGrid({ categories = [] }) {
                   </p>
                 )}
               </div>
-            </a>
+            </Link>
           ))}
         </div>
       </div>

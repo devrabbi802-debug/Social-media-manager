@@ -233,7 +233,7 @@ class OnboardingController extends Controller
         $email = $validated['email'];
 
         return redirect()->to(
-            'http://' . $tenantDomain . '/auto-login?email=' . urlencode($email) . '&token=' . $loginToken
+            'http://' . $tenantDomain . '/' . config('app.admin_panel_prefix', 'ax7k9m') . '/auto-login?email=' . urlencode($email) . '&token=' . $loginToken
         );
     }
 }
