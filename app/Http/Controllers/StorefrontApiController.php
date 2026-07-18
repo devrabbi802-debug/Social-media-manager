@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\StorefrontSettings;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class StorefrontApiController extends Controller
 {
@@ -26,8 +27,8 @@ class StorefrontApiController extends Controller
 
         return response()->json([
             'store_name' => $storefront->store_name ?? config('app.name'),
-            'store_logo' => $storefront->store_logo,
-            'store_favicon' => $storefront->store_favicon,
+            'store_logo' => $storefront->store_logo ? Storage::disk('public')->url($storefront->store_logo) : null,
+            'store_favicon' => $storefront->store_favicon ? Storage::disk('public')->url($storefront->store_favicon) : null,
             'theme' => [
                 'slug' => $storefront->theme_slug,
                 'config' => $storefront->resolvedTheme(),

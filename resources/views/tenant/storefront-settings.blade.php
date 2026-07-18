@@ -12,7 +12,8 @@
 
     {{-- Success Message --}}
     @if(session('success'))
-        <div class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
+        <div class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex items-center gap-2">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
             {{ session('success') }}
         </div>
     @endif
@@ -81,19 +82,63 @@
                         <label class="block text-sm font-medium text-gray-700 mb-1">Store Name</label>
                         <input type="text" name="store_name" value="{{ old('store_name', $storefront->store_name) }}" class="w-full rounded-lg border-gray-300 focus:border-purple-500 focus:ring-purple-500" placeholder="My Store">
                     </div>
-                    <div>
+                    <div x-data="fileUpload('logo-preview', '{{ $storefront->store_logo ? Storage::disk('public')->url($storefront->store_logo) : '' }}')">
                         <label class="block text-sm font-medium text-gray-700 mb-1">Logo</label>
-                        <input type="file" name="logo" accept="image/*" class="w-full rounded-lg border-gray-300 focus:border-purple-500 focus:ring-purple-500">
-                        @if($storefront->store_logo)
-                            <p class="mt-1 text-sm text-gray-500">Current: {{ basename($storefront->store_logo) }}</p>
-                        @endif
+                        <div class="relative"
+                             x-on:dragover.prevent="isDragging = true"
+                             x-on:dragleave.prevent="isDragging = false"
+                             x-on:drop.prevent="isDragging = false; handleDrop($event)"
+                             :class="isDragging ? 'border-purple-500 bg-purple-50' : 'border-gray-300'"
+                             class="border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all duration-200 hover:border-purple-400 hover:bg-purple-50/50"
+                             @click="$refs.logoInput.click()">
+                            <input type="file" name="logo" accept="image/*" x-ref="logoInput" class="hidden" onchange="previewFile(this, 'logo-preview')">
+                            <template x-if="!previewUrl && !existingUrl">
+                                <div>
+                                    <svg class="mx-auto h-10 w-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                    </svg>
+                                    <p class="mt-1 text-sm text-gray-600"><span class="font-medium text-purple-600">Click to upload</span> or drag & drop</p>
+                                    <p class="text-xs text-gray-400 mt-1">PNG, JPG, SVG (Max 2MB)</p>
+                                </div>
+                            </template>
+                            <template x-if="previewUrl || existingUrl">
+                                <div class="flex items-center justify-center gap-3">
+                                    <img :src="previewUrl || existingUrl" alt="Logo preview" class="h-14 w-auto object-contain rounded-lg shadow-sm">
+                                    <button type="button" @click.stop="clearFile('logo-input', 'logo-preview')" class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
                     </div>
-                    <div>
+                    <div x-data="fileUpload('favicon-preview', '{{ $storefront->store_favicon ? Storage::disk('public')->url($storefront->store_favicon) : '' }}')">
                         <label class="block text-sm font-medium text-gray-700 mb-1">Favicon</label>
-                        <input type="file" name="favicon" accept="image/*" class="w-full rounded-lg border-gray-300 focus:border-purple-500 focus:ring-purple-500">
-                        @if($storefront->store_favicon)
-                            <p class="mt-1 text-sm text-gray-500">Current: {{ basename($storefront->store_favicon) }}</p>
-                        @endif
+                        <div class="relative"
+                             x-on:dragover.prevent="isDragging = true"
+                             x-on:dragleave.prevent="isDragging = false"
+                             x-on:drop.prevent="isDragging = false; handleDrop($event)"
+                             :class="isDragging ? 'border-purple-500 bg-purple-50' : 'border-gray-300'"
+                             class="border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all duration-200 hover:border-purple-400 hover:bg-purple-50/50"
+                             @click="$refs.faviconInput.click()">
+                            <input type="file" name="favicon" accept="image/*" x-ref="faviconInput" class="hidden" onchange="previewFile(this, 'favicon-preview')">
+                            <template x-if="!previewUrl && !existingUrl">
+                                <div>
+                                    <svg class="mx-auto h-10 w-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                    </svg>
+                                    <p class="mt-1 text-sm text-gray-600"><span class="font-medium text-purple-600">Click to upload</span> or drag & drop</p>
+                                    <p class="text-xs text-gray-400 mt-1">PNG, ICO (Max 1MB)</p>
+                                </div>
+                            </template>
+                            <template x-if="previewUrl || existingUrl">
+                                <div class="flex items-center justify-center gap-3">
+                                    <img :src="previewUrl || existingUrl" alt="Favicon preview" class="h-10 w-10 object-contain rounded-lg shadow-sm">
+                                    <button type="button" @click.stop="clearFile('favicon-input', 'favicon-preview')" class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -227,9 +272,32 @@
                         <label class="block text-sm font-medium text-gray-700 mb-1">Subtitle</label>
                         <input type="text" name="subtitle" class="w-full rounded-lg border-gray-300 focus:border-purple-500 focus:ring-purple-500">
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Image</label>
-                        <input type="file" name="image" accept="image/*" required class="w-full rounded-lg border-gray-300 focus:border-purple-500 focus:ring-purple-500">
+                    <div x-data="fileUpload('banner-preview', '')">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Banner Image</label>
+                        <div class="relative"
+                             x-on:dragover.prevent="isDragging = true"
+                             x-on:dragleave.prevent="isDragging = false"
+                             x-on:drop.prevent="isDragging = false; handleDrop($event)"
+                             :class="isDragging ? 'border-purple-500 bg-purple-50' : 'border-gray-300'"
+                             class="border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all duration-200 hover:border-purple-400 hover:bg-purple-50/50"
+                             @click="$refs.bannerInput.click()">
+                            <input type="file" name="image" accept="image/*" x-ref="bannerInput" class="hidden" onchange="previewFile(this, 'banner-preview')" required>
+                            <template x-if="!previewUrl && !existingUrl">
+                                <div>
+                                    <svg class="mx-auto h-10 w-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                    </svg>
+                                    <p class="mt-1 text-sm text-gray-600"><span class="font-medium text-purple-600">Click to upload</span> or drag & drop</p>
+                                    <p class="text-xs text-gray-400 mt-1">PNG, JPG, WebP (Max 5MB)</p>
+                                </div>
+                            </template>
+                            <template x-if="previewUrl || existingUrl">
+                                <div>
+                                    <img :src="previewUrl || existingUrl" alt="Banner preview" class="w-full h-32 object-cover rounded-lg shadow-sm">
+                                    <button type="button" @click.stop="clearFile('banner-input', 'banner-preview')" class="mt-2 text-red-500 hover:text-red-700 text-sm font-medium">Remove</button>
+                                </div>
+                            </template>
+                        </div>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Link URL</label>
@@ -296,6 +364,57 @@
 function storefrontSettings() {
     return {
         activeTab: '{{ request("tab", "theme") }}',
+    }
+}
+
+function fileUpload(previewId, existing) {
+    return {
+        previewUrl: null,
+        existingUrl: existing || null,
+        isDragging: false,
+
+        handleDrop(e) {
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                this.showPreview(file);
+                const input = this.$el.querySelector('input[type="file"]');
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                input.files = dt.files;
+                input.dispatchEvent(new Event('change'));
+            }
+        },
+
+        showPreview(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                this.previewUrl = e.target.result;
+                this.existingUrl = null;
+            };
+            reader.readAsDataURL(file);
+        },
+
+        clearFile(inputRef, previewId) {
+            this.previewUrl = null;
+            this.existingUrl = null;
+            const input = this.$refs[inputRef];
+            if (input) input.value = '';
+        }
+    }
+}
+
+function previewFile(input, previewId) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        const Alpine = window.Alpine;
+        const component = Alpine.$data(input.closest('[x-data]'));
+        if (component) {
+            reader.onload = (e) => {
+                component.previewUrl = e.target.result;
+                component.existingUrl = null;
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
     }
 }
 </script>

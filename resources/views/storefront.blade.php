@@ -71,8 +71,8 @@
     <!-- Pass server data to React -->
     <script>
         window.__STOREFRONT_DATA__ = {
-            storeName: {!! json_encode($storefront?->store_name ?? config('app.name')) !!},
-            storeLogo: {!! json_encode($storefront?->store_logo ? Storage::disk('public')->url($storefront->store_logo) : null) !!},
+            store_name: {!! json_encode($storefront?->store_name ?? config('app.name')) !!},
+            store_logo: {!! json_encode($storefront?->store_logo ? Storage::disk('public')->url($storefront->store_logo) : null) !!},
             theme: {!! json_encode($themeConfig) !!},
         };
     </script>

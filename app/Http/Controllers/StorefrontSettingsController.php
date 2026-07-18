@@ -48,6 +48,8 @@ class StorefrontSettingsController extends Controller
             'contact_email' => 'nullable|email|max:255',
             'contact_address' => 'nullable|string|max:1000',
             'custom_css' => 'nullable|string|max:10000',
+            'logo' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+            'favicon' => 'nullable|image|mimes:ico,png,jpg|max:1024',
         ]);
 
         $storefront = StorefrontSettings::first();
@@ -55,6 +57,24 @@ class StorefrontSettingsController extends Controller
         if (!$storefront) {
             return back()->withErrors(['error' => 'Storefront settings not found.']);
         }
+
+        // Handle logo upload
+        if ($request->hasFile('logo')) {
+            if ($storefront->store_logo && Storage::disk('public')->exists($storefront->store_logo)) {
+                Storage::disk('public')->delete($storefront->store_logo);
+            }
+            $validated['store_logo'] = $request->file('logo')->store('storefront/logos', 'public');
+        }
+        unset($validated['logo']);
+
+        // Handle favicon upload
+        if ($request->hasFile('favicon')) {
+            if ($storefront->store_favicon && Storage::disk('public')->exists($storefront->store_favicon)) {
+                Storage::disk('public')->delete($storefront->store_favicon);
+            }
+            $validated['store_favicon'] = $request->file('favicon')->store('storefront/favicons', 'public');
+        }
+        unset($validated['favicon']);
 
         $storefront->update($validated);
 
@@ -129,7 +149,7 @@ class StorefrontSettingsController extends Controller
             Storage::disk('public')->delete($storefront->store_favicon);
         }
 
-        $path = $request->file('favicon')->store('storefront/favicon', 'public');
+        $path = $request->file('favicon')->store('storefront/favicons', 'public');
         $storefront->update(['store_favicon' => $path]);
 
         return back()->with('success', 'Favicon uploaded successfully!');
