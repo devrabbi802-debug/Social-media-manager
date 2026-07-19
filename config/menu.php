@@ -74,6 +74,20 @@ return [
             ],
         ],
 
+        [
+            'id'    => 'business_setup',
+            'title' => 'Business Setup',
+            'items' => [
+                [
+                    'slug'       => 'business_setup',
+                    'title'      => 'Business Setup',
+                    'route'      => 'admin.business-setup.index',
+                    'icon'       => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l-1.414-1.414a2 2 0 00-2.828 0L8 10"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/>',
+                    'permissions' => ['list'],
+                ],
+            ],
+        ],
+
     ],
 
     'permissions' => [

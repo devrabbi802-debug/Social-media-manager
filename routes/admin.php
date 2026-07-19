@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\TenantController;
 use App\Http\Controllers\Admin\AiSystemPromptController;
 use App\Http\Controllers\Admin\BusinessCategoryController;
+use App\Http\Controllers\Admin\BusinessSetupController;
 
 Route::middleware(['web'])->group(function () {
 
@@ -80,6 +81,10 @@ Route::middleware(['web'])->group(function () {
         Route::get('/business-categories/{businessCategory}/edit', [BusinessCategoryController::class, 'edit'])->name('admin.business-categories.edit');
         Route::put('/business-categories/{businessCategory}', [BusinessCategoryController::class, 'update'])->name('admin.business-categories.update');
         Route::delete('/business-categories/{businessCategory}', [BusinessCategoryController::class, 'destroy'])->name('admin.business-categories.destroy');
+
+        // Business Setup
+        Route::get('/business-setup', [BusinessSetupController::class, 'index'])->name('admin.business-setup.index');
+        Route::put('/business-setup', [BusinessSetupController::class, 'update'])->name('admin.business-setup.update');
 
     });
 
