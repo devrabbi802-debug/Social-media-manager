@@ -23,7 +23,7 @@ php artisan tenants:seed           # Seed all tenant databases
 # Storefront (from resources/storefront/)
 cd resources/storefront
 npm install
-npx vite build                      # Build React SPA -> public/storefront/
+npx vite build                      # Build React SPA -> public/storefront/ (manifest: true)
 npx vite preview                    # Preview built storefront
 ```
 
@@ -100,6 +100,7 @@ If catch-all is registered first, it swallows `/dashboard`, `/login`, `/storefro
 - **Flow**: Single-step Alpine.js form → validate all → `Tenant::create()` + `Domain::create()` → `$tenant->run()` creates User + BusinessSetting → cross-domain auto-login via one-time token in `remember_token` → redirect to `{subdomain}.smm.test/{adminPrefix}/dashboard`
 - **Auto-login token**: `Str::random(64)` stored as Hash in `remember_token`, consumed once at `/auto-login?email=...&token=...`
 - **On tenant subdomains**, register/onboarding GET/POST redirect to `/` (storefront)
+- **`SubdomainController`** checks subdomain availability during onboarding (used by the onboarding form)
 
 ### Localization
 
@@ -157,16 +158,16 @@ docker exec laravel-app php artisan <command>
 
 - **Location**: `resources/storefront/` — React SPA with Vite + Tailwind CSS v3
 - **Theme System**: 2 pre-built themes (modern, classic) hardcoded in `ThemeController::THEMES` array. No themes table.
-- **Database**: `storefront_settings` (one row per tenant, NO user_id) stores theme_slug + overrides + layout/contact/social/footer settings. `storefront_banners` stores hero banners with sort_order.
+- **Database**: `storefront_settings` (one row per tenant, NO user_id) stores theme_slug + overrides + layout/contact/social/footer settings. `storefront_banners` stores hero banners with sort_order (table/model/API exist, but admin UI removed).
 - **Theme Resolution**: Default CSS vars → Preset theme → Tenant overrides → Custom CSS
 - **Hot-Swap**: CSS variables on `<html>` — no page reload needed for theme changes
 - **FOWT Prevention**: Inject CSS vars inline in Blade `<head>` before React loads
 - **API Routes** (`routes/api.php`): `/api/storefront/{config,home,products,products/{slug},categories,brands,featured}`, `/api/themes`
 - **Storefront catch-all** (`routes/tenant.php`): LAST route — `GET /{path?}` with optional param serves Blade view with React SPA. Registered AFTER dashboard/auth/storefront-settings routes.
-- **Theme Customizer**: `/{adminPrefix}/storefront-settings` — 3 tabs: Theme Selection, General Settings, Banner Management
+- **Theme Customizer**: `/{adminPrefix}/storefront-settings` — 2 tabs: Theme Selection, General Settings (no Banner Management tab)
 - **Theme colors**: Include `header_text` for contrast — dark headers get white text, white headers get dark text.
-- **Build**: `cd resources/storefront && npx vite build` → outputs to `public/storefront/` (NOT `public/build/`)
-- **Asset loading**: `@vite` directive does NOT work for storefront (different output dir). Blade template uses manifest.json first, then glob fallback to find `public/storefront/assets/index-*.js` and `index-*.css`.
+- **Build**: `cd resources/storefront && npx vite build` → outputs to `public/storefront/` (NOT `public/build/`). Config has `manifest: true`.
+- **Asset loading**: Blade reads `public/storefront/.vite/manifest.json`, looks up `index.html` entry for JS/CSS paths. Falls back to glob pattern if manifest missing.
 - **Data flow**: Blade injects `window.__STOREFRONT_DATA__` with snake_case keys (`store_name`, `store_logo`, `theme`). React reads via `config?.store_name`, `config?.store_logo`. API also returns snake_case.
 - **`App.jsx` fallback** uses camelCase (`storeName`) — inconsistent with snake_case convention. Only affects error fallback path.
 
@@ -187,7 +188,7 @@ docker exec laravel-app php artisan <command>
 - **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/layouts/tenant.blade.php` (tenant), `resources/views/admin/layouts/app.blade.php` (admin), `resources/views/storefront.blade.php` (React SPA entry)
 - **Config**: `config/menu.php` (admin sidebar), `config/tenancy.php` (central domains, DB suffix), `config/services.php` (Facebook + Groq + Cerebras + Gemini + CLIP + Zernio)
 - **Routes**: `routes/web.php` (central), `routes/tenant.php` (per-tenant), `routes/api.php` (storefront API), `routes/admin.php` (central admin panel)
-- **Controllers**: `DashboardController`, `ProductController`, `AttributeTemplateController`, `ThemeController` (hardcoded themes API), `StorefrontController` (serves Blade/React SPA), `StorefrontApiController` (public API), `StorefrontSettingsController` (admin CRUD for settings/banners)
+- **Controllers**: `DashboardController`, `ProductController`, `AttributeTemplateController`, `ThemeController` (hardcoded themes API), `StorefrontController` (serves Blade/React SPA), `StorefrontApiController` (public API), `StorefrontSettingsController` (admin CRUD for settings), `SubdomainController` (subdomain availability check for onboarding)
 - **Middleware**: `app/Http/Middleware/PreventAccessFromNonCentralDomains.php`, `app/Http/Middleware/SetLocale.php`, `app/Http/Middleware/AdminMiddleware.php`
 
 ## Database
@@ -223,6 +224,7 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 - **CLIP server URL**: `http://localhost:8089` (local) vs `http://clip-server:8089` (Docker)
 - **`TenantCouldNotBeIdentifiedOnDomainException`** caught globally in `bootstrap/app.php` → returns 404.
 - **Facebook client secrets in `.env`** are hardcoded — NOT in `.env.example`. Will need re-adding after fresh clone.
+- **`storefront_banners`** — DB table, model, and API endpoint still exist, but admin UI (routes, controller methods, Blade tab) have been removed. Banners can only be managed via direct DB or seeder.
 
 # Agent Instructions
 
