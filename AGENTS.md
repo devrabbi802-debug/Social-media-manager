@@ -182,7 +182,7 @@ docker exec laravel-app php artisan <command>
 - **Onboarding views**: `resources/views/onboarding/` — single-step Alpine.js form
 - **Tenant views**: `resources/views/tenant/` — index, integration, facebook-settings, ai-setup, conversations/, products/, categories/, brands/, warehouses/, inventory/, attribute-templates/, image-match/, storefront-settings/
 - **Admin views**: `resources/views/admin/` (auth, dashboard, users CRUD, tenants CRUD, ai-system-prompt, business-categories CRUD, business-setup/)
-- **React Storefront**: `resources/storefront/` — src/components/{layout,home,ui}/, src/pages/, src/contexts/, src/hooks/, src/api/, src/utils/
+- **React Storefront**: `resources/storefront/` — src/components/shared/, src/themes/{modern,classic}/ (each with own Layout.jsx + components/ + pages/), src/contexts/, src/hooks/, src/api/, src/utils/
 - **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/layouts/tenant.blade.php` (tenant), `resources/views/admin/layouts/app.blade.php` (admin), `resources/views/storefront.blade.php` (React SPA entry)
 - **Config**: `config/menu.php` (admin sidebar), `config/tenancy.php` (central domains, DB suffix), `config/services.php` (Facebook + Groq + Cerebras + Gemini + CLIP + Zernio)
 - **Routes**: `routes/web.php` (central), `routes/tenant.php` (per-tenant), `routes/api.php` (storefront API), `routes/admin.php` (central admin panel)
@@ -202,11 +202,9 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 ## Gotchas
 
 - **`.env.example` is incomplete** — missing `GROQ_MODEL`, `GEMINI_MODEL`, `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`, `APP_DOMAIN`. Has `KILO_MODEL` which `.env` doesn't use. DB defaults to PostgreSQL, queue/cache to `database` — actual `.env` uses MySQL, Redis.
-- **`.env.example` defaults to PostgreSQL** — actual `.env` uses MySQL
 - **`app.js` is empty** — no JS bundled via Vite yet
 - **`APP_LOCALE=en`** — Bengali hardcoded in Blade templates, not via locale config
 - **`.npmrc`**: `ignore-scripts=true` — postinstall scripts skipped
-- **`storage/framework/views/`** excluded from Vite watch but NOT gitignored
 - **No `pint.json`** — Laravel Pint uses defaults
 - **No CI workflows** configured
 - **`tailwind.config.js` exists ONLY in `resources/storefront/`** — main app uses Tailwind v4 CSS-based config
