@@ -31,7 +31,7 @@ npx vite preview                    # Preview built storefront
 
 ### Multi-Tenancy
 
-- **Landlord DB** (`socialboost`): `tenants`, `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `business_categories`, `cache`, `jobs`, `sessions`
+- **Landlord DB** (`socialboost`): `tenants`, `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `business_categories`, `business_setups`, `cache`, `jobs`, `sessions`
 - **Tenant DB** (`{subdomain}_socialboost`): `users`, `facebook_settings`, `ai_settings`, `conversations`, `messages`, `categories`, `attribute_templates`, `attribute_options`, `brands`, `products`, `product_attribute_values`, `product_variants`, `product_images`, `warehouses`, `stock_movements`, `inventory_alerts`, `stock_transfers`, `variant_images`, `business_settings`, `storefront_settings`, `storefront_banners`
 - **Users table does NOT exist in landlord DB** — never `User::count()` from central routes
 - **Tenant custom attributes** in `data` JSON column — query: `where('data->status', 'active')`, NOT `where('status', 'active')`
@@ -81,6 +81,16 @@ If catch-all is registered first, it swallows `/dashboard`, `/login`, `/storefro
 - **Middleware aliases** in `bootstrap/app.php`: `admin` → `AdminMiddleware`, `locale` → `SetLocale`, `central` → `PreventAccessFromNonCentralDomains`
 - **User model** uses Laravel 11+ `#[Fillable]`/`#[Hidden]` PHP attributes. **Admin model** uses traditional `$fillable`/`$hidden` arrays
 - **`Admin::getAllPermissions()`** calls `app(\App\Services\Menu::class)` — **class does not exist** (dead `$menu` variable, code continues via `config('menu.groups')` but throws `BindingResolutionException`)
+
+### Business Setup (Rootadmin Panel)
+
+- **`BusinessSetup`** model — landlord DB, singleton pattern (`firstOrCreate([])`). Fields: `business_name`, `logo_path`, `support_number`, `support_email`. All nullable.
+- **`$businessSetup`** is globally available in ALL Blade views via `View::share()` in `AppServiceProvider::boot()`. Single query per request. No need to fetch manually.
+- **Logo upload** stored in `storage/app/public/business-logos/`. Old logo auto-deleted on replace. Access via `$businessSetup->getLogoUrl()`.
+- **Admin panel route**: `GET /rootadmin/business-setup` + `PUT /rootadmin/business-setup` — single form, no CRUD.
+- **`config/menu.php`** has `business_setup` group with `list` permission only (no create/edit/delete — singleton).
+- **Logo usage**: Admin sidebar (`admin/layouts/app.blade.php`), main website navbar + footer (`layouts/app.blade.php`), rootadmin login (`admin/auth/login.blade.php`), tenant login (`auth/login.blade.php`). All fallback to `asset('images/logo.png')` if no logo set.
+- **Central admin panel** is at `/{centralDomain}/rootadmin/` — uses `admin` guard, landlord DB. Separate from tenant admin panel.
 
 ### Onboarding
 
@@ -171,7 +181,7 @@ docker exec laravel-app php artisan <command>
 - **Public views**: `resources/views/` (welcome, features, pricing, about, contact, auth)
 - **Onboarding views**: `resources/views/onboarding/` — single-step Alpine.js form
 - **Tenant views**: `resources/views/tenant/` — index, integration, facebook-settings, ai-setup, conversations/, products/, categories/, brands/, warehouses/, inventory/, attribute-templates/, image-match/, storefront-settings/
-- **Admin views**: `resources/views/admin/` (auth, dashboard, users CRUD, tenants CRUD, ai-system-prompt, business-categories CRUD)
+- **Admin views**: `resources/views/admin/` (auth, dashboard, users CRUD, tenants CRUD, ai-system-prompt, business-categories CRUD, business-setup/)
 - **React Storefront**: `resources/storefront/` — src/components/{layout,home,ui}/, src/pages/, src/contexts/, src/hooks/, src/api/, src/utils/
 - **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/layouts/tenant.blade.php` (tenant), `resources/views/admin/layouts/app.blade.php` (admin), `resources/views/storefront.blade.php` (React SPA entry)
 - **Config**: `config/menu.php` (admin sidebar), `config/tenancy.php` (central domains, DB suffix), `config/services.php` (Facebook + Groq + Cerebras + Gemini + CLIP + Zernio)
@@ -183,7 +193,7 @@ docker exec laravel-app php artisan <command>
 
 Schema source of truth: migration files in `database/migrations/` (landlord) and `database/migrations/tenant/`.
 
-**Landlord** (`socialboost`): `tenants` (string PK subdomain, `data` JSON), `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `business_categories` (with `extra_fields` JSON), `cache`, `jobs`, `sessions`
+**Landlord** (`socialboost`): `tenants` (string PK subdomain, `data` JSON), `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `business_categories` (with `extra_fields` JSON), `business_setups` (singleton: `business_name`, `logo_path`, `support_number`, `support_email`), `cache`, `jobs`, `sessions`
 
 **Tenant** (`{subdomain}_socialboost`): `users`, `facebook_settings`, `ai_settings`, `conversations`, `messages`, `categories`, `attribute_templates`, `attribute_options`, `brands`, `products`, `product_attribute_values`, `product_variants`, `product_images`, `variant_images`, `warehouses`, `stock_movements`, `stock_transfers`, `inventory_alerts`, `business_settings`, `storefront_settings`, `storefront_banners`
 
