@@ -74,6 +74,7 @@
             store_name: {!! json_encode($storefront?->store_name ?? config('app.name')) !!},
             store_logo: {!! json_encode($storefront?->store_logo ? Storage::disk('public')->url($storefront->store_logo) : null) !!},
             theme: {!! json_encode($themeConfig) !!},
+            theme_slug: {!! json_encode($themeSlug ?? 'modern') !!},
         };
     </script>
 </body>

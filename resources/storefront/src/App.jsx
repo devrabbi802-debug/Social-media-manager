@@ -1,70 +1,64 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
-import Layout from './components/layout/Layout';
-import Home from './pages/Home';
-import Products from './pages/Products';
-import ProductDetail from './pages/ProductDetail';
-import Category from './pages/Category';
-import Brand from './pages/Brand';
-import NotFound from './pages/NotFound';
+import { loadTheme } from './themes';
+import LoadingSpinner from './components/shared/LoadingSpinner';
 import api from './api/client';
 
 export default function App() {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [themeComponents, setThemeComponents] = useState(null);
 
   useEffect(() => {
-    const fetchConfig = async () => {
+    const init = async () => {
       try {
-        // Try to get config from server-injected data first
+        let cfg;
         if (window.__STOREFRONT_DATA__) {
-          setConfig(window.__STOREFRONT_DATA__);
-          setLoading(false);
-          return;
+          cfg = window.__STOREFRONT_DATA__;
+        } else {
+          cfg = await api.get('/storefront/config');
         }
+        setConfig(cfg);
 
-        // Otherwise fetch from API
-        const response = await api.get('/storefront/config');
-          setConfig(response);
+        const slug = cfg?.theme_slug || cfg?.theme?.slug || 'modern';
+        const theme = await loadTheme(slug);
+        setThemeComponents(theme);
       } catch (err) {
-        console.error('Failed to load config:', err);
-        // Use default config
-        setConfig({
-          storeName: 'Store',
-          theme: null,
-        });
+        console.error('Failed to initialize:', err);
+        const theme = await loadTheme('modern');
+        setThemeComponents(theme);
+        setConfig({ store_name: 'Store', theme: null, theme_slug: 'modern' });
       } finally {
         setLoading(false);
       }
     };
-
-    fetchConfig();
+    init();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading store...</p>
-        </div>
-      </div>
-    );
+  if (loading || !themeComponents) {
+    return <LoadingSpinner />;
   }
 
+  const { Layout, Home, Products, ProductDetail, Category, Brand, NotFound } = themeComponents;
+
   return (
-    <ThemeProvider initialConfig={config?.theme?.config}>
+    <ThemeProvider
+      initialConfig={config?.theme?.config}
+      initialSlug={config?.theme_slug || config?.theme?.slug || 'modern'}
+    >
       <BrowserRouter>
         <Layout config={config}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/products" element={<Products />} />
-            <Route path="/products/:slug" element={<ProductDetail />} />
-            <Route path="/category/:slug" element={<Category />} />
-            <Route path="/brand/:slug" element={<Brand />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <Suspense fallback={<LoadingSpinner />}>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/products" element={<Products />} />
+              <Route path="/products/:slug" element={<ProductDetail />} />
+              <Route path="/category/:slug" element={<Category />} />
+              <Route path="/brand/:slug" element={<Brand />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </Layout>
       </BrowserRouter>
     </ThemeProvider>

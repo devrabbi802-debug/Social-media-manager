@@ -2,8 +2,9 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const ThemeContext = createContext(null);
 
-export function ThemeProvider({ children, initialConfig }) {
+export function ThemeProvider({ children, initialConfig, initialSlug }) {
   const [theme, setTheme] = useState(initialConfig);
+  const [themeSlug, setThemeSlug] = useState(initialSlug || 'modern');
 
   useEffect(() => {
     if (theme?.colors) {
@@ -11,7 +12,7 @@ export function ThemeProvider({ children, initialConfig }) {
         document.documentElement.style.setProperty(`--color-${key}`, value);
       });
     }
-    
+
     if (theme?.typography) {
       Object.entries(theme.typography).forEach(([key, value]) => {
         const cssVar = `--${key.replace(/_/g, '-')}`;
@@ -25,7 +26,7 @@ export function ThemeProvider({ children, initialConfig }) {
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, updateTheme }}>
+    <ThemeContext.Provider value={{ theme, themeSlug, updateTheme, setThemeSlug }}>
       {children}
     </ThemeContext.Provider>
   );

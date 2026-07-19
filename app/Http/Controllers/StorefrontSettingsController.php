@@ -86,8 +86,9 @@ class StorefrontSettingsController extends Controller
      */
     public function applyTheme(Request $request)
     {
+        $availableThemes = implode(',', array_keys(ThemeController::THEMES));
         $request->validate([
-            'theme_slug' => 'required|string|in:modern,classic',
+            'theme_slug' => "required|string|in:{$availableThemes}",
         ]);
 
         $storefront = StorefrontSettings::first();
