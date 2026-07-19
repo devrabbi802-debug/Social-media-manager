@@ -4,7 +4,7 @@ const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children, initialConfig, initialSlug }) {
   const [theme, setTheme] = useState(initialConfig);
-  const [themeSlug, setThemeSlug] = useState(initialSlug || 'modern');
+  const [themeSlug, setThemeSlug] = useState(initialSlug || 'clothing-fashion');
 
   useEffect(() => {
     if (theme?.colors) {

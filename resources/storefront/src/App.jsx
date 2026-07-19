@@ -21,14 +21,14 @@ export default function App() {
         }
         setConfig(cfg);
 
-        const slug = cfg?.theme_slug || cfg?.theme?.slug || 'modern';
+        const slug = cfg?.theme_slug || cfg?.theme?.slug || 'clothing-fashion';
         const theme = await loadTheme(slug);
         setThemeComponents(theme);
       } catch (err) {
         console.error('Failed to initialize:', err);
-        const theme = await loadTheme('modern');
+        const theme = await loadTheme('clothing-fashion');
         setThemeComponents(theme);
-        setConfig({ store_name: 'Store', theme: null, theme_slug: 'modern' });
+        setConfig({ store_name: 'Store', theme: null, theme_slug: 'clothing-fashion' });
       } finally {
         setLoading(false);
       }
@@ -45,7 +45,7 @@ export default function App() {
   return (
     <ThemeProvider
       initialConfig={config?.theme?.config}
-      initialSlug={config?.theme_slug || config?.theme?.slug || 'modern'}
+      initialSlug={config?.theme_slug || config?.theme?.slug || 'clothing-fashion'}
     >
       <BrowserRouter>
         <Layout config={config}>

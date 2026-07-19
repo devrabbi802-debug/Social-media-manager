@@ -13,7 +13,7 @@ class StorefrontController extends Controller
     {
         $storefront = StorefrontSettings::first();
         $themeConfig = $storefront?->resolvedTheme();
-        $themeSlug = $storefront?->theme_slug ?? 'modern';
+        $themeSlug = $storefront?->theme_slug ?? 'clothing-fashion';
 
         return view('storefront', compact('storefront', 'themeConfig', 'themeSlug'));
     }

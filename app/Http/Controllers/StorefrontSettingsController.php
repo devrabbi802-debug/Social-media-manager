@@ -15,7 +15,7 @@ class StorefrontSettingsController extends Controller
     {
         $storefront = StorefrontSettings::firstOrCreate(
             [],
-            ['theme_slug' => 'modern']
+            ['theme_slug' => 'clothing-fashion']
         );
 
         $themes = ThemeController::THEMES;

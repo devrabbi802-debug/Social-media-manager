@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
 
             // Theme Selection
-            $table->string('theme_slug', 50)->default('modern');
+            $table->string('theme_slug', 50)->default('clothing-fashion');
             $table->json('theme_overrides')->nullable();
 
             // Brand Identity

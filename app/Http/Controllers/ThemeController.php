@@ -8,9 +8,9 @@ use Illuminate\Http\Request;
 class ThemeController extends Controller
 {
     const THEMES = [
-        'modern' => [
-            'name' => 'Modern',
-            'thumbnail' => '/images/themes/modern.jpg',
+        'clothing-fashion' => [
+            'name' => 'Clothing Fashion',
+            'thumbnail' => '/images/themes/clothing-fashion.jpg',
             'config' => [
                 'colors' => [
                     'primary' => '#3B82F6',

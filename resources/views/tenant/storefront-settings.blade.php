@@ -48,7 +48,7 @@
                         <div class="flex items-center justify-between">
                             <div>
                                 <h3 class="font-semibold text-gray-900">{{ $theme['name'] }}</h3>
-                                <p class="text-sm text-gray-500">{{ $slug === 'modern' ? 'Dark header, shadow cards, rounded buttons' : 'Clean white, border cards, sharp corners' }}</p>
+                                <p class="text-sm text-gray-500">{{ $slug === 'clothing-fashion' ? 'Dark header, shadow cards, rounded buttons' : 'Clean white, border cards, sharp corners' }}</p>
                             </div>
                             @if($storefront->theme_slug === $slug)
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
