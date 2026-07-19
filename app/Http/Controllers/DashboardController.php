@@ -50,7 +50,7 @@ class DashboardController extends Controller
 
     public function settings()
     {
-        $businessSetting = BusinessSetting::where('user_id', auth()->id())->first();
+        $businessSetting = BusinessSetting::firstOrCreate(['user_id' => auth()->id()]);
         $categories = DB::connection('mysql')->table('business_categories')
             ->where('is_active', true)
             ->orderBy('sort_order')
