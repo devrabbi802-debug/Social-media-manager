@@ -157,7 +157,7 @@ docker exec laravel-app php artisan <command>
 ### React Storefront
 
 - **Location**: `resources/storefront/` — React SPA with Vite + Tailwind CSS v3
-- **Theme System**: 2 pre-built themes (modern, classic) hardcoded in `ThemeController::THEMES` array. No themes table.
+- **Theme System**: 2 pre-built themes (clothing-fashion, classic) hardcoded in `ThemeController::THEMES` array. No themes table.
 - **Database**: `storefront_settings` (one row per tenant, NO user_id) stores theme_slug + overrides + layout/contact/social/footer settings. `storefront_banners` stores hero banners with sort_order (table/model/API exist, but admin UI removed).
 - **Theme Resolution**: Default CSS vars → Preset theme → Tenant overrides → Custom CSS
 - **Hot-Swap**: CSS variables on `<html>` — no page reload needed for theme changes
@@ -184,7 +184,7 @@ docker exec laravel-app php artisan <command>
 - **Onboarding views**: `resources/views/onboarding/` — single-step Alpine.js form
 - **Tenant views**: `resources/views/tenant/` — index, integration, facebook-settings, ai-setup, conversations/, products/, categories/, brands/, warehouses/, inventory/, attribute-templates/, image-match/, storefront-settings/
 - **Admin views**: `resources/views/admin/` (auth, dashboard, users CRUD, tenants CRUD, ai-system-prompt, business-categories CRUD, business-setup/)
-- **React Storefront**: `resources/storefront/` — src/components/shared/, src/themes/{modern,classic}/ (each with own Layout.jsx + components/ + pages/), src/contexts/, src/hooks/, src/api/, src/utils/
+- **React Storefront**: `resources/storefront/` — src/components/shared/, src/themes/{clothing-fashion,classic}/ (each with own Layout.jsx + components/ + pages/), src/contexts/, src/hooks/, src/api/, src/utils/
 - **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/layouts/tenant.blade.php` (tenant), `resources/views/admin/layouts/app.blade.php` (admin), `resources/views/storefront.blade.php` (React SPA entry)
 - **Config**: `config/menu.php` (admin sidebar), `config/tenancy.php` (central domains, DB suffix), `config/services.php` (Facebook + Groq + Cerebras + Gemini + CLIP + Zernio)
 - **Routes**: `routes/web.php` (central), `routes/tenant.php` (per-tenant), `routes/api.php` (storefront API), `routes/admin.php` (central admin panel)
