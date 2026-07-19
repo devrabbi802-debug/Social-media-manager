@@ -24,8 +24,7 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Install Node.js 20
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && npm install -g npm@latest
+    && apt-get install -y nodejs
 
 WORKDIR /var/www
 

@@ -48,6 +48,7 @@ npx vite preview                    # Preview built storefront
 - **Tenant routes** (`routes/tenant.php`): Use `InitializeTenancyByDomain` + `PreventAccessFromCentralDomains`
 - **API routes** (`routes/api.php`): Registered via `withRouting(api: ...)` in `bootstrap/app.php`. Include tenancy middleware.
 - **Gotcha**: Central routes registered FIRST via `withRouting`, tenant routes later via `TenancyServiceProvider::boot()`. Exact `GET /` would win over `/{path?}` — that's why the landing page uses domain constraints.
+- **Gotcha (route name conflict)**: `withRouting()` loads web.php lazily AFTER tenant.php (which loads in `booted` callback). If both have same route names (e.g. `login`, `dashboard`), central names overwrite tenant names. `route('login')` would resolve to central `/login` instead of tenant `/{adminPrefix}/login`. **Fix**: web.php central routes MUST NOT use route names that exist in tenant.php. All conflicting names (`login`, `register`, `logout`, `dashboard`, `settings`, `leads`, `reports`, etc.) removed from web.php.
 
 ### Admin Panel Prefix (CRITICAL)
 

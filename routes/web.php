@@ -49,14 +49,17 @@ Route::middleware(PreventAccessFromNonCentralDomains::class)->group(function () 
     });
 
     // Auth Routes - Login (redirect to onboarding — tenant users login on their subdomain)
+    // No 'login' name here — tenant.php defines name('login') for the admin panel login.
+    // Central routes load LAST (lazy), so having the same name here would overwrite the tenant route.
     Route::get('/login', function () {
         return redirect()->route('onboarding');
-    })->name('login');
+    });
 
     // Auth Routes - Register (redirect to onboarding)
+    // No 'register' name — same reason as above.
     Route::get('/register', function () {
         return redirect()->route('onboarding');
-    })->name('register');
+    });
 
     // Onboarding Wizard
     Route::get('/onboarding', [OnboardingController::class, 'index'])->name('onboarding');
@@ -65,23 +68,24 @@ Route::middleware(PreventAccessFromNonCentralDomains::class)->group(function () 
     // Check subdomain availability
     Route::post('/check-subdomain', [SubdomainController::class, 'check'])->name('check-subdomain');
 
-    // Logout
+    // Logout (no name — tenant.php defines name('logout'))
     Route::post('/logout', function (Request $request) {
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
         return redirect('/');
-    })->name('logout');
+    });
 
     // Dashboard Routes (authenticated users only)
+    // No route names — tenant.php defines them for admin panel. Central names would overwrite tenant names.
     Route::middleware(['auth'])->group(function () {
         Route::get('/dashboard', function () {
             return view('tenant.index');
-        })->name('dashboard');
+        });
 
         Route::get('/settings', function () {
             return view('tenant.settings');
-        })->name('settings');
+        });
 
         Route::put('/settings/profile', function (Request $request) {
             $validated = $request->validate([
@@ -113,36 +117,36 @@ Route::middleware(PreventAccessFromNonCentralDomains::class)->group(function () 
 
         Route::get('/leads', function () {
             return view('tenant.leads');
-        })->name('leads');
+        });
 
         Route::get('/inventory', function () {
             return view('tenant.inventory');
-        })->name('inventory');
+        });
 
         Route::get('/reports', function () {
             return view('tenant.reports');
-        })->name('reports');
+        });
 
         Route::get('/whatsapp/send', function () {
             return view('tenant.whatsapp');
-        })->name('whatsapp.send');
+        });
 
         Route::get('/facebook/post', function () {
             return view('tenant.facebook');
-        })->name('facebook.post');
+        });
 
         Route::get('/inventory/add', function () {
             return view('tenant.inventory-add');
-        })->name('inventory.add');
+        });
 
         Route::get('/integration', function () {
             return view('tenant.integration');
-        })->name('integration');
+        });
 
-        Route::get('/facebook/settings', [FacebookSettingController::class, 'index'])->name('facebook.settings');
-        Route::post('/facebook/settings', [FacebookSettingController::class, 'store'])->name('facebook.settings.store');
-        Route::delete('/facebook/settings', [FacebookSettingController::class, 'destroy'])->name('facebook.settings.destroy');
-        Route::post('/facebook/settings/toggle-ai-reply', [FacebookSettingController::class, 'toggleAiReply'])->name('facebook.settings.toggle.ai.reply');
+        Route::get('/facebook/settings', [FacebookSettingController::class, 'index']);
+        Route::post('/facebook/settings', [FacebookSettingController::class, 'store']);
+        Route::delete('/facebook/settings', [FacebookSettingController::class, 'destroy']);
+        Route::post('/facebook/settings/toggle-ai-reply', [FacebookSettingController::class, 'toggleAiReply']);
     });
 });
 
