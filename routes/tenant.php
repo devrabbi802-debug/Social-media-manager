@@ -242,10 +242,6 @@ Route::middleware([
                 Route::post('/apply-theme', [StorefrontSettingsController::class, 'applyTheme'])->name('apply-theme');
                 Route::post('/upload-logo', [StorefrontSettingsController::class, 'uploadLogo'])->name('upload-logo');
                 Route::post('/upload-favicon', [StorefrontSettingsController::class, 'uploadFavicon'])->name('upload-favicon');
-                Route::post('/banners', [StorefrontSettingsController::class, 'storeBanner'])->name('banners.store');
-                Route::put('/banners/{banner}', [StorefrontSettingsController::class, 'updateBanner'])->name('banners.update');
-                Route::delete('/banners/{banner}', [StorefrontSettingsController::class, 'destroyBanner'])->name('banners.destroy');
-                Route::post('/banners/reorder', [StorefrontSettingsController::class, 'reorderBanners'])->name('banners.reorder');
             });
         });
     });

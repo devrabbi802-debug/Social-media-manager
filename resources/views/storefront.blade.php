@@ -37,11 +37,15 @@
     <!-- Storefront Assets (built by Vite) -->
     @php
         $manifestPath = public_path('storefront/.vite/manifest.json');
-        $viteDev = false;
+        $jsFile = null;
+        $cssFile = null;
         if (file_exists($manifestPath)) {
             $manifest = json_decode(file_get_contents($manifestPath), true);
-            $jsFile = $manifest['resources/storefront/src/main.jsx']['file'] ?? null;
-            $cssFile = $manifest['resources/storefront/src/main.jsx']['css'][0] ?? null;
+            $entry = $manifest['index.html'] ?? null;
+            if ($entry) {
+                $jsFile = $entry['file'] ?? null;
+                $cssFile = $entry['css'][0] ?? null;
+            }
         }
     @endphp
     @if(!empty($jsFile))

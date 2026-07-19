@@ -16,5 +16,6 @@ export default defineConfig({
   build: {
     outDir: '../../public/storefront',
     emptyOutDir: true,
+    manifest: true,
   },
 });

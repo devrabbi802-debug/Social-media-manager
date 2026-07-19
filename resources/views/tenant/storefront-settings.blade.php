@@ -27,9 +27,7 @@
             <button @click="activeTab = 'general'" :class="activeTab === 'general' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition">
                 General Settings
             </button>
-            <button @click="activeTab = 'banners'" :class="activeTab === 'banners' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition">
-                Banner Management
-            </button>
+
         </nav>
     </div>
 
@@ -143,51 +141,6 @@
                 </div>
             </div>
 
-            {{-- Layout Options --}}
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h2 class="text-lg font-semibold text-gray-900 mb-4">Layout Options</h2>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Layout Style</label>
-                        <select name="layout_style" class="w-full rounded-lg border-gray-300 focus:border-purple-500 focus:ring-purple-500">
-                            <option value="grid" {{ $storefront->layout_style === 'grid' ? 'selected' : '' }}>Grid</option>
-                            <option value="list" {{ $storefront->layout_style === 'list' ? 'selected' : '' }}>List</option>
-                            <option value="masonry" {{ $storefront->layout_style === 'masonry' ? 'selected' : '' }}>Masonry</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Products Per Row (Desktop)</label>
-                        <select name="products_per_row" class="w-full rounded-lg border-gray-300 focus:border-purple-500 focus:ring-purple-500">
-                            @for($i = 2; $i <= 6; $i++)
-                                <option value="{{ $i }}" {{ $storefront->products_per_row === $i ? 'selected' : '' }}>{{ $i }}</option>
-                            @endfor
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Products Per Row (Mobile)</label>
-                        <select name="products_per_row_mobile" class="w-full rounded-lg border-gray-300 focus:border-purple-500 focus:ring-purple-500">
-                            @for($i = 1; $i <= 4; $i++)
-                                <option value="{{ $i }}" {{ $storefront->products_per_row_mobile === $i ? 'selected' : '' }}>{{ $i }}</option>
-                            @endfor
-                        </select>
-                    </div>
-                </div>
-                <div class="mt-4 flex flex-wrap gap-4">
-                    <label class="flex items-center space-x-2">
-                        <input type="checkbox" name="show_header_slider" value="1" {{ $storefront->show_header_slider ? 'checked' : '' }} class="rounded border-gray-300 text-purple-600 focus:ring-purple-500">
-                        <span class="text-sm text-gray-700">Show Hero Banner Slider</span>
-                    </label>
-                    <label class="flex items-center space-x-2">
-                        <input type="checkbox" name="show_brands_section" value="1" {{ $storefront->show_brands_section ? 'checked' : '' }} class="rounded border-gray-300 text-purple-600 focus:ring-purple-500">
-                        <span class="text-sm text-gray-700">Show Brands Section</span>
-                    </label>
-                    <label class="flex items-center space-x-2">
-                        <input type="checkbox" name="show_newsletter" value="1" {{ $storefront->show_newsletter ? 'checked' : '' }} class="rounded border-gray-300 text-purple-600 focus:ring-purple-500">
-                        <span class="text-sm text-gray-700">Show Newsletter Signup</span>
-                    </label>
-                </div>
-            </div>
-
             {{-- Contact & Social --}}
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h2 class="text-lg font-semibold text-gray-900 mb-4">Contact & Social</h2>
@@ -254,109 +207,6 @@
                 </button>
             </div>
         </form>
-    </div>
-
-    {{-- Banner Management Tab --}}
-    <div x-show="activeTab === 'banners'" x-cloak>
-        {{-- Add Banner Form --}}
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-4">Add New Banner</h2>
-            <form method="POST" action="{{ route('storefront-settings.banners.store') }}" enctype="multipart/form-data">
-                @csrf
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                        <input type="text" name="title" class="w-full rounded-lg border-gray-300 focus:border-purple-500 focus:ring-purple-500">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Subtitle</label>
-                        <input type="text" name="subtitle" class="w-full rounded-lg border-gray-300 focus:border-purple-500 focus:ring-purple-500">
-                    </div>
-                    <div x-data="fileUpload('banner-preview', '')">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Banner Image</label>
-                        <div class="relative"
-                             x-on:dragover.prevent="isDragging = true"
-                             x-on:dragleave.prevent="isDragging = false"
-                             x-on:drop.prevent="isDragging = false; handleDrop($event)"
-                             :class="isDragging ? 'border-purple-500 bg-purple-50' : 'border-gray-300'"
-                             class="border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all duration-200 hover:border-purple-400 hover:bg-purple-50/50"
-                             @click="$refs.bannerInput.click()">
-                            <input type="file" name="image" accept="image/*" x-ref="bannerInput" class="hidden" onchange="previewFile(this, 'banner-preview')" required>
-                            <template x-if="!previewUrl && !existingUrl">
-                                <div>
-                                    <svg class="mx-auto h-10 w-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                                    </svg>
-                                    <p class="mt-1 text-sm text-gray-600"><span class="font-medium text-purple-600">Click to upload</span> or drag & drop</p>
-                                    <p class="text-xs text-gray-400 mt-1">PNG, JPG, WebP (Max 5MB)</p>
-                                </div>
-                            </template>
-                            <template x-if="previewUrl || existingUrl">
-                                <div>
-                                    <img :src="previewUrl || existingUrl" alt="Banner preview" class="w-full h-32 object-cover rounded-lg shadow-sm">
-                                    <button type="button" @click.stop="clearFile('banner-input', 'banner-preview')" class="mt-2 text-red-500 hover:text-red-700 text-sm font-medium">Remove</button>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Link URL</label>
-                        <input type="url" name="link" class="w-full rounded-lg border-gray-300 focus:border-purple-500 focus:ring-purple-500">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Button Text</label>
-                        <input type="text" name="btn_text" class="w-full rounded-lg border-gray-300 focus:border-purple-500 focus:ring-purple-500">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Sort Order</label>
-                        <input type="number" name="sort_order" value="0" min="0" class="w-full rounded-lg border-gray-300 focus:border-purple-500 focus:ring-purple-500">
-                    </div>
-                </div>
-                <div class="mt-4">
-                    <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition font-medium text-sm">
-                        Add Banner
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        {{-- Banner List --}}
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-4">Manage Banners</h2>
-            @if($banners->isEmpty())
-                <p class="text-gray-500 text-center py-8">No banners yet. Add your first banner above.</p>
-            @else
-                <div class="space-y-4" id="banners-list">
-                    @foreach($banners as $banner)
-                        <div class="border border-gray-200 rounded-lg p-4 flex items-center gap-4" data-banner-id="{{ $banner->id }}">
-                            <div class="w-32 h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
-                                @if($banner->image)
-                                    <img src="{{ Storage::disk('public')->url($banner->image) }}" alt="{{ $banner->title }}" class="w-full h-full object-cover">
-                                @else
-                                    <div class="w-full h-full flex items-center justify-center text-gray-400">No Image</div>
-                                @endif
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <h3 class="font-medium text-gray-900">{{ $banner->title ?? 'Untitled' }}</h3>
-                                <p class="text-sm text-gray-500 truncate">{{ $banner->subtitle }}</p>
-                                <p class="text-xs text-gray-400 mt-1">Order: {{ $banner->sort_order }}</p>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <form method="POST" action="{{ route('storefront-settings.banners.destroy', $banner) }}" onsubmit="return confirm('Are you sure?')">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="text-red-600 hover:text-red-800 transition">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                        </svg>
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            @endif
-        </div>
     </div>
 </div>
 
