@@ -11,7 +11,7 @@ Get ERP Store — Laravel 13 multi-tenant SaaS for e-commerce management. Bengal
 ```bash
 ./start.sh              # Docker + DNS fix + Apache + CLIP server + Ngrok tunnel
 ./setup-domain.sh       # DNS wildcard (*.smm.test) + Apache vhost + Docker — first-time setup
-composer setup          # install, key:generate, migrate, npm install --ignore-scripts, build
+composer setup          # composer install → .env copy → key:generate → migrate --force → npm install --ignore-scripts → npm run build
 composer dev            # artisan serve + queue:listen(--tries=1 --timeout=0) + pail + npm run dev (4 procs via concurrently)
 composer test           # config:clear + artisan test
 php artisan test --filter=TestName
@@ -32,7 +32,7 @@ npx vite preview                    # Preview built storefront
 ### Multi-Tenancy
 
 - **Landlord DB** (`socialboost`): `tenants`, `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `business_categories`, `business_setups`, `cache`, `jobs`, `sessions`
-- **Tenant DB** (`{subdomain}_socialboost`): `users`, `facebook_settings`, `ai_settings`, `conversations`, `messages`, `categories`, `attribute_templates`, `attribute_options`, `brands`, `products`, `product_attribute_values`, `product_variants`, `product_images`, `warehouses`, `stock_movements`, `inventory_alerts`, `stock_transfers`, `variant_images`, `business_settings`, `storefront_settings`, `storefront_banners`
+- **Tenant DB** (`{subdomain}_socialboost`): `users`, `facebook_settings`, `ai_settings`, `conversations`, `messages`, `categories`, `attribute_templates`, `attribute_options`, `brands`, `products`, `product_attribute_values`, `product_variants`, `product_images`, `variant_images`, `variant_attribute_values`, `warehouses`, `stock_movements`, `stock_transfers`, `inventory_alerts`, `business_settings`, `storefront_settings`, `storefront_banners`
 - **Users table does NOT exist in landlord DB** — never `User::count()` from central routes
 - **Tenant custom attributes** in `data` JSON column — query: `where('data->status', 'active')`, NOT `where('status', 'active')`
 - **Central domains**: `127.0.0.1`, `localhost`, `smm.test`, `socialboost.com`, `www.socialboost.com`
@@ -188,7 +188,7 @@ docker exec laravel-app php artisan <command>
 - **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/layouts/tenant.blade.php` (tenant), `resources/views/admin/layouts/app.blade.php` (admin), `resources/views/storefront.blade.php` (React SPA entry)
 - **Config**: `config/menu.php` (admin sidebar), `config/tenancy.php` (central domains, DB suffix), `config/services.php` (Facebook + Groq + Cerebras + Gemini + CLIP + Zernio)
 - **Routes**: `routes/web.php` (central), `routes/tenant.php` (per-tenant), `routes/api.php` (storefront API), `routes/admin.php` (central admin panel)
-- **Controllers**: `DashboardController`, `ProductController`, `AttributeTemplateController`, `ThemeController` (hardcoded themes API), `StorefrontController` (serves Blade/React SPA), `StorefrontApiController` (public API), `StorefrontSettingsController` (admin CRUD for settings), `SubdomainController` (subdomain availability check for onboarding)
+- **Controllers**: `DashboardController`, `ProductController`, `StockTransferController` (stock transfer CRUD + complete/cancel), `AttributeTemplateController`, `ThemeController` (hardcoded themes API), `StorefrontController` (serves Blade/React SPA), `StorefrontApiController` (public API), `StorefrontSettingsController` (admin CRUD for settings), `SubdomainController` (subdomain availability check for onboarding)
 - **Middleware**: `app/Http/Middleware/PreventAccessFromNonCentralDomains.php`, `app/Http/Middleware/SetLocale.php`, `app/Http/Middleware/AdminMiddleware.php`
 
 ## Database
@@ -197,9 +197,11 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 
 **Landlord** (`socialboost`): `tenants` (string PK subdomain, `data` JSON), `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `business_categories` (with `extra_fields` JSON), `business_setups` (singleton: `business_name`, `logo_path`, `support_number`, `support_email`), `cache`, `jobs`, `sessions`
 
-**Tenant** (`{subdomain}_socialboost`): `users`, `facebook_settings`, `ai_settings`, `conversations`, `messages`, `categories`, `attribute_templates`, `attribute_options`, `brands`, `products`, `product_attribute_values`, `product_variants`, `product_images`, `variant_images`, `warehouses`, `stock_movements`, `stock_transfers`, `inventory_alerts`, `business_settings`, `storefront_settings`, `storefront_banners`
+**Tenant** (`{subdomain}_socialboost`): `users`, `facebook_settings`, `ai_settings`, `conversations`, `messages`, `categories`, `attribute_templates`, `attribute_options`, `brands`, `products`, `product_attribute_values`, `product_variants`, `product_images`, `variant_images`, `variant_attribute_values`, `warehouses`, `stock_movements`, `stock_transfers`, `inventory_alerts`, `business_settings`, `storefront_settings`, `storefront_banners`
 
 **Seeders**: `AdminSeeder` (`admin@socialboost.com` / `Admin@123456`, super_admin), `BusinessCategorySeeder` (8 categories with extra_fields JSON), `AttributeTemplateSeeder` (8 global variant options + category-specific extra field templates)
+
+**Notable tenant migrations**: `weight_kg` on products, `is_active`/`placeholder`/`default_value` on attribute_templates, `textarea` type enum addition, `locale` on users, `audio_path` on messages, `variant_attribute_values` table, JSON conversions for `payment_methods` and `delivery_areas` in business_settings.
 
 ## Gotchas
 
@@ -219,6 +221,9 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 - **`InventoryAlert::isLowStock()`** — variant-aware (checks variant stock if variants exist)
 - **`BusinessCategory`** lives in landlord DB — always `BusinessCategory::on('mysql')->find($id)`
 - **`attribute_templates.category_id`** references tenant `categories.id`, NOT `business_categories.id`
+- **Extra fields slug→name mismatch**: `store()` saves `ProductAttributeValue` with `attribute_template_id` where slug = `Str::slug($fieldName)` (kebab-case, e.g. `size-chart`). `edit()` view looks up `$existingExtraValues[$field['name']]` (underscore, e.g. `size_chart`). **Fix in `edit()` controller**: builds slug→name map from `BusinessCategory.extra_fields` to re-key `$existingExtraValues` by field name.
+- **Product AJAX endpoints** (in `routes/tenant.php`, under auth): `GET /products/attributes`, `GET /products/variant-options`, `GET /products/extra-fields` — used by product create/edit forms for dynamic data loading.
+- **CLIP embedding batch routes**: `POST /products/{product}/generate-embeddings` + `POST /products/{product}/generate-variant-embeddings` — dispatch `AnalyzeProductImageJob`/`AnalyzeVariantImageJob` for all images.
 - **PHP 8.4**: Unparenthesized nested ternary `a ? b : c ? d : e` is **forbidden**
 - **Alpine.js**: Reactive state must be inside `x-data` scope; `x-if` must be on `<template>` tags only
 - **CLIP server URL**: `http://localhost:8089` (local) vs `http://clip-server:8089` (Docker)
