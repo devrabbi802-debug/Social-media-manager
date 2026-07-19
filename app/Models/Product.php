@@ -86,6 +86,16 @@ class Product extends Model
         return $this->hasMany(ProductImage::class);
     }
 
+    public function primaryImage(): HasOne
+    {
+        return $this->hasOne(ProductImage::class)->oldest('sort_order');
+    }
+
+    public function getPrimaryImageAttribute()
+    {
+        return $this->images()->orderBy('sort_order')->first();
+    }
+
     public function stockMovements(): HasMany
     {
         return $this->hasMany(StockMovement::class);
@@ -99,6 +109,21 @@ class Product extends Model
     public function getEffectivePriceAttribute(): float
     {
         return $this->discount_price ?? $this->base_price;
+    }
+
+    public function getPriceAttribute(): float
+    {
+        return $this->discount_price ?? $this->base_price;
+    }
+
+    public function getIsActiveAttribute(): bool
+    {
+        return $this->status === 'active';
+    }
+
+    public function getLowStockThresholdAttribute(): int
+    {
+        return 10;
     }
 
     public function getHasVariantsAttribute(): bool
