@@ -428,13 +428,24 @@ class ProductController extends Controller
         // Find matching tenant Category for attribute_templates FK
         $tenantCategory = $businessCategory ? Category::where('slug', $businessCategory->slug)->first() : null;
 
-        // Map existing extra field values
+        // Map existing extra field values (key by field name to match $field['name'] in view)
         $existingExtraValues = [];
         foreach ($product->attributeValues as $av) {
             if ($av->attributeTemplate && !$av->attributeTemplate->is_global && !$av->attributeTemplate->is_variant_option) {
                 $existingExtraValues[$av->attributeTemplate->slug] = $av->typed_value;
             }
         }
+        // Also build slug→name map from business category extra_fields so view can look up by $field['name']
+        $slugToFieldName = [];
+        foreach ($extraFields as $field) {
+            $slugToFieldName[Str::slug($field['name'])] = $field['name'];
+        }
+        $nameKeyedValues = [];
+        foreach ($existingExtraValues as $slug => $value) {
+            $fieldName = $slugToFieldName[$slug] ?? $slug;
+            $nameKeyedValues[$fieldName] = $value;
+        }
+        $existingExtraValues = $nameKeyedValues;
 
         // Shudhu sei attribute templates dekhao jei ei product er variants e actually use hoy
         $productOptionNames = $product->variants->flatMap(function ($variant) {
@@ -786,6 +797,29 @@ class ProductController extends Controller
             ->get(['id', 'name', 'options']);
 
         return response()->json($options);
+    }
+
+    public function getExtraFields(Request $request)
+    {
+        $categoryId = $request->category_id;
+        if (!$categoryId) {
+            return response()->json(['extraFields' => [], 'businessCategory' => null, 'isDigital' => false]);
+        }
+
+        $tenantCategory = Category::find($categoryId);
+        if (!$tenantCategory) {
+            return response()->json(['extraFields' => [], 'businessCategory' => null, 'isDigital' => false]);
+        }
+
+        $businessCategory = BusinessCategory::on('mysql')->where('slug', $tenantCategory->slug)->first();
+        $extraFields = $businessCategory->extra_fields ?? [];
+        $isDigital = in_array($businessCategory?->slug, ['digital-product', 'digital-product-service']);
+
+        return response()->json([
+            'extraFields' => $extraFields,
+            'businessCategory' => $businessCategory ? ['id' => $businessCategory->id, 'name' => $businessCategory->name, 'slug' => $businessCategory->slug] : null,
+            'isDigital' => $isDigital,
+        ]);
     }
 
     public function storeVariant(Request $request, Product $product)

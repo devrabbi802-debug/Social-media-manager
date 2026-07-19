@@ -214,6 +214,7 @@
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">@lang('products.price')</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">@lang('products.stock')</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">@lang('products.barcode')</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">@lang('products.images')</th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
@@ -239,6 +240,29 @@
                                                 <input type="text" :name="'variants['+idx+'][barcode]'" x-model="variant.barcode"
                                                        class="w-28 px-2 py-1 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500">
                                             </td>
+                                            <td class="px-4 py-3">
+                                                <div class="flex flex-col gap-1">
+                                                    <div class="flex flex-wrap gap-1" x-show="variantPreviews[idx] && variantPreviews[idx].length > 0">
+                                                        <template x-if="variantPreviews[idx]">
+                                                            <template x-for="(preview, pIdx) in (variantPreviews[idx] || [])" :key="'vp-'+idx+'-'+pIdx">
+                                                                <div class="relative w-10 h-10">
+                                                                    <img :src="preview.url" class="w-10 h-10 object-cover rounded-lg">
+                                                                    <button type="button" @click="removeVariantPreview(idx, pIdx)"
+                                                                            class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center">&times;</button>
+                                                                </div>
+                                                            </template>
+                                                        </template>
+                                                    </div>
+                                                    <label class="cursor-pointer inline-flex items-center px-2 py-1 bg-purple-100 text-purple-700 rounded-lg text-xs font-medium hover:bg-purple-200 transition">
+                                                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                                        </svg>
+                                                        @lang('products.images')
+                                                        <input type="file" :name="'variants['+idx+'][images][]'" multiple accept="image/*" class="hidden"
+                                                               @change="handleVariantImageUpload(idx, $event)">
+                                                    </label>
+                                                </div>
+                                            </td>
                                             {{-- Hidden input for attributes --}}
                                             <template x-for="(val, attrName) in variant.combo" :key="'attr-'+attrName+idx">
                                                 <input type="hidden" :name="'variants['+idx+'][attributes]['+attrName+']'" :value="val">
@@ -248,6 +272,7 @@
                                 </tbody>
                             </table>
                             <p class="text-xs text-gray-400 mt-2">@lang('products.sku_auto_hint')</p>
+                            <p class="text-xs text-gray-400 mt-1">@lang('products.variant_image_hint')</p>
                         </div>
 
                         <div x-show="selectedOptions.length === 0" class="text-center py-8 text-gray-400">
@@ -530,6 +555,7 @@ function productForm() {
         hasVariants: false,
         matrixVariants: [],
         combinationCount: 0,
+        variantPreviews: {},
 
         init() {
             this.generateMatrix();
@@ -546,8 +572,6 @@ function productForm() {
         },
 
         onCategoryChange() {
-            // Show/hide extra fields based on category
-            // (handled by x-show in the template)
         },
 
         isOptionSelected(name) {
@@ -587,6 +611,7 @@ function productForm() {
                 this.matrixVariants = [];
                 this.combinationCount = 0;
                 this.hasVariants = false;
+                this.variantPreviews = {};
                 return;
             }
 
@@ -626,6 +651,29 @@ function productForm() {
             });
 
             this.hasVariants = this.matrixVariants.length > 0;
+
+            // Reset previews if combo count changed
+            const prevCount = Object.keys(this.variantPreviews).length;
+            if (prevCount !== this.matrixVariants.length) {
+                this.variantPreviews = {};
+            }
+        },
+
+        handleVariantImageUpload(idx, event) {
+            const files = Array.from(event.target.files);
+            if (!files.length) return;
+            if (!this.variantPreviews[idx]) this.variantPreviews[idx] = [];
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    this.variantPreviews[idx].push({ url: ev.target.result, file: file });
+                };
+                reader.readAsDataURL(file);
+            });
+        },
+
+        removeVariantPreview(idx, pIdx) {
+            this.variantPreviews[idx].splice(pIdx, 1);
         }
     };
 }

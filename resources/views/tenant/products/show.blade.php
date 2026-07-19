@@ -114,6 +114,7 @@
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Attributes</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">@lang('products.price')</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">@lang('products.stock')</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">@lang('products.images')</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
@@ -134,6 +135,17 @@
                                     </td>
                                     <td class="px-4 py-3 text-sm {{ $variant->stock_quantity <= 0 ? 'text-red-600 font-bold' : 'text-gray-900' }}">
                                         {{ $variant->stock_quantity }}
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        @if($variant->images->count() > 0)
+                                            <div class="flex flex-wrap gap-1">
+                                                @foreach($variant->images as $img)
+                                                    <img src="{{ asset('storage/' . $img->image_path) }}" class="w-10 h-10 object-cover rounded-lg" alt="{{ $img->alt_text }}">
+                                                @endforeach
+                                            </div>
+                                        @else
+                                            <span class="text-xs text-gray-400">@lang('products.no_image')</span>
+                                        @endif
                                     </td>
                                 </tr>
                                 @endforeach

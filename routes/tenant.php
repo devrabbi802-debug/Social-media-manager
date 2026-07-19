@@ -132,6 +132,7 @@ Route::middleware([
                 Route::post('/products', [ProductController::class, 'store'])->name('products.store');
                 Route::get('/products/attributes', [ProductController::class, 'getAttributes'])->name('products.attributes');
                 Route::get('/products/variant-options', [ProductController::class, 'getVariantOptions'])->name('products.variant-options');
+                Route::get('/products/extra-fields', [ProductController::class, 'getExtraFields'])->name('products.extra-fields');
                 Route::get('/products/{product}', [ProductController::class, 'show'])->name('products.show');
                 Route::get('/products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
                 Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
