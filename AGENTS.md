@@ -10,6 +10,7 @@ Get ERP Store — Laravel 13 multi-tenant SaaS for e-commerce management. Bengal
 
 ```bash
 ./start.sh              # Docker + DNS fix + Apache + CLIP server + Ngrok tunnel
+./setup-domain.sh       # DNS wildcard (*.smm.test) + Apache vhost + Docker — first-time setup
 composer setup          # install, key:generate, migrate, npm install --ignore-scripts, build
 composer dev            # artisan serve + queue:listen(--tries=1 --timeout=0) + pail + npm run dev (4 procs via concurrently)
 composer test           # config:clear + artisan test
@@ -31,7 +32,7 @@ npx vite preview                    # Preview built storefront
 ### Multi-Tenancy
 
 - **Landlord DB** (`socialboost`): `tenants`, `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `business_categories`, `cache`, `jobs`, `sessions`
-- **Tenant DB** (`{subdomain}_socialboost`): `users`, `facebook_settings`, `ai_settings`, `conversations`, `messages`, `categories`, `attribute_templates`, `brands`, `products`, `product_attribute_values`, `product_variants`, `product_images`, `warehouses`, `stock_movements`, `inventory_alerts`, `stock_transfers`, `variant_images`, `business_settings`, `storefront_settings`, `storefront_banners`
+- **Tenant DB** (`{subdomain}_socialboost`): `users`, `facebook_settings`, `ai_settings`, `conversations`, `messages`, `categories`, `attribute_templates`, `attribute_options`, `brands`, `products`, `product_attribute_values`, `product_variants`, `product_images`, `warehouses`, `stock_movements`, `inventory_alerts`, `stock_transfers`, `variant_images`, `business_settings`, `storefront_settings`, `storefront_banners`
 - **Users table does NOT exist in landlord DB** — never `User::count()` from central routes
 - **Tenant custom attributes** in `data` JSON column — query: `where('data->status', 'active')`, NOT `where('status', 'active')`
 - **Central domains**: `127.0.0.1`, `localhost`, `smm.test`, `socialboost.com`, `www.socialboost.com`
@@ -174,25 +175,25 @@ docker exec laravel-app php artisan <command>
 - **React Storefront**: `resources/storefront/` — src/components/{layout,home,ui}/, src/pages/, src/contexts/, src/hooks/, src/api/, src/utils/
 - **Layouts**: `resources/views/layouts/app.blade.php` (public), `resources/views/layouts/tenant.blade.php` (tenant), `resources/views/admin/layouts/app.blade.php` (admin), `resources/views/storefront.blade.php` (React SPA entry)
 - **Config**: `config/menu.php` (admin sidebar), `config/tenancy.php` (central domains, DB suffix), `config/services.php` (Facebook + Groq + Cerebras + Gemini + CLIP + Zernio)
+- **Routes**: `routes/web.php` (central), `routes/tenant.php` (per-tenant), `routes/api.php` (storefront API), `routes/admin.php` (central admin panel)
 - **Controllers**: `DashboardController`, `ProductController`, `AttributeTemplateController`, `ThemeController` (hardcoded themes API), `StorefrontController` (serves Blade/React SPA), `StorefrontApiController` (public API), `StorefrontSettingsController` (admin CRUD for settings/banners)
-- **Middleware**: `app/Http/Middleware/PreventAccessFromNonCentralDomains.php`, `app/Http/Middleware/SetLocale.php`
+- **Middleware**: `app/Http/Middleware/PreventAccessFromNonCentralDomains.php`, `app/Http/Middleware/SetLocale.php`, `app/Http/Middleware/AdminMiddleware.php`
 
 ## Database
 
 Schema source of truth: migration files in `database/migrations/` (landlord) and `database/migrations/tenant/`.
 
-**Landlord**: `tenants` (string PK subdomain, `data` JSON), `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `business_categories` (with `extra_fields` JSON), `cache`, `jobs`, `sessions`
+**Landlord** (`socialboost`): `tenants` (string PK subdomain, `data` JSON), `domains`, `admins`, `admin_user_permissions`, `ai_system_prompts`, `business_categories` (with `extra_fields` JSON), `cache`, `jobs`, `sessions`
 
-**Tenant**: `users` (`#[Fillable]` attributes, `locale` column default `bn`), `facebook_settings` (connection_type enum: `facebook_app`/`zernio`), `ai_settings` (type: `message`/`cerebras`/`image`), `conversations`, `messages`, `categories` (self-FK parent_id), `attribute_templates` (is_variant_option, is_active, placeholder/default), `brands`, `products` (weight_kg, is_featured), `product_attribute_values`, `product_variants` (JSON attributes), `product_images`, `variant_images` (JSON embedding), `warehouses`, `stock_movements`, `stock_transfers`, `inventory_alerts`, `attribute_options`, `business_settings` (delivery areas JSON, payment methods JSON, FAQ JSON, extra_fields_data JSON, logo_path), `storefront_settings` (theme_slug, theme_overrides JSON, store_logo, store_favicon, footer_logo, layout_style, products_per_row, show_header_slider, show_brands_section, show_newsletter, contact/social/footer fields, custom_css), `storefront_banners` (title, subtitle, image, link, btn_text, sort_order, is_active, FK to storefront_settings)
+**Tenant** (`{subdomain}_socialboost`): `users`, `facebook_settings`, `ai_settings`, `conversations`, `messages`, `categories`, `attribute_templates`, `attribute_options`, `brands`, `products`, `product_attribute_values`, `product_variants`, `product_images`, `variant_images`, `warehouses`, `stock_movements`, `stock_transfers`, `inventory_alerts`, `business_settings`, `storefront_settings`, `storefront_banners`
 
 **Seeders**: `AdminSeeder` (`admin@socialboost.com` / `Admin@123456`, super_admin), `BusinessCategorySeeder` (8 categories with extra_fields JSON), `AttributeTemplateSeeder` (8 global variant options + category-specific extra field templates)
 
 ## Gotchas
 
-- **Admin panel prefix is configurable** — `.env` has `supermaster`, `.env.example` has `ax7k9m`. All admin/dashboard/storefront-settings URLs use this prefix, NOT bare `/dashboard`.
 - **`.env.example` is incomplete** — missing `GROQ_MODEL`, `GEMINI_MODEL`, `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`, `APP_DOMAIN`. Has `KILO_MODEL` which `.env` doesn't use. DB defaults to PostgreSQL, queue/cache to `database` — actual `.env` uses MySQL, Redis.
-- **`app.js` is empty** — no JS bundled via Vite yet
 - **`.env.example` defaults to PostgreSQL** — actual `.env` uses MySQL
+- **`app.js` is empty** — no JS bundled via Vite yet
 - **`APP_LOCALE=en`** — Bengali hardcoded in Blade templates, not via locale config
 - **`.npmrc`**: `ignore-scripts=true` — postinstall scripts skipped
 - **`storage/framework/views/`** excluded from Vite watch but NOT gitignored
@@ -210,18 +211,9 @@ Schema source of truth: migration files in `database/migrations/` (landlord) and
 - **`attribute_templates.category_id`** references tenant `categories.id`, NOT `business_categories.id`
 - **PHP 8.4**: Unparenthesized nested ternary `a ? b : c ? d : e` is **forbidden**
 - **Alpine.js**: Reactive state must be inside `x-data` scope; `x-if` must be on `<template>` tags only
-- **Route conflicts**: Central `web.php` routes registered before tenant `tenant.php` routes. For identical paths, central version wins. `GET /` uses domain constraints to prevent matching on tenant subdomains.
 - **CLIP server URL**: `http://localhost:8089` (local) vs `http://clip-server:8089` (Docker)
-- **Storefront `storefront_settings`**: One row per tenant, NO user_id column. Do `StorefrontSettings::first()`, NOT `where('user_id', ...)`.
-- **Storefront asset loading**: `@vite` directive does NOT work — build outputs to `public/storefront/` not `public/build/`. Blade template tries manifest.json first, then glob fallback.
-- **Storefront route order**: Catch-all `/{path?}` in `tenant.php` MUST be last route — it swallows all unmatched paths. Dashboard/auth/storefront-settings routes must come before it.
-- **Storefront theme `header_text`**: Required for contrast. Dark `header_bg` → `header_text: #FFFFFF`, white `header_bg` → `header_text: #111827`.
-- **Storefront uploads NOT tenant-isolated**: All tenants share `public/storefront/` directory. Unique filenames prevent collisions but there's no tenant-level file isolation.
 - **`TenantCouldNotBeIdentifiedOnDomainException`** caught globally in `bootstrap/app.php` → returns 404.
-- **`docker-entrypoint.sh` conditional installs**: Composer and npm installs only run if `vendor/` or `node_modules/` directories are missing.
-- **Worker uses pre-built image** (`socialmediamanager-app:latest`) — NOT rebuilt when you `docker compose up --build` the `app` service. Rebuild worker separately if Dockerfile changes.
 - **Facebook client secrets in `.env`** are hardcoded — NOT in `.env.example`. Will need re-adding after fresh clone.
-- **Admin panel login**: `/{centralDomain}/rootadmin/login` (central admin, landlord DB) vs `/{subdomain}.smm.test/{adminPrefix}/login` (tenant user, tenant DB). Two completely separate auth systems.
 
 # Agent Instructions
 
