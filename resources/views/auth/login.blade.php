@@ -7,12 +7,16 @@
     <div class="max-w-md w-full">
         <div class="text-center mb-8">
             <a href="/" class="inline-flex items-center space-x-2 mb-6">
-                <div class="w-12 h-12 gradient-bg rounded-xl flex items-center justify-center">
-                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                    </svg>
-                </div>
-                <span class="text-2xl font-bold gradient-text">SocialBoost AI</span>
+                @if($businessSetup->getLogoUrl())
+                    <img src="{{ $businessSetup->getLogoUrl() }}" alt="{{ $businessSetup->business_name ?? 'SocialBoost AI' }}" class="h-12 w-auto object-contain rounded-xl">
+                @else
+                    <div class="w-12 h-12 gradient-bg rounded-xl flex items-center justify-center">
+                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                @endif
+                <span class="text-2xl font-bold gradient-text">{{ $businessSetup->business_name }}</span>
             </a>
             <h2 class="text-3xl font-bold text-gray-900">আপনার অ্যাকাউন্টে লগইন করুন</h2>
             <p class="mt-2 text-gray-600">অ্যাকাউন্ট নেই? <a href="{{ url('/register') }}" class="text-purple-600 hover:text-purple-700 font-medium">এখানে নিবন্ধন করুন</a></p>

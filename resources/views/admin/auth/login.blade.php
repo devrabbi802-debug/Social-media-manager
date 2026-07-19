@@ -1,3 +1,6 @@
+@php
+    $businessSetup = \App\Models\BusinessSetup::getActive();
+@endphp
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -24,13 +27,18 @@
     <div class="max-w-md w-full relative">
         {{-- Logo --}}
         <div class="text-center mb-8">
-            <div class="inline-flex items-center justify-center w-16 h-16 bg-white/10 backdrop-blur-sm rounded-2xl mb-4 border border-white/20">
-                <svg class="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                </svg>
+            <div class="inline-flex items-center justify-center mb-4">
+                @if($businessSetup->getLogoUrl())
+                    <img src="{{ $businessSetup->getLogoUrl() }}" alt="{{ $businessSetup->business_name ?? 'SocialBoost AI' }}" class="h-14 w-auto object-contain rounded-xl bg-white/10 backdrop-blur-sm p-2 border border-white/20">
+                @else
+                    <div class="inline-flex items-center justify-center w-16 h-16 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20">
+                        <svg class="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                    </div>
+                @endif
             </div>
             <h1 class="text-2xl font-bold text-white">Admin Panel</h1>
-            <p class="text-emerald-200 mt-1 text-sm">SocialBoost AI</p>
         </div>
 
         {{-- Login Card --}}
@@ -99,7 +107,7 @@
             </div>
         </div>
 
-        <p class="text-center text-emerald-200 text-sm mt-6">&copy; {{ date('Y') }} SocialBoost AI</p>
+        <p class="text-center text-emerald-200 text-sm mt-6">&copy; {{ date('Y') }} {{ $businessSetup->business_name }}</p>
     </div>
 </body>
 </html>

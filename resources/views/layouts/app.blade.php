@@ -31,7 +31,11 @@
             <div class="flex justify-between h-16">
                 <div class="flex items-center">
                     <a href="/" class="flex items-center">
-                        <img src="{{ asset('images/logo.png') }}" alt="SocialBoost AI" class="h-10 w-auto object-contain">
+                        @if($businessSetup->getLogoUrl())
+                            <img src="{{ $businessSetup->getLogoUrl() }}" alt="{{ $businessSetup->business_name ?? 'SocialBoost AI' }}" class="h-10 w-auto object-contain">
+                        @else
+                            <img src="{{ asset('images/logo.png') }}" alt="SocialBoost AI" class="h-10 w-auto object-contain">
+                        @endif
                     </a>
                 </div>
 
@@ -112,7 +116,11 @@
             <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
                 <div>
                     <div class="mb-4">
-                        <img src="{{ asset('images/logo.png') }}" alt="SocialBoost AI" class="h-10 w-auto object-contain">
+                        @if($businessSetup->getLogoUrl())
+                            <img src="{{ $businessSetup->getLogoUrl() }}" alt="{{ $businessSetup->business_name ?? 'SocialBoost AI' }}" class="h-10 w-auto object-contain">
+                        @else
+                            <img src="{{ asset('images/logo.png') }}" alt="SocialBoost AI" class="h-10 w-auto object-contain">
+                        @endif
                     </div>
                     <p class="text-gray-400">AI-চালিত সোশ্যাল মিডিয়া ম্যানেজমেন্ট এবং ইনভেন্টরি ম্যানেজমেন্ট প্ল্যাটফর্ম</p>
                 </div>
@@ -145,7 +153,7 @@
                 </div>
             </div>
             <div class="border-t border-gray-800 mt-12 pt-8 text-center text-gray-400">
-                <p>&copy; {{ date('Y') }} SocialBoost AI. সর্বস্বত্ব সংরক্ষিত।</p>
+                <p>&copy; {{ date('Y') }} {{ $businessSetup->business_name }}. সর্বস্বত্ব সংরক্ষিত।</p>
             </div>
         </div>
     </footer>

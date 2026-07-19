@@ -29,7 +29,11 @@
     <aside :class="mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'" class="fixed left-0 top-0 bottom-0 w-64 bg-slate-900 text-white z-50 transform transition-transform duration-300 overflow-y-auto">
         {{-- Logo --}}
         <div class="h-16 flex items-center px-5 border-b border-white/10">
-            <img src="{{ asset('images/logo.png') }}" alt="SocialBoost" class="h-9 w-auto object-contain">
+            @if($businessSetup->getLogoUrl())
+                <img src="{{ $businessSetup->getLogoUrl() }}" alt="{{ $businessSetup->business_name ?? 'SocialBoost' }}" class="h-9 w-auto object-contain">
+            @else
+                <img src="{{ asset('images/logo.png') }}" alt="SocialBoost" class="h-9 w-auto object-contain">
+            @endif
         </div>
 
         {{-- Navigation --}}
