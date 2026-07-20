@@ -99,3 +99,7 @@ docker exec laravel-app php artisan <command>
 - CLIP server has own `venv/` — managed via `clip-server/start.sh` or `start.sh`
 - `start.sh` manages local dev: Docker + CLIP server + dnsmasq + Apache proxy + Ngrok + storefront auto-build
 - `setup-domain.sh` configures `smm.test` wildcard with dnsmasq + Apache reverse proxy to port 8000
+
+## Communication
+
+- **Language**: Always Banglish (Bengali + English mix) — user er sathe kotha bolar somoy shudhu Banglish use korte hobe. Full English or full Bengali avoid korte hobe.
