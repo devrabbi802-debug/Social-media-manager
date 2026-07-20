@@ -40,7 +40,7 @@ export default function App() {
     return <LoadingSpinner />;
   }
 
-  const { Layout, Home, Products, ProductDetail, Category, Brand, NotFound } = themeComponents;
+  const { Layout, Home, Products, ProductDetail, Category, Brand, Cart, Checkout, Auth, NotFound } = themeComponents;
 
   return (
     <ThemeProvider
@@ -56,6 +56,9 @@ export default function App() {
               <Route path="/products/:slug" element={<ProductDetail />} />
               <Route path="/category/:slug" element={<Category />} />
               <Route path="/brand/:slug" element={<Brand />} />
+              <Route path="/cart" element={<Cart />} />
+              <Route path="/checkout" element={<Checkout />} />
+              <Route path="/auth" element={<Auth />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

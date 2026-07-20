@@ -58,7 +58,7 @@ export default function Brand() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 pt-20 pb-8">
       <nav className="flex items-center gap-2 text-sm text-gray-500 mb-6">
         <Link to="/" className="hover:text-primary transition">Home</Link>
         <span>/</span>
