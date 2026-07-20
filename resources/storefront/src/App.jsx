@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { loadTheme } from './themes';
 import LoadingSpinner from './components/shared/LoadingSpinner';
+import ChunkErrorBoundary from './components/shared/ChunkErrorBoundary';
 import api from './api/client';
 
 export default function App() {
@@ -40,7 +41,11 @@ export default function App() {
     return <LoadingSpinner />;
   }
 
-  const { Layout, Home, Products, ProductDetail, Category, Brand, Cart, Checkout, Auth, NotFound } = themeComponents;
+  const {
+    Layout, Home, Products, ProductDetail, Category, Brand, Cart, Checkout, Auth, NotFound,
+    DashboardLayout, DashboardHome, DashboardOrders, DashboardTracking,
+    DashboardWishlist, DashboardAddresses, DashboardSettings,
+  } = themeComponents;
 
   return (
     <ThemeProvider
@@ -49,19 +54,29 @@ export default function App() {
     >
       <BrowserRouter>
         <Layout config={config}>
-          <Suspense fallback={<LoadingSpinner />}>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/products" element={<Products />} />
-              <Route path="/products/:slug" element={<ProductDetail />} />
-              <Route path="/category/:slug" element={<Category />} />
-              <Route path="/brand/:slug" element={<Brand />} />
-              <Route path="/cart" element={<Cart />} />
-              <Route path="/checkout" element={<Checkout />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
+          <ChunkErrorBoundary onChunkError="reload">
+            <Suspense fallback={<LoadingSpinner />}>
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/products" element={<Products />} />
+                <Route path="/products/:slug" element={<ProductDetail />} />
+                <Route path="/category/:slug" element={<Category />} />
+                <Route path="/brand/:slug" element={<Brand />} />
+                <Route path="/cart" element={<Cart />} />
+                <Route path="/checkout" element={<Checkout />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route element={<DashboardLayout />}>
+                  <Route path="/dashboard" element={<DashboardHome />} />
+                  <Route path="/dashboard/orders" element={<DashboardOrders />} />
+                  <Route path="/dashboard/tracking" element={<DashboardTracking />} />
+                  <Route path="/dashboard/wishlist" element={<DashboardWishlist />} />
+                  <Route path="/dashboard/addresses" element={<DashboardAddresses />} />
+                  <Route path="/dashboard/settings" element={<DashboardSettings />} />
+                </Route>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </ChunkErrorBoundary>
         </Layout>
       </BrowserRouter>
     </ThemeProvider>

@@ -9,7 +9,7 @@ use App\Http\Controllers\Admin\AiSystemPromptController;
 use App\Http\Controllers\Admin\BusinessCategoryController;
 use App\Http\Controllers\Admin\BusinessSetupController;
 
-Route::middleware(['web'])->group(function () {
+Route::middleware(['web', 'central'])->group(function () {
 
     Route::middleware('guest:admin')->group(function () {
         Route::get('/rootadmin/login', function () {

@@ -11,4 +11,17 @@ const Checkout = React.lazy(() => import('./pages/Checkout'));
 const Auth = React.lazy(() => import('./pages/Auth'));
 const NotFound = React.lazy(() => import('./pages/NotFound'));
 
-export { Layout, Home, Products, ProductDetail, Category, Brand, Cart, Checkout, Auth, NotFound };
+const DashboardLayout = React.lazy(() => import('./pages/dashboard/DashboardLayout'));
+const DashboardHome = React.lazy(() => import('./pages/dashboard/Overview'));
+const DashboardOrders = React.lazy(() => import('./pages/dashboard/Orders'));
+const DashboardTracking = React.lazy(() => import('./pages/dashboard/Tracking'));
+const DashboardWishlist = React.lazy(() => import('./pages/dashboard/Wishlist'));
+const DashboardAddresses = React.lazy(() => import('./pages/dashboard/Addresses'));
+const DashboardSettings = React.lazy(() => import('./pages/dashboard/Settings'));
+
+export {
+  Layout, Home, Products, ProductDetail, Category, Brand, Cart, Checkout, Auth,
+  DashboardLayout, DashboardHome, DashboardOrders, DashboardTracking,
+  DashboardWishlist, DashboardAddresses, DashboardSettings,
+  NotFound,
+};

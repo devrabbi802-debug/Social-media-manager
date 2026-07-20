@@ -1,73 +1,51 @@
 # AGENTS.md
 
-## Commands
+## Quick Start
 
 ```bash
 composer setup     # install → .env → key → migrate → npm install → vite build
 composer dev       # artisan serve + queue:listen + pail + vite (concurrently)
 composer test      # config:clear + artisan test (SQLite :memory:)
-php artisan tenants:migrate
-php artisan tenants:seed
-
-# Storefront React SPA
-cd resources/storefront
-npx vite build              # production build
-npm run watch               # auto-rebuild on change
+php artisan tenants:migrate   # run tenant DB migrations
+php artisan tenants:seed      # seed tenant DBs
 ```
 
-## Storefront React SPA (`resources/storefront/`)
+## Architecture
 
-- **Stack**: React 18, React Router 6, Vite 5, Tailwind v3 (own config), lucide-react icons
-- **Separate `node_modules/`** from root — `.npmrc` sets `ignore-scripts=true`
-- **Output**: `public/storefront/` — served by Laravel at `/{path?}` catch-all
-- **Theme system**: `src/themes/` — currently only `clothing-fashion` active; `src/themes/index.js` maps slug → lazy import
-- **Theme entry**: `src/themes/clothing-fashion/index.js` exports `{ Layout, Home, Products, ProductDetail, Category, Brand, Cart, Checkout, Auth, NotFound }`
-- **App.jsx** loads theme via `loadTheme(slug)`, renders `Layout` wrapping lazy `<Routes>`
+**Laravel 13 + stancl/tenancy v3** — DB-per-tenant SaaS with AI-powered Facebook comment reply.
 
-### Clothing-Fashion Theme (active)
-
-All pages use **static data** — no API calls for storefront content.
-
-| Route | Component | Description |
+| Layer | Location | Stack |
 |---|---|---|
-| `/` | Home | Slider, categories, best selling, new arrival, banner, jacket collection, features |
-| `/products` | Products | Left sidebar filters (category/price/color/size/brand), grid, load more |
-| `/products/:slug` | ProductDetail | Image gallery, color/size picker, qty, add to cart, wishlist |
-| `/category/:slug` | Category | Products filtered by category slug |
-| `/brand/:slug` | Brand | Products filtered by brand slug |
-| `/cart` | Cart | Items list, qty control, coupon, order summary |
-| `/checkout` | Checkout | Shipping form, SSLCOMMERZ/COD payment, order review |
-| `/auth` | Auth | Phone+password login/register, Google login button |
-| `*` | NotFound | 404 page |
+| Backend | `app/`, `routes/` | PHP 8.4, Laravel 13, stancl/tenancy, Horizon (Redis), MySQL |
+| Admin UI | Blade + Alpine.js | Tailwind v4 (`@tailwindcss/vite`), served by root Vite |
+| Storefront SPA | `resources/storefront/` | React 18, React Router 6, Vite 5, Tailwind v3 (own PostCSS config) |
+| CLIP Server | `clip-server/` | Python FastAPI, OpenAI CLIP model (local/offline image recognition) |
 
-### Components (`src/themes/clothing-fashion/components/`)
+## Storefront SPA (`resources/storefront/`)
 
-- **Header**: Fixed, transparent on home → white on scroll, mega menu (Men/Women/Kids/Collection with submenus), cart badge, search, user icon → `/auth`
-- **Footer**: One Ummah BD branding, social links (FB/IG/YT/LI), quick links, legal, email subscribe, copyright
-- **CartDrawer**: Right slide-in panel, overlay, items with qty, subtotal, view cart/checkout links
-- **ProductCard**: 3:4 aspect ratio, hover add-to-cart button, wishlist heart, discount badge, black stars
+- **Own `node_modules/`** — separate from root, install with `cd resources/storefront && npm install`
+- **Build**: `npx vite build` — output goes to `public/storefront/`
+- **Watch**: `npm run watch` — auto-rebuild on change (no HMR on Laravel dev server)
+- **Laravel serves** at `/{path?}` catch-all via `StorefrontController` → Blade → `@vite` directive
+- **Theme system**: `src/themes/` — lazy-loaded by slug; `clothing-fashion` and `classic` exist
+- **`App.jsx`** fetches `/api/storefront/config` for theme/tenant config (falls back to defaults)
+- **DashboardLayout** routes: `/dashboard`, `/dashboard/orders`, `/tracking`, `/wishlist`, `/addresses`, `/settings`
 
-### Contexts (`src/themes/clothing-fashion/contexts/`)
+## Routes (Load Order Matters)
 
-- **CartContext** — `{ items, drawerOpen, openDrawer, closeDrawer, addToCart, updateQuantity, removeItem, itemCount }`
-- **WishlistContext** — `{ wishlist, toggleWishlist, isWishlisted }`
-- **Layout.jsx** wraps `<CartProvider>` → `<WishlistProvider>` → `<ScrollToTop />` → content
+1. `web.php` — central landing pages, onboarding wizard, webhooks (Facebook/Zernio)
+2. `admin.php` — central admin panel at `/rootadmin/*` (auth guard: `admin`, DB: landlord)
+3. `tenant.php` — per-tenant routes: auth, dashboard, inventory, Facebook OAuth, **storefront catch-all (LAST)**
 
-## Build & Dev
+### Tenancy
 
-- `npx vite build` in `resources/storefront/` — rebuild after ANY source change (static data edits included)
-- Page route change auto-scrolls to top via `ScrollToTop` component in Layout
-- `npm run watch` for auto-rebuild during dev
-
-## Multi-Tenancy (Laravel Backend)
-
-- **DB-per-tenant**: Landlord `socialboost` / Tenant `{subdomain}_socialboost`
-- **Users table → tenant DB only** — never from central routes
+- **DB naming**: `{prefix}{tenant_id}_socialboost` (e.g. `tenant1_socialboost`)
 - **Central domains**: `127.0.0.1`, `localhost`, `smm.test`, `socialboost.com`, `www.socialboost.com`
-- **Route load order**: `web.php` → `admin.php` (central) → `tenant.php` (per-tenant)
-- **Admin prefix**: `config('app.admin_panel_prefix', 'ax7k9m')` — `.env` uses `supermaster`
+- **Admin panel prefix**: `config('app.admin_panel_prefix', 'ax7k9m')` — `.env` uses `supermaster`
 - **Dual auth guards**: `web` (User, tenant DB) + `admin` (Admin, landlord DB)
-- **Middleware aliases**: `admin` → `AdminMiddleware`, `locale` → `SetLocale`, `central` → `PreventAccessFromNonCentralDomains`
+- **Users table → tenant DB only**
+- `tenant.php` registers login/logout names — central routes intentionally avoid name conflicts
+- Route name conflict: `withRouting()` loads `web.php` AFTER `tenant.php` — central names overwrite tenant names
 
 ## Docker
 
@@ -76,16 +54,33 @@ docker compose up -d --build
 docker exec laravel-app php artisan <command>
 ```
 
-7 services: app(8000), mysql(3307), node(5173), redis(6379), phpmyadmin(8080), worker(Horizon), clip-server(8089).
+**7 services**: app(8000), mysql(3307), node(5173), redis(6379), phpmyadmin(8080), worker(Horizon via Supervisor), clip-server(8089).
+
+## Key Services (`app/Services/`)
+
+| Service | Purpose |
+|---|---|
+| `AiChatService` | AI reply generation (Groq/Cerebras/Gemini configurable per tenant) |
+| `ClipService` | CLIP image matching client (posts to `clip-server:8089`) |
+| `ZernioService` | Zernio social media API v1 client |
+| `AudioTranscriptionService` | Audio→text for voice messages |
+
+## Inventory System
+
+- Products, variants (JSON attributes), categories, brands, attribute templates, warehouses, stock movements, low-stock alerts
+- All tenant DB tables (under `app/Http/Controllers/Dashboard/`)
+- **Known bugs** (per `INVENTORY_REVIEW.txt`): variant stock not synced to parent product, stock operations lack DB transactions, stale attribute values on edit
 
 ## Gotchas
 
 - `.env` uses MySQL+Redis; `.env.example` defaults to PostgreSQL+`database` queue/cache
+- Root Vite uses **Tailwind v4** (`@tailwindcss/vite`); storefront Vite uses **Tailwind v3** (PostCSS)
+- Root `.npmrc` sets `ignore-scripts=true` — `postinstall` hooks won't run for root deps
 - Storefront edits require `npx vite build` — no HMR on Laravel dev server
-- Route name conflict: `withRouting()` loads web.php AFTER tenant.php — central names overwrite tenant names
-- `TenantCouldNotBeIdentifiedOnDomainException` → 404
-- PHP 8.4: unparenthesized ternary `a ? b : c ? d : e` forbidden
-
-## Communication
-
-- Amar shathe kotha bolaar shomoy ALWAYS Banglish (Bengali + English mix) use korbo.
+- `TenantCouldNotBeIdentifiedOnDomainException` → 404 (subdomain not recognized)
+- PHP 8.4: `a ? b : c ? d : e` (unparenthesized ternary) forbidden
+- `composer test` → `config:clear` uses `@no_additional_args` flag, then `artisan test` (uses SQLite `:memory:`)
+- `composer setup` copies `.env` only if it doesn't exist — does **not** overwrite
+- `start.sh` manages local dev: Docker + CLIP server + dnsmasq + Apache proxy + Ngrok + storefront auto-build
+- `setup-domain.sh` configures `smm.test` with wildcard dnsmasq + Apache reverse proxy to port 8000
+- Storefront static data is for theme dev only — production uses API calls to `/api/storefront/*`
