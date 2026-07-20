@@ -8,7 +8,7 @@ const staticBanners = [
     subtitle: 'Get up to 40% off on trending styles',
     btn_text: 'Shop Now',
     link: '/products',
-    image: 'https://images.unsplash.com/photo-1469334031218-e382a39b0d96?w=1920&q=80',
+    image: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1920&q=80',
     align: 'left',
   },
   {
