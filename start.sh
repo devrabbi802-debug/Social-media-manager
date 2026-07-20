@@ -65,6 +65,20 @@ else
     echo "[OK] Apache already running"
 fi
 
+# Storefront auto-build
+STOREFRONT_DIR="$PROJECT_DIR/resources/storefront"
+if [ -d "$STOREFRONT_DIR" ]; then
+    if ! pgrep -f "vite build --watch" > /dev/null 2>&1; then
+        echo "[INFO] Storefront auto-build starting..."
+        cd "$STOREFRONT_DIR"
+        nohup npx vite build --watch > /tmp/storefront-build.log 2>&1 &
+        cd "$PROJECT_DIR"
+        echo "[OK] Storefront auto-build started"
+    else
+        echo "[OK] Storefront auto-build already running"
+    fi
+fi
+
 echo ""
 echo "========================================="
 echo "  DONE! Visit: http://smm.test"
