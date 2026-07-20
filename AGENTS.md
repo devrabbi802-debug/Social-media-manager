@@ -98,3 +98,7 @@ docker exec laravel-app php artisan <command>
 - `footer_logo` field exists with no upload UI
 - Product images API returns raw path; logo/favicon return full URL via `Storage::url()`
 - `.env.example` has PostgreSQL + `database` queue/cache; actual `.env` uses MySQL + Redis
+
+## Communication
+
+- Amar shathe kotha bolaar shomoy ALWAYS Banglish (Bengali + English mix) use korbo. Pure Bengali / pure English na — mix kore bolbo.
