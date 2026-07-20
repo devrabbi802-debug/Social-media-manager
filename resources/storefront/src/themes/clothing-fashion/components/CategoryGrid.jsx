@@ -31,11 +31,7 @@ export default function CategoryGrid({ categories = [] }) {
   const [c1, c2, c3, c4, c5] = categories;
 
   return (
-    <section>
-      <div className="px-4 pt-8 md:pt-12 pb-2">
-        <h2 className="text-lg md:text-2xl font-bold tracking-tight text-center">Category by Occasion</h2>
-      </div>
-
+    <section className="px-4 pt-4 md:pt-6 pb-2">
       <div className="flex flex-col md:flex-row gap-[2px] md:h-[600px]">
         <div className="flex flex-col gap-[2px] flex-1">
           {c1 && <CategoryCard category={c1} />}
