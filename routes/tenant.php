@@ -247,12 +247,6 @@ Route::middleware([
         });
     });
 
-    // Block register/onboarding routes on tenant — customers don't need these
-    Route::get('/register', function () { return redirect('/'); })->name('register');
-    Route::post('/register', function () { return redirect('/'); });
-    Route::get('/onboarding', function () { return redirect('/'); })->name('onboarding');
-    Route::post('/onboarding', function () { return redirect('/'); });
-
     // Storefront catch-all route (LAST - no auth required)
     // This serves the React SPA for all non-dashboard, non-auth routes
     // Optional {path?} param ensures "/" matches (path=null) without overwriting central GET /
