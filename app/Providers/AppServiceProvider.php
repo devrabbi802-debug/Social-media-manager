@@ -25,7 +25,11 @@ class AppServiceProvider extends ServiceProvider
     {
         BusinessCategory::observe(BusinessCategoryObserver::class);
 
-        // Share businessSetup with all Blade views (single query, cached)
-        View::share('businessSetup', BusinessSetup::getActive());
+        // Share businessSetup with all Blade views (graceful fallback if DB unavailable)
+        try {
+            View::share('businessSetup', BusinessSetup::getActive());
+        } catch (\Throwable) {
+            View::share('businessSetup', new BusinessSetup());
+        }
     }
 }

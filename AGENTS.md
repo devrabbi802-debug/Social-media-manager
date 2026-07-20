@@ -90,8 +90,7 @@ docker exec laravel-app php artisan <command>
 - `.env.example` missing: `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`, `GROQ_MODEL`, `GEMINI_MODEL`, `APP_DOMAIN`. Has unused `KILO_MODEL`.
 - `BusinessCategory` in landlord DB → always `::on('mysql')->find(...)`
 - `attribute_templates.category_id` → tenant `categories.id`, NOT `business_categories.id`
-- Extra fields slug mismatch: `store()` uses `Str::slug()` (kebab), `edit()` looks up by `$field['name']` (underscore)
-- `Admin::getAllPermissions()` throws `BindingResolutionException` for super_admin — dead code
+
 - PHP 8.4: unparenthesized ternary `a ? b : c ? d : e` forbidden
 - Route name conflict: `withRouting()` loads web.php AFTER tenant.php — central names overwrite tenant names
 - `TenantCouldNotBeIdentifiedOnDomainException` → 404

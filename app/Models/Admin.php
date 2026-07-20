@@ -50,7 +50,6 @@ class Admin extends Authenticatable
     public function getAllPermissions(): array
     {
         if ($this->role === 'super_admin') {
-            $menu = app(\App\Services\Menu::class);
             $all = [];
             foreach (config('menu.groups') ?? [] as $group) {
                 foreach ($group['items'] as $item) {
