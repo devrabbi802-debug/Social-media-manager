@@ -5,6 +5,7 @@ import { Edit3 } from 'lucide-react';
 export default function EditableSection({ sectionType, sectionData, children, label }) {
   const { isEditorMode, openEditor } = useEditor();
   const [selected, setSelected] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const ref = useRef(null);
 
   useEffect(() => {
@@ -20,13 +21,17 @@ export default function EditableSection({ sectionType, sectionData, children, la
 
   if (!isEditorMode) return <>{children}</>;
 
+  const showOverlay = selected || isHovered;
+
   return (
     <div
       ref={ref}
       className="relative cursor-pointer"
       onClick={() => setSelected((s) => !s)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      {selected && (
+      {showOverlay && (
         <div className="absolute top-4 right-4 z-50 flex items-center gap-2 pointer-events-none">
           <span className="text-xs text-white bg-gray-900/80 px-2 py-1 rounded pointer-events-auto">
             {label || sectionType}
@@ -39,7 +44,7 @@ export default function EditableSection({ sectionType, sectionData, children, la
           </button>
         </div>
       )}
-      <div className={`${selected ? 'ring-2 ring-blue-500 ring-offset-2 rounded' : ''} transition-all`}>
+      <div className={`${showOverlay ? 'ring-2 ring-blue-500 ring-offset-2 rounded' : 'hover:ring-2 hover:ring-blue-300 hover:ring-offset-1'} transition-all`}>
         {children}
       </div>
     </div>
