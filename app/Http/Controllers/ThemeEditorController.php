@@ -16,6 +16,7 @@ class ThemeEditorController extends Controller
         return response()->json([
             'banners' => $data['banners'] ?? [],
             'features' => $data['features'] ?? [],
+            'notices' => $data['notices'] ?? [],
         ]);
     }
 
@@ -45,6 +46,29 @@ class ThemeEditorController extends Controller
         return response()->json([
             'message' => 'Banners updated successfully',
             'banners' => $sectionsData['banners'],
+        ]);
+    }
+
+    public function updateNotices(Request $request)
+    {
+        $validated = $request->validate([
+            'notices' => 'required|array',
+            'notices.*' => 'nullable|string|max:500',
+        ]);
+
+        $storefront = StorefrontSettings::first();
+        if (!$storefront) {
+            return response()->json(['message' => 'Storefront not found'], 404);
+        }
+
+        $sectionsData = $storefront->sections_data ?? [];
+        $sectionsData['notices'] = $validated['notices'];
+
+        $storefront->update(['sections_data' => $sectionsData]);
+
+        return response()->json([
+            'message' => 'Notices updated successfully',
+            'notices' => $sectionsData['notices'],
         ]);
     }
 

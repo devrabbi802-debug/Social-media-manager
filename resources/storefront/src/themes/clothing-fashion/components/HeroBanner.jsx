@@ -118,9 +118,6 @@ export default function HeroBanner({ banners }) {
               } ${index === current ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}
               transition-all duration-700 delay-200`}
             >
-              <p className="text-sm md:text-base uppercase tracking-[0.2em] mb-3 font-light text-white/80">
-                {slide.align === 'left' ? 'New Season' : slide.align === 'right' ? 'Trending Now' : 'Featured'}
-              </p>
               <h2 className="text-3xl md:text-5xl lg:text-6xl font-bold mb-4 leading-tight">
                 {slide.title}
               </h2>

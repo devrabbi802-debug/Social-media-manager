@@ -50,5 +50,6 @@ Route::middleware([
 ])->prefix('editor')->group(function () {
     Route::get('/sections', [ThemeEditorController::class, 'sections']);
     Route::put('/sections/banners', [ThemeEditorController::class, 'updateBanners']);
+    Route::put('/sections/notices', [ThemeEditorController::class, 'updateNotices']);
     Route::post('/upload', [ThemeEditorController::class, 'uploadImage']);
 });

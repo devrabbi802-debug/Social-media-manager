@@ -44,7 +44,7 @@ export default function EditableSection({ sectionType, sectionData, children, la
           </button>
         </div>
       )}
-      <div className={`${showOverlay ? 'ring-2 ring-blue-500 ring-offset-2 rounded' : 'hover:ring-2 hover:ring-blue-300 hover:ring-offset-1'} transition-all`}>
+      <div className={`${showOverlay ? 'ring-2 ring-blue-500 ring-offset-2 rounded' : 'hover:ring-2 hover:ring-blue-300 hover:ring-offset-1'} transition-all ${isEditorMode ? 'pointer-events-none' : ''}`}>
         {children}
       </div>
     </div>
