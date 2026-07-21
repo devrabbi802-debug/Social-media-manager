@@ -14,7 +14,7 @@ export default function CartDrawer() {
       )}
 
       <div
-        className={`fixed top-0 right-0 h-full w-full max-w-md bg-white z-50 shadow-2xl transform transition-transform duration-300 ${
+        className={`fixed top-8 right-0 bottom-0 w-full max-w-md bg-white z-50 shadow-2xl transform transition-transform duration-300 ${
           drawerOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
