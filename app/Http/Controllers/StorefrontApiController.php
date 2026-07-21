@@ -69,10 +69,14 @@ class StorefrontApiController extends Controller
     {
         $storefront = StorefrontSettings::first();
 
-        // Active banners
-        $banners = $storefront
-            ? $storefront->banners()->where('is_active', true)->orderBy('sort_order')->get()
-            : collect();
+        // Active banners (from sections_data JSON)
+        $banners = collect();
+        if ($storefront && $storefront->sections_data) {
+            $raw = $storefront->sections_data['banners'] ?? [];
+            $banners = collect($raw)->filter(fn($b) => $b['is_active'] ?? true)
+                ->sortBy('sort_order')
+                ->values();
+        }
 
         // Featured products
         $featuredProducts = Product::active()

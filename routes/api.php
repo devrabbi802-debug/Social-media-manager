@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\StorefrontApiController;
 use App\Http\Controllers\ThemeController;
+use App\Http\Controllers\ThemeEditorController;
 use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
 use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
 
@@ -39,4 +40,15 @@ Route::middleware([
 ])->group(function () {
     Route::get('/themes', [ThemeController::class, 'index']);
     Route::get('/themes/{slug}', [ThemeController::class, 'show']);
+});
+
+// Theme editor endpoints (authenticated)
+Route::middleware([
+    'api',
+    InitializeTenancyByDomain::class,
+    PreventAccessFromCentralDomains::class,
+])->prefix('editor')->group(function () {
+    Route::get('/sections', [ThemeEditorController::class, 'sections']);
+    Route::put('/sections/banners', [ThemeEditorController::class, 'updateBanners']);
+    Route::post('/upload', [ThemeEditorController::class, 'uploadImage']);
 });

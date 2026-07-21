@@ -18,10 +18,11 @@ const DashboardTracking = React.lazy(() => import('./pages/dashboard/Tracking'))
 const DashboardWishlist = React.lazy(() => import('./pages/dashboard/Wishlist'));
 const DashboardAddresses = React.lazy(() => import('./pages/dashboard/Addresses'));
 const DashboardSettings = React.lazy(() => import('./pages/dashboard/Settings'));
+const DashboardThemeEditor = React.lazy(() => import('./pages/dashboard/ThemeEditor'));
 
 export {
   Layout, Home, Products, ProductDetail, Category, Brand, Cart, Checkout, Auth,
   DashboardLayout, DashboardHome, DashboardOrders, DashboardTracking,
-  DashboardWishlist, DashboardAddresses, DashboardSettings,
+  DashboardWishlist, DashboardAddresses, DashboardSettings, DashboardThemeEditor,
   NotFound,
 };

@@ -1,7 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import Skeleton from '../../../components/shared/Skeleton';
+
+function BannerSkeleton() {
+  return (
+    <div className="h-96 w-full bg-gray-100 overflow-hidden relative">
+      <Skeleton className="absolute inset-0" />
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6">
+        <Skeleton className="h-4 w-32 rounded" />
+        <Skeleton className="h-10 w-72 rounded" />
+        <Skeleton className="h-5 w-48 rounded" />
+        <Skeleton className="h-12 w-36 rounded mt-4" />
+      </div>
+    </div>
+  );
+}
 
 export default function HeroBanner({ banners = [] }) {
+  if (banners === null) {
+    return <BannerSkeleton />;
+  }
+
   const [current, setCurrent] = useState(0);
 
   useEffect(() => {

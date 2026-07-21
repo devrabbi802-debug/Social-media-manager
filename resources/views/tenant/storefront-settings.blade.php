@@ -50,11 +50,17 @@
                                 <h3 class="font-semibold text-gray-900">{{ $theme['name'] }}</h3>
                                 <p class="text-sm text-gray-500">{{ $slug === 'clothing-fashion' ? 'Dark header, shadow cards, rounded buttons' : 'Clean white, border cards, sharp corners' }}</p>
                             </div>
-                            @if($storefront->theme_slug === $slug)
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                                    Active
-                                </span>
-                            @endif
+                            <div class="flex items-center gap-2">
+                                @if($storefront->theme_slug === $slug)
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                        Active
+                                    </span>
+                                @endif
+                                <a href="/?editor=true&theme={{ $slug }}" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg hover:bg-gray-800 transition">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                    Customize
+                                </a>
+                            </div>
                         </div>
                         <form id="theme-{{ $slug }}" method="POST" action="{{ route('storefront-settings.apply-theme') }}" class="hidden">
                             @csrf

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useEditor } from '../../../components/editor/EditorContext';
+import EditableSection from '../../../components/editor/EditableSection';
 import api from '../../../api/client';
 import HeroBanner from '../components/HeroBanner';
 import CategoryGrid from '../components/CategoryGrid';
@@ -24,6 +26,7 @@ function BannerSkeleton() {
 }
 
 export default function Home() {
+  const { isEditorMode } = useEditor();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -64,13 +67,32 @@ export default function Home() {
     );
   }
 
+  const handleBannersSaved = (newBanners) => {
+    setData((prev) => ({ ...prev, banners: newBanners }));
+  };
+
+  const sectionData = {
+    banners: data?.banners || [],
+    onBannersSaved: handleBannersSaved,
+  };
+
   return (
     <div>
-      <HeroBanner banners={data?.banners || []} />
-      <CategoryGrid categories={data?.categories || []} />
-      <FeaturedProducts products={data?.featured_products || []} />
-      <BrandShowcase brands={data?.brands || []} />
-      <Newsletter />
+      <EditableSection sectionType="banners" sectionData={sectionData} label="Slider">
+        <HeroBanner banners={data?.banners || []} />
+      </EditableSection>
+      <EditableSection sectionType="category-grid" sectionData={{ categories: data?.categories }} label="Categories">
+        <CategoryGrid categories={data?.categories || []} />
+      </EditableSection>
+      <EditableSection sectionType="featured-products" sectionData={{ products: data?.featured_products }} label="Featured Products">
+        <FeaturedProducts products={data?.featured_products || []} />
+      </EditableSection>
+      <EditableSection sectionType="brands" sectionData={{ brands: data?.brands }} label="Brands">
+        <BrandShowcase brands={data?.brands || []} />
+      </EditableSection>
+      <EditableSection sectionType="newsletter" sectionData={{}} label="Newsletter">
+        <Newsletter />
+      </EditableSection>
     </div>
   );
 }

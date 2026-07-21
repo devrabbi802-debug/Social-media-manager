@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import Skeleton from '../../../components/shared/Skeleton';
 
 const staticBanners = [
   {
@@ -31,10 +32,35 @@ const staticBanners = [
   },
 ];
 
+function BannerSkeleton() {
+  return (
+    <div className="w-full h-[80vh] min-h-[500px] max-h-[800px] bg-gray-100 overflow-hidden relative">
+      <Skeleton className="absolute inset-0" />
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6">
+        <Skeleton className="h-4 w-32 rounded" />
+        <Skeleton className="h-10 w-72 rounded" />
+        <Skeleton className="h-5 w-48 rounded" />
+        <Skeleton className="h-12 w-36 rounded-full mt-4" />
+      </div>
+    </div>
+  );
+}
+
 export default function HeroBanner({ banners }) {
-  const slides = banners?.length > 0 ? banners : staticBanners;
+  if (banners === null) {
+    return <BannerSkeleton />;
+  }
+
+  const slides = banners.length > 0 ? banners : staticBanners;
   const [current, setCurrent] = useState(0);
   const [touchStart, setTouchStart] = useState(0);
+  const [imagesLoaded, setImagesLoaded] = useState({});
+
+  const allImagesLoaded = slides.length > 0 && slides.every((s) => imagesLoaded[s.image]);
+
+  const handleImgLoad = (src) => {
+    setImagesLoaded((prev) => ({ ...prev, [src]: true }));
+  };
 
   const goTo = useCallback((index) => {
     setCurrent((index + slides.length) % slides.length);
@@ -63,13 +89,27 @@ export default function HeroBanner({ banners }) {
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {slides.map((slide, index) => (
+      {slides.map((slide, index) => {
+        const imgLoaded = imagesLoaded[slide.image];
+        return (
         <div
           key={slide.id || index}
           className={`absolute inset-0 transition-all duration-700 ease-in-out ${
             index === current ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
           }`}
         >
+          {!imgLoaded && (
+            <div className="absolute inset-0 z-10 bg-gray-800">
+              <Skeleton className="absolute inset-0 opacity-30" />
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6">
+                <Skeleton className="h-4 w-32 rounded opacity-50" />
+                <Skeleton className="h-10 w-72 rounded opacity-50" />
+                <Skeleton className="h-5 w-48 rounded opacity-50" />
+                <Skeleton className="h-12 w-36 rounded-full mt-4 opacity-50" />
+              </div>
+            </div>
+          )}
+          <img src={slide.image} alt="" className="hidden" onLoad={() => handleImgLoad(slide.image)} />
           <div
             className="w-full h-full bg-cover bg-center bg-gray-900"
             style={{ backgroundImage: `url(${slide.image})` }}
@@ -112,7 +152,8 @@ export default function HeroBanner({ banners }) {
             </div>
           </div>
         </div>
-      ))}
+        );
+      })}
 
       {slides.length > 1 && (
         <>

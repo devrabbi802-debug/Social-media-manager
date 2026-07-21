@@ -10,6 +10,7 @@ class StorefrontSettings extends Model
     protected $fillable = [
         'theme_slug',
         'theme_overrides',
+        'sections_data',
         'store_name',
         'store_logo',
         'store_favicon',
@@ -36,6 +37,7 @@ class StorefrontSettings extends Model
     {
         return [
             'theme_overrides' => 'array',
+            'sections_data' => 'array',
             'show_header_slider' => 'boolean',
             'show_brands_section' => 'boolean',
             'show_newsletter' => 'boolean',

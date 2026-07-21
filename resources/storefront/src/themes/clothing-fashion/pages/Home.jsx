@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useEditor } from '../../../components/editor/EditorContext';
+import EditableSection from '../../../components/editor/EditableSection';
 import HeroBanner from '../components/HeroBanner';
 import CategoryGrid from '../components/CategoryGrid';
 import CategorySlider from '../components/CategorySlider';
@@ -7,6 +9,7 @@ import CategoryBanner from '../components/CategoryBanner';
 import CategoryProducts from '../components/CategoryProducts';
 import Features from '../components/Features';
 import { allProducts } from '../data/products';
+import api from '../../../api/client';
 
 const categories = [
   { id: 1, name: 'T-Shirts', slug: 't-shirts', image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=800&q=80', products_count: 24 },
@@ -24,16 +27,62 @@ const newArrivals = allProducts.slice(10, 20);
 const jacketProducts = allProducts.filter((p) => jacketIds.includes(p.id));
 
 export default function Home() {
+  const { isEditorMode } = useEditor();
+  const [banners, setBanners] = useState(null);
+  const [saveVer, setSaveVer] = useState(0);
+
+  useEffect(() => {
+    if (isEditorMode && window.__editor_banners) {
+      setBanners(window.__editor_banners);
+      return;
+    }
+
+    const endpoint = isEditorMode ? '/editor/sections' : '/storefront/home';
+    api.get(endpoint).then((res) => {
+      const fetched = isEditorMode ? (res.banners || []) : (res.banners || []);
+      setBanners(fetched);
+    }).catch(() => {
+      setBanners([]);
+    });
+  }, [isEditorMode, saveVer]);
+
+  const handleBannersSaved = (newBanners) => {
+    window.__editor_banners = newBanners;
+    setBanners(newBanners);
+    setSaveVer((v) => v + 1);
+  };
+
+  const sectionData = {
+    banners: banners,
+    onBannersSaved: handleBannersSaved,
+  };
+
   return (
     <div>
-      <HeroBanner />
-      <CategoryGrid categories={categories} />
-      <CategorySlider categories={categories} />
-      <ProductSection title="BEST SELLING" products={bestSelling} initialCount={8} />
-      <ProductSection title="NEW ARRIVAL" products={newArrivals} initialCount={8} />
-      <CategoryBanner />
-      <CategoryProducts title="Jackets Collection" products={jacketProducts} />
-      <Features />
+      <EditableSection sectionType="banners" sectionData={sectionData} label="Slider">
+        <HeroBanner banners={banners} />
+      </EditableSection>
+      <EditableSection sectionType="category-grid" sectionData={{ categories }} label="Categories">
+        <CategoryGrid categories={categories} />
+      </EditableSection>
+      <EditableSection sectionType="category-slider" sectionData={{ categories }} label="Category Slider">
+        <CategorySlider categories={categories} />
+      </EditableSection>
+      <EditableSection sectionType="best-selling" sectionData={{ products: bestSelling }} label="Best Selling">
+        <ProductSection title="BEST SELLING" products={bestSelling} initialCount={8} />
+      </EditableSection>
+      <EditableSection sectionType="new-arrival" sectionData={{ products: newArrivals }} label="New Arrival">
+        <ProductSection title="NEW ARRIVAL" products={newArrivals} initialCount={8} />
+      </EditableSection>
+      <EditableSection sectionType="category-banner" sectionData={{}} label="Promo Banner">
+        <CategoryBanner />
+      </EditableSection>
+      <EditableSection sectionType="category-products" sectionData={{ products: jacketProducts }} label="Category Products">
+        <CategoryProducts title="Jackets Collection" products={jacketProducts} />
+      </EditableSection>
+      <EditableSection sectionType="features" sectionData={{}} label="Features">
+        <Features />
+      </EditableSection>
     </div>
   );
 }

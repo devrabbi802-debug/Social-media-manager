@@ -21,7 +21,7 @@ function ScrollToTop() {
 
 function NoticeBar() {
   return (
-    <div className="fixed top-0 left-0 right-0 z-[60] h-8 bg-gray-900 overflow-hidden">
+    <div id="store-notice-bar" className="fixed top-0 left-0 right-0 z-[60] h-8 bg-gray-900 overflow-hidden">
       <div className="absolute inset-0 flex items-center whitespace-nowrap ticker-track">
         {[...Array(3)].flatMap(() => notices).map((text, i) => (
           <span key={i} className="inline-block text-white text-[11px] uppercase tracking-[0.2em] font-medium px-8">
