@@ -1,6 +1,9 @@
 import React from 'react';
+import { PromoBannerSkeleton } from '../../../components/shared/SectionSkeletons';
 
-export default function PromoBanner() {
+export default function PromoBanner({ loading }) {
+  if (loading) return <PromoBannerSkeleton />;
+
   return (
     <section className="py-12">
       <div className="container mx-auto px-4">

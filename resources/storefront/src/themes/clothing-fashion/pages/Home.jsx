@@ -29,11 +29,13 @@ const jacketProducts = allProducts.filter((p) => jacketIds.includes(p.id));
 export default function Home() {
   const { isEditorMode } = useEditor();
   const [banners, setBanners] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [saveVer, setSaveVer] = useState(0);
 
   useEffect(() => {
     if (isEditorMode && window.__editor_banners) {
       setBanners(window.__editor_banners);
+      setLoading(false);
       return;
     }
 
@@ -43,6 +45,8 @@ export default function Home() {
       setBanners(fetched);
     }).catch(() => {
       setBanners([]);
+    }).finally(() => {
+      setLoading(false);
     });
   }, [isEditorMode, saveVer]);
 
@@ -63,22 +67,22 @@ export default function Home() {
         <HeroBanner banners={banners} />
       </EditableSection>
       <EditableSection sectionType="category-grid" sectionData={{ categories }} label="Categories">
-        <CategoryGrid categories={categories} />
+        <CategoryGrid categories={categories} loading={loading} />
       </EditableSection>
       <EditableSection sectionType="category-slider" sectionData={{ categories }} label="Category Slider">
-        <CategorySlider categories={categories} />
+        <CategorySlider categories={categories} loading={loading} />
       </EditableSection>
       <EditableSection sectionType="best-selling" sectionData={{ products: bestSelling }} label="Best Selling">
-        <ProductSection title="BEST SELLING" products={bestSelling} initialCount={8} />
+        <ProductSection title="BEST SELLING" products={bestSelling} initialCount={8} loading={loading} />
       </EditableSection>
       <EditableSection sectionType="new-arrival" sectionData={{ products: newArrivals }} label="New Arrival">
-        <ProductSection title="NEW ARRIVAL" products={newArrivals} initialCount={8} />
+        <ProductSection title="NEW ARRIVAL" products={newArrivals} initialCount={8} loading={loading} />
       </EditableSection>
       <EditableSection sectionType="category-banner" sectionData={{}} label="Promo Banner">
-        <CategoryBanner />
+        <CategoryBanner loading={loading} />
       </EditableSection>
       <EditableSection sectionType="category-products" sectionData={{ products: jacketProducts }} label="Category Products">
-        <CategoryProducts title="Jackets Collection" products={jacketProducts} />
+        <CategoryProducts title="Jackets Collection" products={jacketProducts} loading={loading} />
       </EditableSection>
       <EditableSection sectionType="features" sectionData={{}} label="Features">
         <Features />

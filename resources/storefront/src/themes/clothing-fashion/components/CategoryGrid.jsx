@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight } from 'lucide-react';
+import { CategoryGridSkeleton } from '../../../components/shared/SectionSkeletons';
 
 function CategoryCard({ category }) {
   return (
@@ -25,7 +25,8 @@ function CategoryCard({ category }) {
   );
 }
 
-export default function CategoryGrid({ categories = [] }) {
+export default function CategoryGrid({ categories = [], loading }) {
+  if (loading) return <CategoryGridSkeleton />;
   if (categories.length === 0) return null;
 
   const [c1, c2, c3, c4, c5] = categories;
@@ -37,11 +38,9 @@ export default function CategoryGrid({ categories = [] }) {
           {c1 && <CategoryCard category={c1} />}
           {c2 && <CategoryCard category={c2} />}
         </div>
-
         <div className="flex-1 md:flex-[1.5]">
           {c3 && <CategoryCard category={c3} />}
         </div>
-
         <div className="flex flex-col gap-[2px] flex-1">
           {c4 && <CategoryCard category={c4} />}
           {c5 && <CategoryCard category={c5} />}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Skeleton from '../../../components/shared/Skeleton';
+import { HeroBannerSkeleton } from '../../../components/shared/SectionSkeletons';
 
 const staticBanners = [
   {
@@ -32,23 +33,9 @@ const staticBanners = [
   },
 ];
 
-function BannerSkeleton() {
-  return (
-    <div className="w-full h-[80vh] min-h-[500px] max-h-[800px] bg-gray-100 overflow-hidden relative">
-      <Skeleton className="absolute inset-0" />
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6">
-        <Skeleton className="h-4 w-32 rounded" />
-        <Skeleton className="h-10 w-72 rounded" />
-        <Skeleton className="h-5 w-48 rounded" />
-        <Skeleton className="h-12 w-36 rounded-full mt-4" />
-      </div>
-    </div>
-  );
-}
-
 export default function HeroBanner({ banners }) {
   if (banners === null) {
-    return <BannerSkeleton />;
+    return <HeroBannerSkeleton />;
   }
 
   const slides = banners.length > 0 ? banners : staticBanners;

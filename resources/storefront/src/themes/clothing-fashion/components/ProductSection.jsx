@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import ProductCard from './ProductCard';
+import { ProductGridSkeleton } from '../../../components/shared/SectionSkeletons';
 
-export default function ProductSection({ title, products = [], initialCount = 8 }) {
+export default function ProductSection({ title, products = [], initialCount = 8, loading }) {
   const [showAll, setShowAll] = useState(false);
-  const displayProducts = showAll ? products : products.slice(0, initialCount);
 
+  if (loading) return <ProductGridSkeleton />;
   if (products.length === 0) return null;
+
+  const displayProducts = showAll ? products : products.slice(0, initialCount);
 
   return (
     <section className="py-8 md:py-12">

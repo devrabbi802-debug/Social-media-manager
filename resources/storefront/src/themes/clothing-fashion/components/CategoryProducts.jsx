@@ -1,7 +1,9 @@
 import React from 'react';
 import ProductCard from './ProductCard';
+import { ProductGridSkeleton } from '../../../components/shared/SectionSkeletons';
 
-export default function CategoryProducts({ title, products = [] }) {
+export default function CategoryProducts({ title, products = [], loading }) {
+  if (loading) return <ProductGridSkeleton />;
   if (products.length === 0) return null;
 
   return (

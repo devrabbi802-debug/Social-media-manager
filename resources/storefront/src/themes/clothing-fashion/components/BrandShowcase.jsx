@@ -1,11 +1,13 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { BrandShowcaseSkeleton } from '../../../components/shared/SectionSkeletons';
 
-export default function BrandShowcase({ brands = [] }) {
+export default function BrandShowcase({ brands = [], loading }) {
+  if (loading) return <BrandShowcaseSkeleton />;
   if (brands.length === 0) return null;
 
   return (
-    <section className="py-12 bg-surface">
+    <section className="py-12 bg-gray-50">
       <div className="container mx-auto px-4">
         <h2 className="text-2xl font-bold text-center mb-8">Our Brands</h2>
         <div className="flex flex-wrap justify-center items-center gap-8">

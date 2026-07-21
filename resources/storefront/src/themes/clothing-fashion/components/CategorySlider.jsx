@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { CategorySliderSkeleton } from '../../../components/shared/SectionSkeletons';
 
-export default function CategorySlider({ categories = [] }) {
+export default function CategorySlider({ categories = [], loading }) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
+  if (loading) return <CategorySliderSkeleton />;
   if (categories.length === 0) return null;
 
   const visibleCount = 5;

@@ -1,8 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
+import { CategoryBannerSkeleton } from '../../../components/shared/SectionSkeletons';
 
-export default function CategoryBanner() {
+export default function CategoryBanner({ loading }) {
+  if (loading) return <CategoryBannerSkeleton />;
+
   return (
     <section className="py-8 md:py-12">
       <div className="container mx-auto px-4">

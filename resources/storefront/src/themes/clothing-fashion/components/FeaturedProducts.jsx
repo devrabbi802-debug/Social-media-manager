@@ -1,8 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import ProductCard from './ProductCard';
+import { ProductGridSkeleton } from '../../../components/shared/SectionSkeletons';
 
-export default function FeaturedProducts({ products = [] }) {
+export default function FeaturedProducts({ products = [], loading }) {
+  if (loading) return <ProductGridSkeleton />;
   if (products.length === 0) return null;
 
   return (
