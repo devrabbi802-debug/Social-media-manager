@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { ShoppingCart, Heart, Eye } from 'lucide-react';
+import { ShoppingCart, Heart, Eye, Star } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useWishlist } from '../contexts/WishlistContext';
 
@@ -85,28 +85,28 @@ export default function ProductCard({ product }) {
   };
 
   return (
-    <div className="group relative bg-white border border-gray-100 hover:border-gray-200 hover:shadow-lg transition-all duration-300">
-      <Link to={`/products/${slug}`} className="block relative overflow-hidden bg-gray-50">
+    <div className="group relative bg-white rounded-xl shadow-sm hover:shadow-xl border border-gray-100 hover:border-gray-200 transition-all duration-300 hover:-translate-y-1">
+      <Link to={`/products/${slug}`} className="block relative overflow-hidden rounded-t-xl bg-gray-50">
         <div className="aspect-[3/4]">
           {displayImage ? (
             <img
               src={displayImage}
               alt={name}
-              className="w-full h-full object-cover group-hover:scale-105 transition duration-700"
+              className="w-full h-full object-cover group-hover:scale-110 transition duration-700"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-gray-200 text-4xl">?</div>
           )}
         </div>
 
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-500" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
         <button
           onClick={handleToggleWishlist}
-          className="absolute top-3 right-3 w-9 h-9 flex items-center justify-center bg-white shadow-sm hover:shadow-md transition-all duration-200 z-10 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0"
+          className="absolute top-3 right-3 w-9 h-9 flex items-center justify-center bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white hover:scale-110 transition-all duration-200 z-10 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0"
         >
           <Heart
-            className={`w-4 h-4 transition ${
+            className={`w-[18px] h-[18px] transition ${
               isWishlisted(product.id) ? 'fill-red-500 text-red-500' : 'text-gray-700'
             }`}
           />
@@ -114,19 +114,19 @@ export default function ProductCard({ product }) {
 
         <Link
           to={`/products/${slug}`}
-          className="absolute top-3 right-14 w-9 h-9 flex items-center justify-center bg-white shadow-sm hover:shadow-md transition-all duration-200 z-10 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0"
+          className="absolute top-3 right-14 w-9 h-9 flex items-center justify-center bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white hover:scale-110 transition-all duration-200 z-10 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0"
           style={{ transitionDelay: '50ms' }}
         >
-          <Eye className="w-4 h-4 text-gray-700" />
+          <Eye className="w-[18px] h-[18px] text-gray-700" />
         </Link>
 
         {hasDiscount && (
-          <span className="absolute top-3 left-3 bg-red-500 text-white text-[10px] px-2 py-1 font-semibold tracking-wider z-10 shadow-sm">
+          <span className="absolute top-3 left-3 bg-gradient-to-r from-red-500 to-rose-500 text-white text-[10px] px-2.5 py-1 font-bold tracking-wider z-10 shadow-lg rounded-full">
             -{discountPercent}%
           </span>
         )}
         {isOutOfStock && (
-          <span className="absolute top-3 left-3 bg-gray-900 text-white text-[10px] px-2 py-1 font-semibold tracking-wider z-10 shadow-sm">
+          <span className="absolute top-3 left-3 bg-gray-900/90 backdrop-blur-sm text-white text-[10px] px-2.5 py-1 font-bold tracking-wider z-10 shadow-lg rounded-full">
             SOLD OUT
           </span>
         )}
@@ -135,7 +135,7 @@ export default function ProductCard({ product }) {
           <button
             onClick={handleAddToCart}
             disabled={isOutOfStock}
-            className="w-full bg-gray-900 text-white py-3 text-xs font-medium tracking-wider uppercase hover:bg-gray-800 transition shadow-lg flex items-center justify-center gap-2"
+            className="w-full bg-white text-gray-900 py-3 text-xs font-semibold tracking-wider uppercase hover:bg-gray-900 hover:text-white transition-all duration-300 shadow-lg rounded-lg flex items-center justify-center gap-2"
           >
             <ShoppingCart className="w-3.5 h-3.5" />
             {isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
@@ -143,8 +143,8 @@ export default function ProductCard({ product }) {
         </div>
       </Link>
 
-      <div className="p-3 md:p-4">
-        <div className="flex items-center justify-between mb-1.5">
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-2">
           {category && (
             <span className="text-[10px] text-gray-400 uppercase tracking-[0.15em] font-medium">
               {typeof category === 'string' ? category : category.name}
@@ -152,34 +152,34 @@ export default function ProductCard({ product }) {
           )}
           <div className="flex items-center gap-0.5">
             {[...Array(5)].map((_, i) => (
-              <span key={i} className="w-2 h-2 rounded-full bg-gray-200" />
+              <Star key={i} className="w-3 h-3 fill-gray-200 text-gray-200" />
             ))}
           </div>
         </div>
 
         <Link to={`/products/${slug}`}>
-          <h3 className="text-sm font-semibold text-gray-900 mb-2 line-clamp-1 leading-snug hover:text-gray-600 transition">
+          <h3 className="text-sm font-semibold text-gray-900 mb-2.5 line-clamp-1 leading-snug hover:text-primary transition-colors">
             {name}
           </h3>
         </Link>
 
-        <div className="flex items-center gap-2 mb-2.5">
-          <span className="text-sm font-bold text-gray-900">৳{displayPrice}</span>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-lg font-bold text-gray-900">৳{displayPrice}</span>
           {hasDiscount && (
-            <span className="text-xs text-gray-300 line-through">৳{displayBasePrice}</span>
+            <span className="text-sm text-gray-400 line-through">৳{displayBasePrice}</span>
           )}
         </div>
 
         {uniqueColors.length > 0 && (
-          <div className="flex items-center gap-1.5 mb-0.5">
+          <div className="flex items-center gap-2 mb-0.5">
             {colorVariants.map((v) => (
               <button
                 key={v.color}
                 onClick={(e) => { e.preventDefault(); setSelectedColor(v.color); setSelectedSize(null); }}
-                className={`w-[18px] h-[18px] rounded-full border-2 transition-all duration-200 ${
+                className={`w-5 h-5 rounded-full transition-all duration-200 ${
                   selectedColor === v.color
-                    ? 'border-gray-900 scale-110 shadow-sm'
-                    : 'border-gray-200 hover:border-gray-400'
+                    ? 'ring-2 ring-gray-900 ring-offset-2 scale-110'
+                    : 'ring-1 ring-gray-300 hover:ring-gray-400'
                 }`}
                 style={{ backgroundColor: colorMap[v.color] || '#ccc' }}
                 title={v.color}
@@ -189,15 +189,15 @@ export default function ProductCard({ product }) {
         )}
 
         {uniqueSizes.length > 0 && selectedColor && (
-          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+          <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
             {sizeVariants.map((v) => (
               <button
                 key={v.size}
                 onClick={(e) => { e.preventDefault(); setSelectedSize(selectedSize === v.size ? null : v.size); }}
-                className={`text-[11px] px-2 py-0.5 font-medium transition-all duration-200 ${
+                className={`text-[11px] px-2.5 py-1 font-medium rounded-md transition-all duration-200 ${
                   selectedSize === v.size
-                    ? 'bg-gray-900 text-white'
-                    : 'bg-gray-50 text-gray-500 border border-gray-200 hover:border-gray-400 hover:bg-gray-100'
+                    ? 'bg-gray-900 text-white shadow-sm'
+                    : 'bg-gray-50 text-gray-600 border border-gray-200 hover:border-gray-900 hover:text-gray-900'
                 }`}
               >
                 {v.size}
