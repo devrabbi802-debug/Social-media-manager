@@ -10,6 +10,15 @@ import CategoryProducts from '../components/CategoryProducts';
 import Features from '../components/Features';
 import api from '../../../api/client';
 
+const defaultCategories = [
+  { id: 1, name: 'T-Shirts', slug: 't-shirts', image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=800&q=80', products_count: 24 },
+  { id: 2, name: 'Denim', slug: 'denim', image: 'https://images.unsplash.com/photo-1542272454315-4c01d7abdf4a?w=800&q=80', products_count: 18 },
+  { id: 3, name: 'Hoodies', slug: 'hoodies', image: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=800&q=80', products_count: 15 },
+  { id: 4, name: 'Jackets', slug: 'jackets', image: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&q=80', products_count: 12 },
+  { id: 5, name: 'Shoes', slug: 'shoes', image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&q=80', products_count: 30 },
+  { id: 6, name: 'Accessories', slug: 'accessories', image: 'https://images.unsplash.com/photo-1606760227091-3dd870d97f1d?w=800&q=80', products_count: 20 },
+];
+
 const defaultTitles = {
   'best-selling': 'BEST SELLING',
   'new-arrival': 'NEW ARRIVAL',
@@ -29,8 +38,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [saveVer, setSaveVer] = useState(0);
 
-  const gridCategories = featuredCategories && featuredCategories.length > 0 ? featuredCategories.slice(0, 5) : null;
-  const sliderCategories = allCategories && allCategories.length > 0 ? allCategories : null;
+  const gridCategories = featuredCategories && featuredCategories.length > 0 ? featuredCategories.slice(0, 5) : defaultCategories;
+  const sliderCategories = allCategories && allCategories.length > 0 ? allCategories : defaultCategories;
 
   useEffect(() => {
     if (isEditorMode && window.__editor_banners && window.__editor_categories && window.__editor_all_categories) {
