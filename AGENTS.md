@@ -30,7 +30,7 @@ php artisan tenants:seed      # seed tenant DBs
 2. `routes/api.php` — `/api/storefront/*` and `/api/themes/*` (tenant-scoped via domain middleware), `/api/editor/*` (theme editor PUT endpoints)
 3. `routes/console.php` — Artisan commands
 4. `routes/admin.php` — central admin `/rootadmin/*` (auth guard `admin`, landlord DB). Loaded via `bootstrap/app.php` `then:` callback.
-5. `routes/tenant.php` — per-tenant dashboard, inventory, Facebook OAuth, **storefront catch-all LAST** (loaded by tenancy package)
+5. `routes/tenant.php` — per-tenant dashboard, inventory, Facebook OAuth, **storefront catch-all LAST** (loaded by `TenancyServiceProvider` via `booted()` callback)
 
 `tenant.php` defines named routes (`login`, `register`, `logout`). Central routes deliberately leave these unnamed — `withRouting()` loads `web.php` AFTER `tenant.php`; a name conflict would overwrite the tenant route.
 
@@ -47,6 +47,7 @@ php artisan tenants:seed      # seed tenant DBs
 - **`locale` middleware** on all tenant routes (sets locale from user DB column)
 - **`central` middleware** on central-only routes (prevents access on tenant subdomains)
 - **`TenantCouldNotBeIdentifiedOnDomainException` → 404** (`bootstrap/app.php:38-40`)
+- **Tenant DB auto-created** on tenant creation — `TenancyServiceProvider` pipelines `CreateDatabase` + `MigrateDatabase` jobs
 
 ## Storefront SPA
 
@@ -54,7 +55,7 @@ php artisan tenants:seed      # seed tenant DBs
 - **Build**: `cd resources/storefront && npm run build` → `public/storefront/` (manifest enabled)
 - **Watch**: `npm run watch` — auto-rebuild on change (no HMR)
 - **Dev proxy**: `vite.config.js` proxies `/api` → `http://localhost:8000`
-- **Themes**: `resources/storefront/src/themes/` lazy-loaded by slug; `clothing-fashion` (default) and `classic`
+- **Themes**: lazy-loaded via `resources/storefront/src/themes/index.js`; `clothing-fashion` (default) and `classic`
 - **Cart**: client-side React Context (localStorage) — no backend cart API
 - **Editor mode**: `?editor=true` URL param toggles `EditableSection` overlays
 - **`sections_data`** JSON column on `StorefrontSettings` stores editor state (categories, all_categories, banners, section_titles)
@@ -69,7 +70,8 @@ docker exec laravel-app php artisan <command>
 **7 services**: app(8000), mysql(3307), node(5173), redis(6379), phpmyadmin(8080), worker(Horizon via Supervisor), clip-server(8089).
 
 - `docker-entrypoint.sh`: waits for MySQL → `composer install --no-dev` → `npm install` (root only) → `key:generate` → `migrate` → `artisan serve --host=0.0.0.0 --port=8000`
-- **Storefront not auto-built in Docker** — build manually or run `node` service
+- Node service runs `npm install && npm run dev -- --host 0.0.0.0`
+- **Storefront not auto-built in Docker** — build manually
 - Worker runs Supervisor + Horizon (`docker/worker-entrypoint.sh` + `docker/supervisord.conf`)
 - CLIP server: Dockerfile in `clip-server/`, port 8089, persists model cache to `clip-models` volume
 
@@ -103,7 +105,8 @@ Minimal — 2 Laravel examples (`tests/Feature/ExampleTest.php`, `tests/Unit/Exa
 ## Gotchas
 
 - `.env` uses MySQL+Redis; `.env.example` defaults to PostgreSQL + database-backed queue/cache/session
-- `.env` has duplicate `QUEUE_CONNECTION=redis` (lines 39 and 50) — second wins
+- `.env` has duplicate `QUEUE_CONNECTION=redis` entries — last one wins
+- `.env` `APP_NAME="Get ERP Store"` — not the repo name
 - Root Vite = Tailwind v4 (`@tailwindcss/vite`); storefront Vite = Tailwind v3 (PostCSS + `tailwindcss` + `autoprefixer`)
 - `start.sh` orchestrates local dev: Docker + CLIP server + dnsmasq + Apache proxy + Ngrok + storefront auto-build
 - `setup-domain.sh` configures `smm.test` wildcard via dnsmasq + Apache reverse proxy to port 8000
