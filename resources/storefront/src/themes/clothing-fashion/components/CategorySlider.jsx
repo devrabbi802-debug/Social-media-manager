@@ -46,7 +46,7 @@ export default function CategorySlider({ categories = [], loading }) {
                   className="group flex-1 min-w-0"
                 >
                   <div className="relative bg-gray-900 border border-gray-100 hover:border-gray-300 hover:shadow-md transition-all duration-300 overflow-hidden">
-                    <div className="aspect-[4/5] bg-cover bg-center group-hover:scale-105 transition duration-500" style={{ backgroundImage: `url(${cat.image})` }} />
+                    <div className="aspect-[4/5] bg-cover bg-center group-hover:scale-105 transition duration-500" style={{ backgroundImage: `url(${cat.custom_image || cat.image})` }} />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                     <div className="absolute bottom-0 left-0 right-0 p-3 text-center">
                       <h3 className="text-sm font-semibold text-white drop-shadow-sm">{cat.name}</h3>

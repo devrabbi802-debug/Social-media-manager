@@ -51,5 +51,7 @@ Route::middleware([
     Route::get('/sections', [ThemeEditorController::class, 'sections']);
     Route::put('/sections/banners', [ThemeEditorController::class, 'updateBanners']);
     Route::put('/sections/notices', [ThemeEditorController::class, 'updateNotices']);
+    Route::put('/sections/categories', [ThemeEditorController::class, 'updateCategories']);
+    Route::put('/sections/all-categories', [ThemeEditorController::class, 'updateAllCategories']);
     Route::post('/upload', [ThemeEditorController::class, 'uploadImage']);
 });

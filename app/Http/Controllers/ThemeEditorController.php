@@ -17,6 +17,8 @@ class ThemeEditorController extends Controller
             'banners' => $data['banners'] ?? [],
             'features' => $data['features'] ?? [],
             'notices' => $data['notices'] ?? [],
+            'categories' => $data['categories'] ?? [],
+            'all_categories' => $data['all_categories'] ?? [],
         ]);
     }
 
@@ -69,6 +71,62 @@ class ThemeEditorController extends Controller
         return response()->json([
             'message' => 'Notices updated successfully',
             'notices' => $sectionsData['notices'],
+        ]);
+    }
+
+    public function updateCategories(Request $request)
+    {
+        $validated = $request->validate([
+            'categories' => 'required|array|max:5',
+            'categories.*.id' => 'required|integer|exists:categories,id',
+            'categories.*.name' => 'nullable|string|max:255',
+            'categories.*.slug' => 'nullable|string|max:255',
+            'categories.*.image' => 'nullable|string|max:500',
+            'categories.*.custom_image' => 'nullable|string|max:500',
+            'categories.*.products_count' => 'nullable|integer|min:0',
+        ]);
+
+        $storefront = StorefrontSettings::first();
+        if (!$storefront) {
+            return response()->json(['message' => 'Storefront not found'], 404);
+        }
+
+        $sectionsData = $storefront->sections_data ?? [];
+        $sectionsData['categories'] = $validated['categories'];
+
+        $storefront->update(['sections_data' => $sectionsData]);
+
+        return response()->json([
+            'message' => 'Categories updated successfully',
+            'categories' => $sectionsData['categories'],
+        ]);
+    }
+
+    public function updateAllCategories(Request $request)
+    {
+        $validated = $request->validate([
+            'all_categories' => 'required|array',
+            'all_categories.*.id' => 'required|integer|exists:categories,id',
+            'all_categories.*.name' => 'nullable|string|max:255',
+            'all_categories.*.slug' => 'nullable|string|max:255',
+            'all_categories.*.image' => 'nullable|string|max:500',
+            'all_categories.*.custom_image' => 'nullable|string|max:500',
+            'all_categories.*.products_count' => 'nullable|integer|min:0',
+        ]);
+
+        $storefront = StorefrontSettings::first();
+        if (!$storefront) {
+            return response()->json(['message' => 'Storefront not found'], 404);
+        }
+
+        $sectionsData = $storefront->sections_data ?? [];
+        $sectionsData['all_categories'] = $validated['all_categories'];
+
+        $storefront->update(['sections_data' => $sectionsData]);
+
+        return response()->json([
+            'message' => 'All categories updated successfully',
+            'all_categories' => $sectionsData['all_categories'],
         ]);
     }
 

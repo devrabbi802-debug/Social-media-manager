@@ -86,19 +86,24 @@ class StorefrontApiController extends Controller
             ->get()
             ->map(fn($product) => $this->formatProduct($product));
 
-        // Categories (active, root only, limit 6)
-        $categories = Category::where('is_active', true)
-            ->whereNull('parent_id')
-            ->orderBy('sort_order')
-            ->limit(6)
-            ->get()
-            ->map(fn($cat) => [
-                'id' => $cat->id,
-                'name' => $cat->name,
-                'slug' => $cat->slug,
-                'image' => $cat->image,
-                'products_count' => $cat->products()->active()->count(),
-            ]);
+        // Categories (from editor settings if set, otherwise DB)
+        $editorCategories = $storefront?->sections_data['categories'] ?? [];
+        if (!empty($editorCategories)) {
+            $categories = $editorCategories;
+        } else {
+            $categories = Category::where('is_active', true)
+                ->whereNull('parent_id')
+                ->orderBy('sort_order')
+                ->limit(6)
+                ->get()
+                ->map(fn($cat) => [
+                    'id' => $cat->id,
+                    'name' => $cat->name,
+                    'slug' => $cat->slug,
+                    'image' => $cat->image ? Storage::disk('public')->url($cat->image) : null,
+                    'products_count' => $cat->products()->active()->count(),
+                ]);
+        }
 
         // Active brands
         $brands = Brand::where('is_active', true)
@@ -111,10 +116,19 @@ class StorefrontApiController extends Controller
                 'logo' => $brand->logo,
             ]);
 
+        // All categories (from editor settings if set, otherwise DB)
+        $editorAllCategories = $storefront?->sections_data['all_categories'] ?? [];
+        if (!empty($editorAllCategories)) {
+            $allCategories = $editorAllCategories;
+        } else {
+            $allCategories = $categories;
+        }
+
         return response()->json([
             'banners' => $banners,
             'featured_products' => $featuredProducts,
             'categories' => $categories,
+            'all_categories' => $allCategories,
             'brands' => $brands,
         ]);
     }
@@ -194,7 +208,14 @@ class StorefrontApiController extends Controller
         $categories = Category::where('is_active', true)
             ->withCount(['products' => fn($q) => $q->active()])
             ->orderBy('sort_order')
-            ->get();
+            ->get()
+            ->map(fn($cat) => [
+                'id' => $cat->id,
+                'name' => $cat->name,
+                'slug' => $cat->slug,
+                'image' => $cat->image ? Storage::disk('public')->url($cat->image) : null,
+                'products_count' => (int) $cat->products_count,
+            ]);
 
         return response()->json($categories);
     }

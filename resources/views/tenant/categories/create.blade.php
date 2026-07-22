@@ -21,7 +21,7 @@
     </div>
 
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <form action="{{ route('inventory.categories.store') }}" method="POST">
+        <form action="{{ route('inventory.categories.store') }}" method="POST" enctype="multipart/form-data">
             @csrf
             <div class="bg-white rounded-2xl p-6 shadow-sm space-y-4">
                 <div>
@@ -41,6 +41,12 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">@lang('categories.description')</label>
                     <textarea name="description" rows="3" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">{{ old('description') }}</textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">@lang('categories.image')</label>
+                    <input type="file" name="image" accept="image/*"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100">
+                    @error('image') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                 </div>
                 <div>
                     <label class="flex items-center space-x-3 cursor-pointer">

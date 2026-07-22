@@ -5,6 +5,8 @@ import { loadTheme } from './themes';
 import { EditorProvider, useEditor } from './components/editor/EditorContext';
 import EditorToolbar from './components/editor/EditorToolbar';
 import BannerEditorModal from './components/editor/BannerEditorModal';
+import CategoryEditorModal from './components/editor/CategoryEditorModal';
+import AllCategoryEditorModal from './components/editor/AllCategoryEditorModal';
 import ChunkErrorBoundary from './components/shared/ChunkErrorBoundary';
 import Skeleton from './components/shared/Skeleton';
 import api from './api/client';
@@ -21,6 +23,26 @@ function EditorOverlay({ onExit }) {
           onClose={closeEditor}
           onSaved={(banners) => {
             window.__editor_banners = banners;
+          }}
+        />
+      )}
+
+      {activeSection?.type === 'category-grid' && (
+        <CategoryEditorModal
+          sectionData={activeSection.data}
+          onClose={closeEditor}
+          onSaved={(categories) => {
+            window.__editor_categories = categories;
+          }}
+        />
+      )}
+
+      {activeSection?.type === 'all-categories' && (
+        <AllCategoryEditorModal
+          sectionData={activeSection.data}
+          onClose={closeEditor}
+          onSaved={(categories) => {
+            window.__editor_all_categories = categories;
           }}
         />
       )}

@@ -10,7 +10,7 @@ function CategoryCard({ category }) {
     >
       <div
         className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
-        style={{ backgroundImage: `url(${category.image})` }}
+        style={{ backgroundImage: `url(${category.custom_image || category.image})` }}
       />
       <div className="absolute inset-0 bg-black/30 group-hover:bg-black/40 transition-all duration-500" />
       <div className="absolute inset-0 flex flex-col items-center justify-end p-4 md:p-6 text-white bg-gradient-to-t from-black/60 via-transparent to-transparent">

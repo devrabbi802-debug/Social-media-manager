@@ -11,7 +11,7 @@ import Features from '../components/Features';
 import { allProducts } from '../data/products';
 import api from '../../../api/client';
 
-const categories = [
+const defaultCategories = [
   { id: 1, name: 'T-Shirts', slug: 't-shirts', image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=800&q=80', products_count: 24 },
   { id: 2, name: 'Denim', slug: 'denim', image: 'https://images.unsplash.com/photo-1542272454315-4c01d7abdf4a?w=800&q=80', products_count: 18 },
   { id: 3, name: 'Hoodies', slug: 'hoodies', image: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=800&q=80', products_count: 15 },
@@ -29,20 +29,28 @@ const jacketProducts = allProducts.filter((p) => jacketIds.includes(p.id));
 export default function Home() {
   const { isEditorMode } = useEditor();
   const [banners, setBanners] = useState(null);
+  const [featuredCategories, setFeaturedCategories] = useState(null);
+  const [allCategories, setAllCategories] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saveVer, setSaveVer] = useState(0);
 
+  const gridCategories = featuredCategories && featuredCategories.length > 0 ? featuredCategories.slice(0, 5) : defaultCategories;
+  const sliderCategories = allCategories && allCategories.length > 0 ? allCategories : defaultCategories;
+
   useEffect(() => {
-    if (isEditorMode && window.__editor_banners) {
+    if (isEditorMode && window.__editor_banners && window.__editor_categories && window.__editor_all_categories) {
       setBanners(window.__editor_banners);
+      setFeaturedCategories(window.__editor_categories.slice(0, 5));
+      setAllCategories(window.__editor_all_categories);
       setLoading(false);
       return;
     }
 
     const endpoint = isEditorMode ? '/editor/sections' : '/storefront/home';
     api.get(endpoint).then((res) => {
-      const fetched = isEditorMode ? (res.banners || []) : (res.banners || []);
-      setBanners(fetched);
+      setBanners(res.banners || []);
+      setFeaturedCategories(res.categories ? res.categories.slice(0, 5) : null);
+      setAllCategories(res.all_categories || null);
     }).catch(() => {
       setBanners([]);
     }).finally(() => {
@@ -56,21 +64,43 @@ export default function Home() {
     setSaveVer((v) => v + 1);
   };
 
-  const sectionData = {
+  const handleCategoriesSaved = (newCategories) => {
+    window.__editor_categories = newCategories;
+    setFeaturedCategories(newCategories.slice(0, 5));
+    setSaveVer((v) => v + 1);
+  };
+
+  const handleAllCategoriesSaved = (newCategories) => {
+    window.__editor_all_categories = newCategories;
+    setAllCategories(newCategories);
+    setSaveVer((v) => v + 1);
+  };
+
+  const bannerSectionData = {
     banners: banners,
     onBannersSaved: handleBannersSaved,
   };
 
+  const gridSectionData = {
+    categories: gridCategories,
+    onCategoriesSaved: handleCategoriesSaved,
+  };
+
+  const sliderSectionData = {
+    allCategories: sliderCategories,
+    onAllCategoriesSaved: handleAllCategoriesSaved,
+  };
+
   return (
     <div>
-      <EditableSection sectionType="banners" sectionData={sectionData} label="Slider">
+      <EditableSection sectionType="banners" sectionData={bannerSectionData} label="Slider">
         <HeroBanner banners={banners} />
       </EditableSection>
-      <EditableSection sectionType="category-grid" sectionData={{ categories }} label="Categories">
-        <CategoryGrid categories={categories} loading={loading} />
+      <EditableSection sectionType="category-grid" sectionData={gridSectionData} label="Categories">
+        <CategoryGrid categories={gridCategories} loading={loading} />
       </EditableSection>
-      <EditableSection sectionType="category-slider" sectionData={{ categories }} label="Category Slider">
-        <CategorySlider categories={categories} loading={loading} />
+      <EditableSection sectionType="all-categories" sectionData={sliderSectionData} label="All Categories">
+        <CategorySlider categories={sliderCategories} loading={loading} />
       </EditableSection>
       <EditableSection sectionType="best-selling" sectionData={{ products: bestSelling }} label="Best Selling">
         <ProductSection title="BEST SELLING" products={bestSelling} initialCount={8} loading={loading} />
