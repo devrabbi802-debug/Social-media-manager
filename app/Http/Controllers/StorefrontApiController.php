@@ -96,20 +96,50 @@ class StorefrontApiController extends Controller
             ->get()
             ->map(fn($product) => $this->formatProduct($product, true));
 
-        // Category products (from editor settings or first parent category)
-        $categorySlug = $storefront?->sections_data['category_products_slug'] ?? null;
-        if (!$categorySlug) {
-            $firstCategory = Category::where('is_active', true)->whereNull('parent_id')->orderBy('sort_order')->first();
-            $categorySlug = $firstCategory?->slug;
-        }
+        // Category products (from editor settings with per-category config)
+        $editorCategoryProducts = $storefront?->sections_data['category_products'] ?? null;
         $categoryProducts = collect();
-        if ($categorySlug) {
-            $categoryProducts = Product::active()
-                ->whereHas('category', fn($q) => $q->where('slug', $categorySlug))
-                ->with($productWith)
-                ->limit(10)
-                ->get()
-                ->map(fn($product) => $this->formatProduct($product, true));
+
+        if ($editorCategoryProducts && !empty($editorCategoryProducts['categories'])) {
+            foreach ($editorCategoryProducts['categories'] as $catConfig) {
+                $products = Product::active()
+                    ->whereHas('category', fn($q) => $q->where('id', $catConfig['id']))
+                    ->with($productWith)
+                    ->limit($catConfig['product_count'] ?? 4)
+                    ->get()
+                    ->map(fn($product) => $this->formatProduct($product, true));
+
+                $categoryProducts->push([
+                    'id' => $catConfig['id'],
+                    'name' => $catConfig['name'] ?? '',
+                    'slug' => $catConfig['slug'] ?? '',
+                    'banner_image' => $catConfig['banner_image'] ?? null,
+                    'product_count' => $catConfig['product_count'] ?? 4,
+                    'products' => $products,
+                ]);
+            }
+        } else {
+            // Fallback: first parent category
+            $firstCategory = Category::where('is_active', true)->whereNull('parent_id')->orderBy('sort_order')->first();
+            $fallbackSlug = $firstCategory?->slug;
+            $fallbackName = $firstCategory?->name ?? '';
+            if ($fallbackSlug) {
+                $products = Product::active()
+                    ->whereHas('category', fn($q) => $q->where('slug', $fallbackSlug))
+                    ->with($productWith)
+                    ->limit(10)
+                    ->get()
+                    ->map(fn($product) => $this->formatProduct($product, true));
+
+                $categoryProducts->push([
+                    'id' => $firstCategory?->id,
+                    'name' => $fallbackName,
+                    'slug' => $fallbackSlug,
+                    'banner_image' => null,
+                    'product_count' => 10,
+                    'products' => $products,
+                ]);
+            }
         }
 
         // Categories (from editor settings if set, otherwise DB)

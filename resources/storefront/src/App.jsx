@@ -9,6 +9,7 @@ import CategoryEditorModal from './components/editor/CategoryEditorModal';
 import AllCategoryEditorModal from './components/editor/AllCategoryEditorModal';
 import TitleEditorModal from './components/editor/TitleEditorModal';
 import CategoryBannerEditorModal from './components/editor/CategoryBannerEditorModal';
+import CategoryProductsEditorModal from './components/editor/CategoryProductsEditorModal';
 import ChunkErrorBoundary from './components/shared/ChunkErrorBoundary';
 import Skeleton from './components/shared/Skeleton';
 import api from './api/client';
@@ -49,7 +50,7 @@ function EditorOverlay({ onExit }) {
         />
       )}
 
-      {['best-selling', 'new-arrival', 'category-products'].includes(activeSection?.type) && (
+      {['best-selling', 'new-arrival'].includes(activeSection?.type) && (
         <TitleEditorModal
           sectionType={activeSection.type}
           sectionData={activeSection.data}
@@ -66,6 +67,16 @@ function EditorOverlay({ onExit }) {
           onClose={closeEditor}
           onSaved={(banner) => {
             window.__editor_category_banner = banner;
+          }}
+        />
+      )}
+
+      {activeSection?.type === 'category-products' && (
+        <CategoryProductsEditorModal
+          sectionData={activeSection.data}
+          onClose={closeEditor}
+          onSaved={(data) => {
+            window.__editor_category_products_data = data;
           }}
         />
       )}

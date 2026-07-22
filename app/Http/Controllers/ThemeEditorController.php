@@ -21,6 +21,7 @@ class ThemeEditorController extends Controller
             'categories' => $data['categories'] ?? [],
             'all_categories' => $data['all_categories'] ?? [],
             'section_titles' => $data['section_titles'] ?? [],
+            'category_products' => $data['category_products'] ?? null,
         ]);
     }
 
@@ -183,6 +184,34 @@ class ThemeEditorController extends Controller
         return response()->json([
             'message' => 'Category banner updated successfully',
             'category_banner' => $sectionsData['category_banner'],
+        ]);
+    }
+
+    public function updateCategoryProducts(Request $request)
+    {
+        $validated = $request->validate([
+            'title' => 'nullable|string|max:255',
+            'categories' => 'required|array',
+            'categories.*.id' => 'required|integer',
+            'categories.*.name' => 'nullable|string|max:255',
+            'categories.*.slug' => 'nullable|string|max:255',
+            'categories.*.banner_image' => 'nullable|string|max:500',
+            'categories.*.product_count' => 'nullable|integer|min:1|max:50',
+        ]);
+
+        $storefront = StorefrontSettings::first();
+        if (!$storefront) {
+            return response()->json(['message' => 'Storefront not found'], 404);
+        }
+
+        $sectionsData = $storefront->sections_data ?? [];
+        $sectionsData['category_products'] = $validated;
+
+        $storefront->update(['sections_data' => $sectionsData]);
+
+        return response()->json([
+            'message' => 'Category products updated successfully',
+            'category_products' => $sectionsData['category_products'],
         ]);
     }
 
