@@ -162,7 +162,7 @@ export default function Header({ storeName, storeLogo }) {
   const suggestionHover = 'hover:bg-gray-50';
 
   return (
-    <header className={`fixed top-8 left-0 right-0 z-50 transition-all duration-300 ${headerBg} ${textColor}`}>
+    <header id="store-header" className={`fixed top-8 left-0 right-0 z-50 transition-all duration-300 ${headerBg} ${textColor}`}>
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
