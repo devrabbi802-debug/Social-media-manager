@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ShoppingCart, ChevronRight, Star, Minus, Plus, Heart } from 'lucide-react';
+import { ShoppingCart, ChevronRight, Star, Minus, Plus, Heart, MessageSquare, Ruler, Package, Tag, ShieldCheck } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useWishlist } from '../contexts/WishlistContext';
+import ProductSection from '../components/ProductSection';
+import ImageZoom from '../../../components/shared/ImageZoom';
 import api from '../../../api/client';
 
 const colorMap = {
@@ -24,6 +26,9 @@ export default function ProductDetail() {
   const [selectedColor, setSelectedColor] = useState(null);
   const [selectedSize, setSelectedSize] = useState(null);
   const [quantity, setQuantity] = useState(1);
+  const [activeTab, setActiveTab] = useState('description');
+  const [relatedProducts, setRelatedProducts] = useState([]);
+  const [relatedLoading, setRelatedLoading] = useState(true);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -45,6 +50,21 @@ export default function ProductDetail() {
     };
     fetchProduct();
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // Fetch related products
+    const fetchRelated = async () => {
+      try {
+        setRelatedLoading(true);
+        const response = await api.get(`/storefront/products/${slug}/related`);
+        setRelatedProducts(response || []);
+      } catch (err) {
+        console.error('Failed to load related products:', err);
+        setRelatedProducts([]);
+      } finally {
+        setRelatedLoading(false);
+      }
+    };
+    fetchRelated();
   }, [slug]);
 
   const variants = product?.variants || [];
@@ -105,11 +125,11 @@ export default function ProductDetail() {
 
   if (loading) {
     return (
-      <div className="pt-20">
-        <div className="container mx-auto px-4 py-8">
+      <div className="pt-14">
+        <div className="container mx-auto px-4 py-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
             <div>
-              <div className="aspect-[4/5] bg-gray-100 rounded-xl animate-pulse mb-4" />
+              <div className="aspect-square bg-gray-100 rounded-xl animate-pulse mb-4" />
               <div className="flex gap-3">
                 {[1, 2, 3].map((i) => (
                   <div key={i} className="w-20 h-20 bg-gray-100 rounded-lg animate-pulse" />
@@ -139,7 +159,7 @@ export default function ProductDetail() {
 
   if (error === 'NOT_FOUND' || !product) {
     return (
-      <div className="pt-20">
+      <div className="pt-14">
         <div className="container mx-auto px-4 py-20 text-center">
           <div className="text-6xl mb-4">🔍</div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Product Not Found</h2>
@@ -154,7 +174,7 @@ export default function ProductDetail() {
 
   if (error) {
     return (
-      <div className="pt-20">
+      <div className="pt-14">
         <div className="container mx-auto px-4 py-20 text-center">
           <div className="text-6xl mb-4">⚠️</div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Something went wrong</h2>
@@ -165,12 +185,10 @@ export default function ProductDetail() {
         </div>
       </div>
     );
-  }
-
-  return (
-    <div className="pt-20">
-      <div className="container mx-auto px-4 py-8">
-        <nav className="flex items-center gap-2 text-xs text-gray-400 mb-8 uppercase tracking-wider">
+  }    return (
+    <div className="pt-14">
+      <div className="container mx-auto px-4 py-4">
+        <nav className="flex items-center gap-2 text-xs text-gray-400 mb-2 uppercase tracking-wider">
           <Link to="/" className="hover:text-gray-900 transition">Home</Link>
           <ChevronRight className="w-3 h-3" />
           <Link to="/products" className="hover:text-gray-900 transition">Products</Link>
@@ -186,19 +204,15 @@ export default function ProductDetail() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
           <div>
-            <div className="aspect-[4/5] bg-gray-50 rounded-xl overflow-hidden mb-4">
-              {images.length > 0 ? (
-                <img
-                  src={images[currentImageIndex]}
-                  alt={product.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-200 text-6xl">?</div>
-              )}
-            </div>
+            <ImageZoom
+              src={images[currentImageIndex] || null}
+              alt={product.name}
+              images={images}
+              currentIndex={currentImageIndex}
+              onImageChange={setSelectedImage}
+            />
             {images.length > 1 && (
-              <div className="flex gap-3">
+              <div className="flex gap-3 mt-4">
                 {images.map((img, i) => (
                   <button
                     key={i}
@@ -212,13 +226,112 @@ export default function ProductDetail() {
                 ))}
               </div>
             )}
+
+            {/* Description & Reviews Tabs */}
+            <div className="mt-8 border border-gray-200 rounded-xl overflow-hidden">
+              {/* Tab Buttons */}
+              <div className="flex border-b border-gray-200 bg-gray-50/50">
+                <button
+                  onClick={() => setActiveTab('description')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3.5 text-xs font-bold uppercase tracking-wider transition-all duration-200 relative ${
+                    activeTab === 'description'
+                      ? 'text-gray-900 bg-white'
+                      : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  Description
+                  {activeTab === 'description' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900" />
+                  )}
+                </button>
+                <button
+                  onClick={() => setActiveTab('reviews')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3.5 text-xs font-bold uppercase tracking-wider transition-all duration-200 relative ${
+                    activeTab === 'reviews'
+                      ? 'text-gray-900 bg-white'
+                      : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <Star className="w-3.5 h-3.5" />
+                  Reviews
+                  {activeTab === 'reviews' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900" />
+                  )}
+                </button>
+              </div>
+
+              {/* Tab Content */}
+              <div className="p-6">
+                {activeTab === 'description' && (
+                  <div className="animate-fade-in">
+                    {product.description ? (
+                      <div>
+                        <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{product.description}</p>
+
+                        {product.attributes?.length > 0 && (
+                          <div className="mt-6 pt-6 border-t border-gray-100">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-900 mb-4">Product Details</h4>
+                            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {product.attributes.map((attr, i) => (
+                                <div key={i} className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-3">
+                                  <Ruler className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                  <div>
+                                    <dt className="text-[11px] text-gray-400 uppercase tracking-wider">{attr.attribute}</dt>
+                                    <dd className="text-sm text-gray-900 font-medium">{attr.value}</dd>
+                                  </div>
+                                </div>
+                              ))}
+                            </dl>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-400 text-center py-8">No description available.</p>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'reviews' && (
+                  <div className="animate-fade-in">
+                    <div className="text-center py-8">
+                      <div className="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
+                        <Star className="w-7 h-7 text-amber-400" />
+                      </div>
+                      <h4 className="text-base font-semibold text-gray-900 mb-2">No Reviews Yet</h4>
+                      <p className="text-sm text-gray-400 max-w-xs mx-auto mb-6">
+                        Be the first to share your thoughts about this product.
+                      </p>
+                      <button className="inline-flex items-center gap-2 bg-gray-900 text-white px-5 py-2.5 text-xs font-semibold uppercase tracking-wider rounded-lg hover:bg-gray-800 transition">
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        Write a Review
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-col">
-            {product.category && (
-              <span className="text-xs uppercase tracking-[0.2em] text-gray-400 mb-2">
-                {product.category.name}
-              </span>
+            {(product.category || product.brand) && (
+              <div className="flex items-center gap-3 mb-2">
+                {product.category && (
+                  <span className="text-xs uppercase tracking-[0.2em] text-gray-400">
+                    {product.category.name}
+                  </span>
+                )}
+                {product.brand && (
+                  <span className="text-xs font-medium text-gray-900 bg-gray-100 px-2.5 py-0.5 rounded-full">
+                    {product.brand.name}
+                  </span>
+                )}
+                {product.sku && (
+                  <span className="text-[10px] font-mono text-gray-400 bg-gray-50 px-2 py-0.5 rounded border border-gray-200">
+                    SKU: {product.sku}
+                  </span>
+                )}
+              </div>
             )}
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">{product.name}</h1>
 
@@ -347,27 +460,76 @@ export default function ProductDetail() {
               </button>
             </div>
 
-            {product.description && (
-              <div className="border-t border-gray-100 pt-6">
-                <h4 className="text-xs font-bold uppercase tracking-wider mb-3">Description</h4>
-                <p className="text-sm text-gray-500 leading-relaxed">{product.description}</p>
+            {/* Product Information */}
+            {product.sku || product.attributes?.length > 0 ? (
+              <div className="border-t border-gray-100 pt-6 mt-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-900 mb-4">
+                  Product Information
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {product.sku && (
+                    <div className="flex items-center gap-2.5 bg-gray-50 rounded-lg px-3.5 py-2.5">
+                      <Tag className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                      <div>
+                        <span className="text-[10px] text-gray-400 uppercase tracking-wider block">Model / SKU</span>
+                        <span className="text-sm text-gray-900 font-medium font-mono">{product.sku}</span>
+                      </div>
+                    </div>
+                  )}
+                  {product.category && (
+                    <div className="flex items-center gap-2.5 bg-gray-50 rounded-lg px-3.5 py-2.5">
+                      <Package className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                      <div>
+                        <span className="text-[10px] text-gray-400 uppercase tracking-wider block">Category</span>
+                        <span className="text-sm text-gray-900 font-medium">{product.category.name}</span>
+                      </div>
+                    </div>
+                  )}
+                  {product.brand && (
+                    <div className="flex items-center gap-2.5 bg-gray-50 rounded-lg px-3.5 py-2.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                      <div>
+                        <span className="text-[10px] text-gray-400 uppercase tracking-wider block">Brand</span>
+                        <span className="text-sm text-gray-900 font-medium">{product.brand.name}</span>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2.5 bg-gray-50 rounded-lg px-3.5 py-2.5">
+                    <Package className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                    <div>
+                      <span className="text-[10px] text-gray-400 uppercase tracking-wider block">Availability</span>
+                      <span className={`text-sm font-medium ${isOutOfStock ? 'text-red-500' : 'text-green-600'}`}>
+                        {isOutOfStock ? 'Out of Stock' : `${displayStock} in stock`}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
+            ) : (
+              product.brand && (
+                <div className="border-t border-gray-100 pt-6 mt-2">
+                  <div className="flex items-center gap-2.5 bg-gray-50 rounded-lg px-3.5 py-2.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                    <div>
+                      <span className="text-[10px] text-gray-400 uppercase tracking-wider block">Brand</span>
+                      <span className="text-sm text-gray-900 font-medium">{product.brand.name}</span>
+                    </div>
+                  </div>
+                </div>
+              )
             )}
 
-            {product.attributes?.length > 0 && (
-              <div className="border-t border-gray-100 pt-6 mt-4">
-                <h4 className="text-xs font-bold uppercase tracking-wider mb-3">Details</h4>
-                <dl className="space-y-2">
-                  {product.attributes.map((attr, i) => (
-                    <div key={i} className="flex text-sm">
-                      <dt className="text-gray-400 w-32">{attr.attribute}</dt>
-                      <dd className="text-gray-900 font-medium">{attr.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </div>
-            )}
           </div>
+        </div>
+
+        {/* Related Products Section */}
+        <div className="mt-12 md:mt-16 border-t border-gray-100 pt-8 md:pt-12">
+          <ProductSection
+            title="Related Products"
+            products={relatedProducts}
+            loading={relatedLoading}
+            initialCount={4}
+          />
         </div>
       </div>
     </div>

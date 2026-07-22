@@ -27,6 +27,7 @@ Route::middleware([
     Route::get('/home', [StorefrontApiController::class, 'home']);
     Route::get('/products', [StorefrontApiController::class, 'products']);
     Route::get('/products/{slug}', [StorefrontApiController::class, 'product']);
+    Route::get('/products/{slug}/related', [StorefrontApiController::class, 'relatedProducts']);
     Route::get('/categories', [StorefrontApiController::class, 'categories']);
     Route::get('/brands', [StorefrontApiController::class, 'brands']);
     Route::get('/featured', [StorefrontApiController::class, 'featured']);

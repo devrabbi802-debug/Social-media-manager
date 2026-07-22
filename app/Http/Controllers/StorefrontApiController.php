@@ -295,6 +295,39 @@ class StorefrontApiController extends Controller
     }
 
     /**
+     * Related products based on same category
+     */
+    public function relatedProducts(string $slug)
+    {
+        $product = Product::active()->where('slug', $slug)->firstOrFail();
+
+        $related = Product::active()
+            ->where('id', '!=', $product->id)
+            ->where('category_id', $product->category_id)
+            ->with(['category', 'brand', 'images', 'variants.images'])
+            ->limit(8)
+            ->get()
+            ->map(fn($p) => $this->formatProduct($p, true))
+            ->values();
+
+        // If not enough in same category, fallback to latest products
+        if ($related->count() < 4) {
+            $excludeIds = collect([$product->id])->merge($related->pluck('id'));
+            $fallback = Product::active()
+                ->whereNotIn('id', $excludeIds)
+                ->with(['category', 'brand', 'images', 'variants.images'])
+                ->inRandomOrder()
+                ->limit(8 - $related->count())
+                ->get()
+                ->map(fn($p) => $this->formatProduct($p, true));
+
+            $related = $related->concat($fallback)->values();
+        }
+
+        return response()->json($related);
+    }
+
+    /**
      * Featured products only
      */
     public function featured()
