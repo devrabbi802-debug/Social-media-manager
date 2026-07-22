@@ -193,11 +193,11 @@ export default function Home() {
       <EditableSection sectionType="best-selling" sectionData={{ title: sectionTitles['best-selling'] || defaultTitles['best-selling'], products: featuredProducts || fallbackProducts.featured, sectionLabel: 'Best Selling', onSectionTitleSaved: handleSectionTitleSaved }} label="Best Selling">
         <ProductSection title={sectionTitles['best-selling'] || defaultTitles['best-selling']} products={featuredProducts || fallbackProducts.featured} initialCount={8} loading={loading} />
       </EditableSection>
-      <EditableSection sectionType="new-arrival" sectionData={{ title: sectionTitles['new-arrival'] || defaultTitles['new-arrival'], products: newArrivals || fallbackProducts.newArrivals, sectionLabel: 'New Arrival', onSectionTitleSaved: handleSectionTitleSaved }} label="New Arrival">
-        <ProductSection title={sectionTitles['new-arrival'] || defaultTitles['new-arrival']} products={newArrivals || fallbackProducts.newArrivals} initialCount={8} loading={loading} />
-      </EditableSection>
       <EditableSection sectionType="category-banner" sectionData={{ categoryBanner, onBannerSaved: handleCategoryBannerSaved }} label="Promo Banner">
         <CategoryBanner banner={categoryBanner} loading={loading} />
+      </EditableSection>
+      <EditableSection sectionType="new-arrival" sectionData={{ title: sectionTitles['new-arrival'] || defaultTitles['new-arrival'], products: newArrivals || fallbackProducts.newArrivals, sectionLabel: 'New Arrival', onSectionTitleSaved: handleSectionTitleSaved }} label="New Arrival">
+        <ProductSection title={sectionTitles['new-arrival'] || defaultTitles['new-arrival']} products={newArrivals || fallbackProducts.newArrivals} initialCount={8} loading={loading} />
       </EditableSection>
       <EditableSection sectionType="category-products" sectionData={{ categoryProductsData: categoryProductsData || { title: defaultTitles['category-products'], categories: [{ id: 4, name: 'Jackets', slug: 'jackets', banner_image: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=1920&q=80', product_count: 4 }] }, onCategoryProductsSaved: handleCategoryProductsSaved }} label="Category Products">
         <CategoryProducts title={sectionTitles['category-products'] || defaultTitles['category-products']} data={categoryProducts || fallbackProducts.categoryProducts} loading={loading} />
