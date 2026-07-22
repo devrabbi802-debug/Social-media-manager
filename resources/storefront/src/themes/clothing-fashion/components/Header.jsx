@@ -54,7 +54,6 @@ export default function Header({ storeName, storeLogo }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [focusedIndex, setFocusedIndex] = useState(-1);
-  const [scrolled, setScrolled] = useState(false);
   const [searchImage, setSearchImage] = useState(null);
   const [searchImagePreview, setSearchImagePreview] = useState(null);
   const searchInputRef = useRef(null);
@@ -63,7 +62,6 @@ export default function Header({ storeName, storeLogo }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { openDrawer, itemCount } = useCart();
-  const isHome = location.pathname === '/';
 
   const suggestions = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -74,13 +72,6 @@ export default function Header({ storeName, storeLogo }) {
   }, [searchQuery]);
 
   const hasSuggestions = suggestions.length > 0;
-
-  useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 60);
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    handleScroll();
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -162,13 +153,13 @@ export default function Header({ storeName, storeLogo }) {
     }
   };
 
-  const headerBg = isHome && !scrolled ? 'bg-transparent' : 'bg-white shadow-md';
-  const textColor = isHome && !scrolled ? 'text-white' : 'text-gray-900';
-  const submenuBg = isHome && !scrolled ? 'bg-gray-900/95' : 'bg-white';
-  const submenuText = isHome && !scrolled ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-gray-900';
-  const searchInputBg = isHome && !scrolled ? 'bg-white/10 text-white placeholder-white/50 border-white/20' : 'bg-white text-gray-900 border-gray-300';
-  const suggestionBg = isHome && !scrolled ? 'bg-gray-900/95' : 'bg-white';
-  const suggestionHover = isHome && !scrolled ? 'hover:bg-white/10' : 'hover:bg-gray-50';
+  const headerBg = 'bg-white shadow-md';
+  const textColor = 'text-gray-900';
+  const submenuBg = 'bg-white';
+  const submenuText = 'text-gray-600 hover:text-gray-900';
+  const searchInputBg = 'bg-white text-gray-900 border-gray-300';
+  const suggestionBg = 'bg-white';
+  const suggestionHover = 'hover:bg-gray-50';
 
   return (
     <header className={`fixed top-8 left-0 right-0 z-50 transition-all duration-300 ${headerBg} ${textColor}`}>
@@ -252,7 +243,7 @@ export default function Header({ storeName, storeLogo }) {
           <div ref={searchPanelRef} className="relative pb-3">
             <form onSubmit={handleSearch} className="flex">
               <div className="relative flex-1">
-                <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isHome && !scrolled ? 'text-white/50' : 'text-gray-400'}`} />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   ref={searchInputRef}
                   type="text"
@@ -265,11 +256,7 @@ export default function Header({ storeName, storeLogo }) {
                 <button
                   type="button"
                   onClick={() => imageInputRef.current?.click()}
-                  className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded transition ${
-                    isHome && !scrolled
-                      ? 'hover:bg-white/10 text-white/60 hover:text-white'
-                      : 'hover:bg-gray-100 text-gray-400 hover:text-gray-900'
-                  }`}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded transition hover:bg-gray-100 text-gray-400 hover:text-gray-900"
                   title="Search by image"
                 >
                   <Camera className="w-4 h-4" />
@@ -289,12 +276,12 @@ export default function Header({ storeName, storeLogo }) {
             </form>
 
             {searchImagePreview && (
-              <div className={`mt-2 p-3 border rounded flex items-center gap-3 ${isHome && !scrolled ? 'border-white/20 bg-white/5' : 'border-gray-200 bg-gray-50'}`}>
+              <div className="mt-2 p-3 border rounded flex items-center gap-3 border-gray-200 bg-gray-50">
                 <div className="w-12 h-12 rounded overflow-hidden bg-gray-100 flex-shrink-0">
                   <img src={searchImagePreview} alt="" className="w-full h-full object-cover" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-xs font-medium ${isHome && !scrolled ? 'text-white' : 'text-gray-700'}`}>
+                  <p className="text-xs font-medium text-gray-700">
                     {searchImage?.name || 'Image selected'}
                   </p>
                   <p className="text-[10px] text-gray-400 mt-0.5">
@@ -304,7 +291,7 @@ export default function Header({ storeName, storeLogo }) {
                 <button
                   type="button"
                   onClick={clearSearchImage}
-                  className={`p-1 rounded transition ${isHome && !scrolled ? 'hover:bg-white/10 text-white/60' : 'hover:bg-gray-200 text-gray-400'}`}
+                  className="p-1 rounded transition hover:bg-gray-200 text-gray-400"
                 >
                   <XIcon className="w-3.5 h-3.5" />
                 </button>
@@ -312,7 +299,7 @@ export default function Header({ storeName, storeLogo }) {
             )}
 
             {searchQuery.trim() && !searchImagePreview && (
-              <div className={`absolute top-full left-0 right-0 mt-0.5 shadow-2xl border ${isHome && !scrolled ? 'border-white/10' : 'border-gray-100'} ${suggestionBg} max-h-96 overflow-y-auto`}>
+              <div className={`absolute top-full left-0 right-0 mt-0.5 shadow-2xl border border-gray-100 ${suggestionBg} max-h-96 overflow-y-auto`}>
                 {hasSuggestions ? (
                   <>
                     <div className="px-4 py-2 border-b border-gray-100">
@@ -324,20 +311,20 @@ export default function Header({ storeName, storeLogo }) {
                         onClick={() => goToProduct(product.slug)}
                         onMouseEnter={() => setFocusedIndex(index)}
                         className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition ${
-                          focusedIndex === index ? (isHome && !scrolled ? 'bg-white/10' : 'bg-gray-50') : ''
+                          focusedIndex === index ? 'bg-gray-50' : ''
                         } ${suggestionHover}`}
                       >
                         <div className="w-10 h-12 bg-gray-100 overflow-hidden flex-shrink-0">
                           <img src={product.image} alt="" className="w-full h-full object-cover" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-medium line-clamp-1 ${isHome && !scrolled ? 'text-white' : 'text-gray-900'}`}>
+                          <p className="text-sm font-medium line-clamp-1 text-gray-900">
                             {highlightMatch(product.name, searchQuery)}
                           </p>
                           <p className="text-xs text-gray-400 mt-0.5">{product.category}</p>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <p className={`text-sm font-bold ${isHome && !scrolled ? 'text-white' : 'text-gray-900'}`}>৳{product.effective_price}</p>
+                          <p className="text-sm font-bold text-gray-900">৳{product.effective_price}</p>
                           {product.discount_price && (
                             <p className="text-xs text-gray-400 line-through">৳{product.base_price}</p>
                           )}
@@ -347,18 +334,14 @@ export default function Header({ storeName, storeLogo }) {
                     <Link
                       to={`/products?search=${encodeURIComponent(searchQuery)}`}
                       onClick={closeSearch}
-                      className={`flex items-center justify-center gap-1.5 px-4 py-3 text-sm font-medium border-t border-gray-100 transition ${
-                        isHome && !scrolled
-                          ? 'text-white hover:bg-white/10'
-                          : 'text-gray-900 hover:bg-gray-50'
-                      }`}
+                      className="flex items-center justify-center gap-1.5 px-4 py-3 text-sm font-medium border-t border-gray-100 transition text-gray-900 hover:bg-gray-50"
                     >
                       View all results
                       <ArrowRight className="w-4 h-4" />
                     </Link>
                   </>
                 ) : (
-                  <div className={`px-4 py-8 text-center text-sm ${isHome && !scrolled ? 'text-white/60' : 'text-gray-400'}`}>
+                  <div className="px-4 py-8 text-center text-sm text-gray-400">
                     No products found for "{searchQuery}"
                   </div>
                 )}

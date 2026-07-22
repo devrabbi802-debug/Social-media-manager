@@ -90,7 +90,7 @@ export default function Layout({ children, config }) {
           storeName={config?.store_name}
           storeLogo={config?.store_logo}
         />
-        <main className="flex-1">
+        <main className="flex-1 pt-16">
           {children}
         </main>
         <Footer />
