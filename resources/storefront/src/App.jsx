@@ -7,6 +7,7 @@ import EditorToolbar from './components/editor/EditorToolbar';
 import BannerEditorModal from './components/editor/BannerEditorModal';
 import CategoryEditorModal from './components/editor/CategoryEditorModal';
 import AllCategoryEditorModal from './components/editor/AllCategoryEditorModal';
+import TitleEditorModal from './components/editor/TitleEditorModal';
 import ChunkErrorBoundary from './components/shared/ChunkErrorBoundary';
 import Skeleton from './components/shared/Skeleton';
 import api from './api/client';
@@ -43,6 +44,17 @@ function EditorOverlay({ onExit }) {
           onClose={closeEditor}
           onSaved={(categories) => {
             window.__editor_all_categories = categories;
+          }}
+        />
+      )}
+
+      {['best-selling', 'new-arrival', 'category-products'].includes(activeSection?.type) && (
+        <TitleEditorModal
+          sectionType={activeSection.type}
+          sectionData={activeSection.data}
+          onClose={closeEditor}
+          onSaved={(sectionTitles) => {
+            window.__editor_section_titles = sectionTitles;
           }}
         />
       )}

@@ -129,6 +129,7 @@ class StorefrontApiController extends Controller
             'featured_products' => $featuredProducts,
             'categories' => $categories,
             'all_categories' => $allCategories,
+            'section_titles' => $storefront?->sections_data['section_titles'] ?? [],
             'brands' => $brands,
         ]);
     }

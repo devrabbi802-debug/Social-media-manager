@@ -53,5 +53,6 @@ Route::middleware([
     Route::put('/sections/notices', [ThemeEditorController::class, 'updateNotices']);
     Route::put('/sections/categories', [ThemeEditorController::class, 'updateCategories']);
     Route::put('/sections/all-categories', [ThemeEditorController::class, 'updateAllCategories']);
+    Route::put('/sections/title', [ThemeEditorController::class, 'updateSectionTitle']);
     Route::post('/upload', [ThemeEditorController::class, 'uploadImage']);
 });

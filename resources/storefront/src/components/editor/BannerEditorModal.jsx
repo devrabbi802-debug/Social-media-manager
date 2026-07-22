@@ -6,16 +6,16 @@ import api from '../../api/client';
 export default function BannerEditorModal({ sectionData, onClose, onSaved }) {
   const [banners, setBanners] = useState(() => {
     if (sectionData?.banners?.length > 0) {
-      return sectionData.banners.map((b, i) => ({ ...b, sort_order: b.sort_order ?? i, _key: Date.now() + i }));
+      return sectionData.banners.map((b, i) => ({ ...b, align: b.align || 'center', sort_order: b.sort_order ?? i, _key: Date.now() + i }));
     }
-    return [{ title: '', subtitle: '', btn_text: '', link: '', image: null, sort_order: 0, is_active: true, _key: Date.now() }];
+    return [{ title: '', subtitle: '', btn_text: '', link: '', image: null, align: 'center', sort_order: 0, is_active: true, _key: Date.now() }];
   });
   const [saving, setSaving] = useState(false);
 
   const addSlide = () => {
     setBanners((prev) => [
       ...prev,
-      { title: '', subtitle: '', btn_text: '', link: '', image: null, sort_order: prev.length, is_active: true, _key: Date.now() },
+      { title: '', subtitle: '', btn_text: '', link: '', image: null, align: 'center', sort_order: prev.length, is_active: true, _key: Date.now() },
     ]);
   };
 
@@ -118,6 +118,24 @@ export default function BannerEditorModal({ sectionData, onClose, onSaved }) {
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="/products or https://..."
                 />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-500 mb-1">Text Alignment</label>
+                <div className="flex items-center gap-2">
+                  {['left', 'center', 'right'].map((align) => (
+                    <button
+                      key={align}
+                      onClick={() => updateSlide(slide._key, 'align', align)}
+                      className={`px-4 py-2 text-sm rounded-lg border transition ${
+                        (slide.align || 'center') === align
+                          ? 'bg-gray-900 text-white border-gray-900'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      {align.charAt(0).toUpperCase() + align.slice(1)}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-gray-500 mb-1">Image</label>

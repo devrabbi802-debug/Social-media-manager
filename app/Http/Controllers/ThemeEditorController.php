@@ -19,6 +19,7 @@ class ThemeEditorController extends Controller
             'notices' => $data['notices'] ?? [],
             'categories' => $data['categories'] ?? [],
             'all_categories' => $data['all_categories'] ?? [],
+            'section_titles' => $data['section_titles'] ?? [],
         ]);
     }
 
@@ -31,6 +32,7 @@ class ThemeEditorController extends Controller
             'banners.*.link' => 'nullable|string|max:500',
             'banners.*.btn_text' => 'nullable|string|max:100',
             'banners.*.image' => 'nullable|string|max:500',
+            'banners.*.align' => 'nullable|string|in:left,center,right',
             'banners.*.sort_order' => 'nullable|integer|min:0',
             'banners.*.is_active' => 'nullable|boolean',
         ]);
@@ -127,6 +129,32 @@ class ThemeEditorController extends Controller
         return response()->json([
             'message' => 'All categories updated successfully',
             'all_categories' => $sectionsData['all_categories'],
+        ]);
+    }
+
+    public function updateSectionTitle(Request $request)
+    {
+        $validated = $request->validate([
+            'section' => 'required|string|max:100',
+            'title' => 'nullable|string|max:255',
+        ]);
+
+        $storefront = StorefrontSettings::first();
+        if (!$storefront) {
+            return response()->json(['message' => 'Storefront not found'], 404);
+        }
+
+        $sectionsData = $storefront->sections_data ?? [];
+        $sectionsData['section_titles'] = array_merge(
+            $sectionsData['section_titles'] ?? [],
+            [$validated['section'] => $validated['title']]
+        );
+
+        $storefront->update(['sections_data' => $sectionsData]);
+
+        return response()->json([
+            'message' => 'Section title updated successfully',
+            'section_titles' => $sectionsData['section_titles'],
         ]);
     }
 
