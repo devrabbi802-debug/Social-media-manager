@@ -15,6 +15,7 @@ class ThemeEditorController extends Controller
 
         return response()->json([
             'banners' => $data['banners'] ?? [],
+            'category_banner' => $data['category_banner'] ?? null,
             'features' => $data['features'] ?? [],
             'notices' => $data['notices'] ?? [],
             'categories' => $data['categories'] ?? [],
@@ -155,6 +156,33 @@ class ThemeEditorController extends Controller
         return response()->json([
             'message' => 'Section title updated successfully',
             'section_titles' => $sectionsData['section_titles'],
+        ]);
+    }
+
+    public function updateCategoryBanner(Request $request)
+    {
+        $validated = $request->validate([
+            'image' => 'nullable|string|max:500',
+            'title' => 'nullable|string|max:255',
+            'subtitle' => 'nullable|string|max:500',
+            'label' => 'nullable|string|max:100',
+            'btn_text' => 'nullable|string|max:100',
+            'link' => 'nullable|string|max:500',
+        ]);
+
+        $storefront = StorefrontSettings::first();
+        if (!$storefront) {
+            return response()->json(['message' => 'Storefront not found'], 404);
+        }
+
+        $sectionsData = $storefront->sections_data ?? [];
+        $sectionsData['category_banner'] = $validated;
+
+        $storefront->update(['sections_data' => $sectionsData]);
+
+        return response()->json([
+            'message' => 'Category banner updated successfully',
+            'category_banner' => $sectionsData['category_banner'],
         ]);
     }
 

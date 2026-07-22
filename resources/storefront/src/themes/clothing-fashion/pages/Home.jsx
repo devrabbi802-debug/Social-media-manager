@@ -38,6 +38,7 @@ export default function Home() {
   const [featuredCategories, setFeaturedCategories] = useState(null);
   const [allCategories, setAllCategories] = useState(null);
   const [sectionTitles, setSectionTitles] = useState({});
+  const [categoryBanner, setCategoryBanner] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saveVer, setSaveVer] = useState(0);
 
@@ -50,6 +51,7 @@ export default function Home() {
       setFeaturedCategories(window.__editor_categories.slice(0, 5));
       setAllCategories(window.__editor_all_categories);
       if (window.__editor_section_titles) setSectionTitles(window.__editor_section_titles);
+      if (window.__editor_category_banner) setCategoryBanner(window.__editor_category_banner);
       setLoading(false);
       return;
     }
@@ -60,6 +62,7 @@ export default function Home() {
       setFeaturedCategories(res.categories ? res.categories.slice(0, 5) : null);
       setAllCategories(res.all_categories || null);
       if (res.section_titles) setSectionTitles(res.section_titles);
+      if (res.category_banner) setCategoryBanner(res.category_banner);
     }).catch(() => {
       setBanners([]);
     }).finally(() => {
@@ -88,6 +91,12 @@ export default function Home() {
   const handleSectionTitleSaved = (sectionTitles) => {
     window.__editor_section_titles = sectionTitles;
     setSectionTitles(sectionTitles);
+    setSaveVer((v) => v + 1);
+  };
+
+  const handleCategoryBannerSaved = (banner) => {
+    window.__editor_category_banner = banner;
+    setCategoryBanner(banner);
     setSaveVer((v) => v + 1);
   };
 
@@ -123,8 +132,8 @@ export default function Home() {
       <EditableSection sectionType="new-arrival" sectionData={{ title: sectionTitles['new-arrival'] || defaultTitles['new-arrival'], products: newArrivals, sectionLabel: 'New Arrival', onSectionTitleSaved: handleSectionTitleSaved }} label="New Arrival">
         <ProductSection title={sectionTitles['new-arrival'] || defaultTitles['new-arrival']} products={newArrivals} initialCount={8} loading={loading} />
       </EditableSection>
-      <EditableSection sectionType="category-banner" sectionData={{}} label="Promo Banner">
-        <CategoryBanner loading={loading} />
+      <EditableSection sectionType="category-banner" sectionData={{ categoryBanner, onBannerSaved: handleCategoryBannerSaved }} label="Promo Banner">
+        <CategoryBanner banner={categoryBanner} loading={loading} />
       </EditableSection>
       <EditableSection sectionType="category-products" sectionData={{ title: sectionTitles['category-products'] || defaultTitles['category-products'], products: jacketProducts, sectionLabel: 'Category Products', onSectionTitleSaved: handleSectionTitleSaved }} label="Category Products">
         <CategoryProducts title={sectionTitles['category-products'] || defaultTitles['category-products']} products={jacketProducts} loading={loading} />
