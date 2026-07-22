@@ -8,23 +8,7 @@ import ProductSection from '../components/ProductSection';
 import CategoryBanner from '../components/CategoryBanner';
 import CategoryProducts from '../components/CategoryProducts';
 import Features from '../components/Features';
-import { allProducts } from '../data/products';
 import api from '../../../api/client';
-
-const defaultCategories = [
-  { id: 1, name: 'T-Shirts', slug: 't-shirts', image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=800&q=80', products_count: 24 },
-  { id: 2, name: 'Denim', slug: 'denim', image: 'https://images.unsplash.com/photo-1542272454315-4c01d7abdf4a?w=800&q=80', products_count: 18 },
-  { id: 3, name: 'Hoodies', slug: 'hoodies', image: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=800&q=80', products_count: 15 },
-  { id: 4, name: 'Jackets', slug: 'jackets', image: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&q=80', products_count: 12 },
-  { id: 5, name: 'Shoes', slug: 'shoes', image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&q=80', products_count: 30 },
-  { id: 6, name: 'Accessories', slug: 'accessories', image: 'https://images.unsplash.com/photo-1606760227091-3dd870d97f1d?w=800&q=80', products_count: 20 },
-];
-
-const jacketIds = [4, 10, 14, 21];
-
-const bestSelling = allProducts.slice(0, 10);
-const newArrivals = allProducts.slice(10, 20);
-const jacketProducts = allProducts.filter((p) => jacketIds.includes(p.id));
 
 const defaultTitles = {
   'best-selling': 'BEST SELLING',
@@ -39,11 +23,14 @@ export default function Home() {
   const [allCategories, setAllCategories] = useState(null);
   const [sectionTitles, setSectionTitles] = useState({});
   const [categoryBanner, setCategoryBanner] = useState(null);
+  const [featuredProducts, setFeaturedProducts] = useState(null);
+  const [newArrivals, setNewArrivals] = useState(null);
+  const [categoryProducts, setCategoryProducts] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saveVer, setSaveVer] = useState(0);
 
-  const gridCategories = featuredCategories && featuredCategories.length > 0 ? featuredCategories.slice(0, 5) : defaultCategories;
-  const sliderCategories = allCategories && allCategories.length > 0 ? allCategories : defaultCategories;
+  const gridCategories = featuredCategories && featuredCategories.length > 0 ? featuredCategories.slice(0, 5) : null;
+  const sliderCategories = allCategories && allCategories.length > 0 ? allCategories : null;
 
   useEffect(() => {
     if (isEditorMode && window.__editor_banners && window.__editor_categories && window.__editor_all_categories) {
@@ -61,6 +48,9 @@ export default function Home() {
       setBanners(res.banners || []);
       setFeaturedCategories(res.categories ? res.categories.slice(0, 5) : null);
       setAllCategories(res.all_categories || null);
+      setFeaturedProducts(res.featured_products || null);
+      setNewArrivals(res.new_arrivals || null);
+      setCategoryProducts(res.category_products || null);
       if (res.section_titles) setSectionTitles(res.section_titles);
       if (res.category_banner) setCategoryBanner(res.category_banner);
       if (res.notices !== undefined) {
@@ -125,22 +115,22 @@ export default function Home() {
         <HeroBanner banners={banners} />
       </EditableSection>
       <EditableSection sectionType="category-grid" sectionData={gridSectionData} label="Categories">
-        <CategoryGrid categories={gridCategories} loading={loading} />
+        <CategoryGrid categories={gridCategories || []} loading={loading} />
       </EditableSection>
       <EditableSection sectionType="all-categories" sectionData={sliderSectionData} label="All Categories">
-        <CategorySlider categories={sliderCategories} loading={loading} />
+        <CategorySlider categories={sliderCategories || []} loading={loading} />
       </EditableSection>
-      <EditableSection sectionType="best-selling" sectionData={{ title: sectionTitles['best-selling'] || defaultTitles['best-selling'], products: bestSelling, sectionLabel: 'Best Selling', onSectionTitleSaved: handleSectionTitleSaved }} label="Best Selling">
-        <ProductSection title={sectionTitles['best-selling'] || defaultTitles['best-selling']} products={bestSelling} initialCount={8} loading={loading} />
+      <EditableSection sectionType="best-selling" sectionData={{ title: sectionTitles['best-selling'] || defaultTitles['best-selling'], products: featuredProducts || [], sectionLabel: 'Best Selling', onSectionTitleSaved: handleSectionTitleSaved }} label="Best Selling">
+        <ProductSection title={sectionTitles['best-selling'] || defaultTitles['best-selling']} products={featuredProducts || []} initialCount={8} loading={loading} />
       </EditableSection>
-      <EditableSection sectionType="new-arrival" sectionData={{ title: sectionTitles['new-arrival'] || defaultTitles['new-arrival'], products: newArrivals, sectionLabel: 'New Arrival', onSectionTitleSaved: handleSectionTitleSaved }} label="New Arrival">
-        <ProductSection title={sectionTitles['new-arrival'] || defaultTitles['new-arrival']} products={newArrivals} initialCount={8} loading={loading} />
+      <EditableSection sectionType="new-arrival" sectionData={{ title: sectionTitles['new-arrival'] || defaultTitles['new-arrival'], products: newArrivals || [], sectionLabel: 'New Arrival', onSectionTitleSaved: handleSectionTitleSaved }} label="New Arrival">
+        <ProductSection title={sectionTitles['new-arrival'] || defaultTitles['new-arrival']} products={newArrivals || []} initialCount={8} loading={loading} />
       </EditableSection>
       <EditableSection sectionType="category-banner" sectionData={{ categoryBanner, onBannerSaved: handleCategoryBannerSaved }} label="Promo Banner">
         <CategoryBanner banner={categoryBanner} loading={loading} />
       </EditableSection>
-      <EditableSection sectionType="category-products" sectionData={{ title: sectionTitles['category-products'] || defaultTitles['category-products'], products: jacketProducts, sectionLabel: 'Category Products', onSectionTitleSaved: handleSectionTitleSaved }} label="Category Products">
-        <CategoryProducts title={sectionTitles['category-products'] || defaultTitles['category-products']} products={jacketProducts} loading={loading} />
+      <EditableSection sectionType="category-products" sectionData={{ title: sectionTitles['category-products'] || defaultTitles['category-products'], products: categoryProducts || [], sectionLabel: 'Category Products', onSectionTitleSaved: handleSectionTitleSaved }} label="Category Products">
+        <CategoryProducts title={sectionTitles['category-products'] || defaultTitles['category-products']} products={categoryProducts || []} loading={loading} />
       </EditableSection>
       <EditableSection sectionType="features" sectionData={{}} label="Features">
         <Features />

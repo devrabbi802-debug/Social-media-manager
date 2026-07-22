@@ -78,13 +78,39 @@ class StorefrontApiController extends Controller
                 ->values();
         }
 
+        $productWith = ['category', 'brand', 'images', 'variants.attributeValues.attributeTemplate', 'variants.images'];
+
         // Featured products
         $featuredProducts = Product::active()
             ->featured()
-            ->with(['category', 'brand', 'images'])
+            ->with($productWith)
             ->limit(8)
             ->get()
-            ->map(fn($product) => $this->formatProduct($product));
+            ->map(fn($product) => $this->formatProduct($product, true));
+
+        // New arrivals (latest 10)
+        $newArrivals = Product::active()
+            ->with($productWith)
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(fn($product) => $this->formatProduct($product, true));
+
+        // Category products (from editor settings or first parent category)
+        $categorySlug = $storefront?->sections_data['category_products_slug'] ?? null;
+        if (!$categorySlug) {
+            $firstCategory = Category::where('is_active', true)->whereNull('parent_id')->orderBy('sort_order')->first();
+            $categorySlug = $firstCategory?->slug;
+        }
+        $categoryProducts = collect();
+        if ($categorySlug) {
+            $categoryProducts = Product::active()
+                ->whereHas('category', fn($q) => $q->where('slug', $categorySlug))
+                ->with($productWith)
+                ->limit(10)
+                ->get()
+                ->map(fn($product) => $this->formatProduct($product, true));
+        }
 
         // Categories (from editor settings if set, otherwise DB)
         $editorCategories = $storefront?->sections_data['categories'] ?? [];
@@ -127,6 +153,8 @@ class StorefrontApiController extends Controller
         return response()->json([
             'banners' => $banners,
             'featured_products' => $featuredProducts,
+            'new_arrivals' => $newArrivals,
+            'category_products' => $categoryProducts,
             'categories' => $categories,
             'all_categories' => $allCategories,
             'section_titles' => $storefront?->sections_data['section_titles'] ?? [],
@@ -277,23 +305,31 @@ class StorefrontApiController extends Controller
                 'name' => $product->brand->name,
                 'slug' => $product->brand->slug,
             ] : null,
-            'image' => $product->images->first()?->path ?? null,
-            'images' => $product->images->map(fn($img) => $img->path),
+            'image' => $product->images->first()?->image_url ?? null,
+            'images' => $product->images->map(fn($img) => $img->image_url),
         ];
 
         if ($detailed) {
-            $data['variants'] = $product->variants->map(fn($variant) => [
+            $variants = $product->variants->map(fn($variant) => [
                 'id' => $variant->id,
                 'name' => $variant->name,
                 'sku' => $variant->sku,
                 'price' => $variant->price,
                 'stock_quantity' => $variant->stock_quantity,
+                'stock' => $variant->stock_quantity,
                 'attributes' => $variant->attributeValues->map(fn($attr) => [
                     'attribute' => $attr->attributeTemplate->name ?? $attr->attribute_template_id,
                     'value' => $attr->value,
                 ]),
-                'image' => $variant->images->first()?->path ?? null,
+                'image' => $variant->images->first()?->image_url ?? null,
             ]);
+
+            $variants = $variants->map(fn($v) => array_merge(
+                $v,
+                collect($v['attributes'])->mapWithKeys(fn($a) => [strtolower($a['attribute']) => $a['value']])->toArray()
+            ));
+
+            $data['variants'] = $variants;
 
             $data['attributes'] = $product->attributeValues->map(fn($attr) => [
                 'attribute' => $attr->attributeTemplate->name ?? $attr->attribute_template_id,
