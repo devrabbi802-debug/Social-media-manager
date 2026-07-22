@@ -82,12 +82,12 @@ export default function Home() {
   };
 
   const gridSectionData = {
-    categories: gridCategories,
+    categories: featuredCategories || [],
     onCategoriesSaved: handleCategoriesSaved,
   };
 
   const sliderSectionData = {
-    allCategories: sliderCategories,
+    allCategories: allCategories || [],
     onAllCategoriesSaved: handleAllCategoriesSaved,
   };
 
