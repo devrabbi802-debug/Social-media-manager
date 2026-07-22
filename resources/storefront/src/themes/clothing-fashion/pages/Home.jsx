@@ -8,6 +8,7 @@ import ProductSection from '../components/ProductSection';
 import CategoryBanner from '../components/CategoryBanner';
 import CategoryProducts from '../components/CategoryProducts';
 import Features from '../components/Features';
+import { allProducts } from '../data/products';
 import api from '../../../api/client';
 
 const defaultCategories = [
@@ -18,6 +19,14 @@ const defaultCategories = [
   { id: 5, name: 'Shoes', slug: 'shoes', image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&q=80', products_count: 30 },
   { id: 6, name: 'Accessories', slug: 'accessories', image: 'https://images.unsplash.com/photo-1606760227091-3dd870d97f1d?w=800&q=80', products_count: 20 },
 ];
+
+const jacketIds = [4, 10, 14, 21];
+
+const fallbackProducts = {
+  featured: allProducts.slice(0, 10),
+  newArrivals: allProducts.slice(10, 20),
+  categoryProducts: allProducts.filter((p) => jacketIds.includes(p.id)),
+};
 
 const defaultTitles = {
   'best-selling': 'BEST SELLING',
@@ -42,6 +51,14 @@ export default function Home() {
   const sliderCategories = allCategories && allCategories.length > 0 ? allCategories : defaultCategories;
 
   useEffect(() => {
+    const loadProducts = () => {
+      api.get('/storefront/home').then((res) => {
+        setFeaturedProducts(res.featured_products?.length ? res.featured_products : null);
+        setNewArrivals(res.new_arrivals?.length ? res.new_arrivals : null);
+        setCategoryProducts(res.category_products?.length ? res.category_products : null);
+      });
+    };
+
     if (isEditorMode && window.__editor_banners && window.__editor_categories && window.__editor_all_categories) {
       setBanners(window.__editor_banners);
       setFeaturedCategories(window.__editor_categories.slice(0, 5));
@@ -49,17 +66,37 @@ export default function Home() {
       if (window.__editor_section_titles) setSectionTitles(window.__editor_section_titles);
       if (window.__editor_category_banner) setCategoryBanner(window.__editor_category_banner);
       setLoading(false);
+      loadProducts();
       return;
     }
 
-    const endpoint = isEditorMode ? '/editor/sections' : '/storefront/home';
-    api.get(endpoint).then((res) => {
+    if (isEditorMode) {
+      api.get('/editor/sections').then((res) => {
+        setBanners(res.banners || []);
+        setFeaturedCategories(res.categories ? res.categories.slice(0, 5) : null);
+        setAllCategories(res.all_categories || null);
+        if (res.section_titles) setSectionTitles(res.section_titles);
+        if (res.category_banner) setCategoryBanner(res.category_banner);
+        if (res.notices !== undefined) {
+          window.__editor_notices = res.notices;
+          window.dispatchEvent(new Event('notices:updated'));
+        }
+      }).catch(() => {
+        setBanners([]);
+      }).finally(() => {
+        setLoading(false);
+      });
+      loadProducts();
+      return;
+    }
+
+    api.get('/storefront/home').then((res) => {
       setBanners(res.banners || []);
       setFeaturedCategories(res.categories ? res.categories.slice(0, 5) : null);
       setAllCategories(res.all_categories || null);
-      setFeaturedProducts(res.featured_products || null);
-      setNewArrivals(res.new_arrivals || null);
-      setCategoryProducts(res.category_products || null);
+      setFeaturedProducts(res.featured_products?.length ? res.featured_products : null);
+      setNewArrivals(res.new_arrivals?.length ? res.new_arrivals : null);
+      setCategoryProducts(res.category_products?.length ? res.category_products : null);
       if (res.section_titles) setSectionTitles(res.section_titles);
       if (res.category_banner) setCategoryBanner(res.category_banner);
       if (res.notices !== undefined) {
@@ -129,17 +166,17 @@ export default function Home() {
       <EditableSection sectionType="all-categories" sectionData={sliderSectionData} label="All Categories">
         <CategorySlider categories={sliderCategories || []} loading={loading} />
       </EditableSection>
-      <EditableSection sectionType="best-selling" sectionData={{ title: sectionTitles['best-selling'] || defaultTitles['best-selling'], products: featuredProducts || [], sectionLabel: 'Best Selling', onSectionTitleSaved: handleSectionTitleSaved }} label="Best Selling">
-        <ProductSection title={sectionTitles['best-selling'] || defaultTitles['best-selling']} products={featuredProducts || []} initialCount={8} loading={loading} />
+      <EditableSection sectionType="best-selling" sectionData={{ title: sectionTitles['best-selling'] || defaultTitles['best-selling'], products: featuredProducts || fallbackProducts.featured, sectionLabel: 'Best Selling', onSectionTitleSaved: handleSectionTitleSaved }} label="Best Selling">
+        <ProductSection title={sectionTitles['best-selling'] || defaultTitles['best-selling']} products={featuredProducts || fallbackProducts.featured} initialCount={8} loading={loading} />
       </EditableSection>
-      <EditableSection sectionType="new-arrival" sectionData={{ title: sectionTitles['new-arrival'] || defaultTitles['new-arrival'], products: newArrivals || [], sectionLabel: 'New Arrival', onSectionTitleSaved: handleSectionTitleSaved }} label="New Arrival">
-        <ProductSection title={sectionTitles['new-arrival'] || defaultTitles['new-arrival']} products={newArrivals || []} initialCount={8} loading={loading} />
+      <EditableSection sectionType="new-arrival" sectionData={{ title: sectionTitles['new-arrival'] || defaultTitles['new-arrival'], products: newArrivals || fallbackProducts.newArrivals, sectionLabel: 'New Arrival', onSectionTitleSaved: handleSectionTitleSaved }} label="New Arrival">
+        <ProductSection title={sectionTitles['new-arrival'] || defaultTitles['new-arrival']} products={newArrivals || fallbackProducts.newArrivals} initialCount={8} loading={loading} />
       </EditableSection>
       <EditableSection sectionType="category-banner" sectionData={{ categoryBanner, onBannerSaved: handleCategoryBannerSaved }} label="Promo Banner">
         <CategoryBanner banner={categoryBanner} loading={loading} />
       </EditableSection>
-      <EditableSection sectionType="category-products" sectionData={{ title: sectionTitles['category-products'] || defaultTitles['category-products'], products: categoryProducts || [], sectionLabel: 'Category Products', onSectionTitleSaved: handleSectionTitleSaved }} label="Category Products">
-        <CategoryProducts title={sectionTitles['category-products'] || defaultTitles['category-products']} products={categoryProducts || []} loading={loading} />
+      <EditableSection sectionType="category-products" sectionData={{ title: sectionTitles['category-products'] || defaultTitles['category-products'], products: categoryProducts || fallbackProducts.categoryProducts, sectionLabel: 'Category Products', onSectionTitleSaved: handleSectionTitleSaved }} label="Category Products">
+        <CategoryProducts title={sectionTitles['category-products'] || defaultTitles['category-products']} products={categoryProducts || fallbackProducts.categoryProducts} loading={loading} />
       </EditableSection>
       <EditableSection sectionType="features" sectionData={{}} label="Features">
         <Features />
