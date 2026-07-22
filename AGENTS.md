@@ -3,10 +3,10 @@
 ## Quick Start
 
 ```bash
-composer setup       # install → .env → key → migrate → npm install (--ignore-scripts) → vite build
+composer setup       # install → .env → key → migrate → npm install --ignore-scripts → vite build
 composer dev         # artisan serve + queue:listen + pail + vite (concurrently)
 composer test        # config:clear + artisan test (SQLite :memory:)
-php artisan tenants:migrate   # separate — NOT in composer setup
+php artisan tenants:migrate   # tenant DBs only — NOT in composer setup
 php artisan tenants:seed      # seed tenant DBs
 ./vendor/bin/pint             # format PHP
 ```
@@ -27,7 +27,7 @@ php artisan tenants:seed      # seed tenant DBs
 ## Routes (Load Order)
 
 1. `routes/web.php` — landing pages, onboarding, **webhooks** (Facebook/Zernio, CSRF-exempt)
-2. `routes/api.php` — storefront `/api/storefront/*` and `/api/themes/*` (tenant-scoped, public)
+2. `routes/api.php` — storefront `/api/storefront/*` and `/api/themes/*` (tenant-scoped, public via domain middleware)
 3. `routes/console.php` — Artisan commands
 4. `routes/admin.php` — central admin `/rootadmin/*` (auth guard `admin`, landlord DB). Loaded via `bootstrap/app.php` `then:` callback.
 5. `routes/tenant.php` — per-tenant dashboard, inventory, Facebook OAuth, **storefront catch-all LAST** (loaded by tenancy package)
@@ -40,7 +40,7 @@ php artisan tenants:seed      # seed tenant DBs
 
 - **DB naming**: `{tenant_id}_socialboost` (suffix only, no prefix) — `config/tenancy.php:56-57`
 - **Central domains**: `127.0.0.1`, `localhost`, `smm.test`, `socialboost.com`, `www.socialboost.com`
-- **Tenant admin prefix**: `ADMIN_PANEL_PREFIX` env var (default `ax7k9m`, overridable) — accessible at `/{prefix}/*`
+- **Tenant admin prefix**: `ADMIN_PANEL_PREFIX` env var (default `ax7k9m`) — accessible at `/{prefix}/*`
 - **Central admin prefix**: hardcoded `/rootadmin`
 - **Dual auth guards**: `web` (User, tenant DB) + `admin` (Admin, landlord DB)
 - **`public` disk NOT tenant-aware** — use `tenant_asset()` not `asset()` for tenant assets (`config/tenancy.php:141` `asset_helper_tenancy => false`)
@@ -54,9 +54,10 @@ php artisan tenants:seed      # seed tenant DBs
 - **Watch**: `npm run watch` — auto-rebuild on change (no HMR on Laravel dev server)
 - **Dev proxy**: `vite.config.js` proxies `/api` → `http://localhost:8000`
 - **Laravel serves** catch-all `/{path?}` via `StorefrontController` → Blade → `@vite` directive (LAST route in `tenant.php`)
-- **Themes**: `resources/storefront/src/themes/` lazy-loaded by slug; `clothing-fashion` (default fallback) and `classic`
-- **Tailwind v3** with CSS custom properties for theming (colors, fonts, border-radius)
-- **Cart**: cookie-based (httpOnly signed token), not URL-based sessions
+- **Themes**: `resources/storefront/src/themes/` lazy-loaded by slug; `clothing-fashion` (default) and `classic`
+- **Tailwind v3** with CSS custom properties for theming
+- **Cart**: client-side React Context (localStorage) — no backend cart API yet
+- **Implemented pages**: Home, Products, ProductDetail, Category, Brand, Cart, Checkout, Auth (login/register), Dashboard (orders, wishlist, settings, theme editor)
 
 ## Docker
 
@@ -75,6 +76,7 @@ docker exec laravel-app php artisan <command>
 - **Driver**: Redis (production), `sync` (testing — `phpunit.xml`)
 - **Named queues** (priority): `facebook` > `high` > `default` > `low`
 - **Jobs**: `SendAiReplyJob`, `AnalyzeProductImageJob`, `AnalyzeVariantImageJob`, `ProcessImageBatch`, `SyncCategoryAttributeTemplates`
+- **SyncCategoryAttributeTemplates** syncs `BusinessCategory.extra_fields` JSON → `attribute_templates` in ALL tenant DBs (runs on BusinessCategory created/updated)
 - Horizon dashboard at `/horizon` (local) or configured `HORIZON_PATH`
 
 ## Key Services (`app/Services/`)
@@ -99,6 +101,7 @@ Minimal — 2 default Laravel example tests (`tests/Feature/ExampleTest.php`, `t
 ## Gotchas
 
 - `.env` uses MySQL+Redis; `.env.example` defaults to PostgreSQL + database-backed queue/cache/session
+- `.env` has duplicate `QUEUE_CONNECTION=redis` (lines 39 and 50) — second wins
 - Root Vite = Tailwind v4 (`@tailwindcss/vite`); storefront Vite = Tailwind v3 (PostCSS + `tailwindcss` + `autoprefixer`)
 - `TenantCouldNotBeIdentifiedOnDomainException` → 404 (`bootstrap/app.php:38-40`)
 - CLIP server has own `venv/` — managed via `clip-server/start.sh` or `start.sh`
@@ -108,7 +111,3 @@ Minimal — 2 default Laravel example tests (`tests/Feature/ExampleTest.php`, `t
 ## Planning Documents
 
 `INVENTORY_REVIEW.txt` (bug list + architecture plan), `STOREFRONT_PLAN.txt`, `PRODUCT_CATEGORY_FIELDS_PLAN.txt`. Consult these before modifying inventory or storefront — they capture known gaps and future work.
-
-## Communication
-
-- **Language**: Always Banglish (Bengali + English mix) — user er sathe kotha bolar somoy shudhu Banglish use korte hobe. Full English or full Bengali avoid korte hobe.

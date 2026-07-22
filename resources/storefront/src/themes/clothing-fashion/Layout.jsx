@@ -37,7 +37,7 @@ function NoticeBar() {
       onMouseLeave={() => setIsHovered(false)}
     >
       <div className="absolute inset-0 flex items-center whitespace-nowrap ticker-track">
-        {[...Array(3)].flatMap(() => notices).map((text, i) => (
+        {[...Array(20)].flatMap(() => notices).map((text, i) => (
           <span key={i} className="inline-block text-white text-[11px] uppercase tracking-[0.2em] font-medium px-8">
             {text}
           </span>
