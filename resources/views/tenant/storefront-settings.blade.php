@@ -38,12 +38,8 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 @foreach($themes as $slug => $theme)
                     <div class="relative border-2 rounded-xl p-4 cursor-pointer transition hover:shadow-md {{ $storefront->theme_slug === $slug ? 'border-purple-500 bg-purple-50' : 'border-gray-200' }}" onclick="document.getElementById('theme-{{ $slug }}').submit()">
-                        <div class="aspect-video bg-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
-                            <div class="w-full h-full p-4" style="background: {{ $theme['config']['colors']['primary'] }}">
-                                <div class="bg-white rounded p-2 h-full flex items-center justify-center">
-                                    <span class="text-sm font-medium" style="color: {{ $theme['config']['colors']['text'] }}">{{ $theme['name'] }} Theme</span>
-                                </div>
-                            </div>
+                        <div class="aspect-video bg-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden cursor-pointer" @click.stop="openLightbox('{{ asset($theme['thumbnail']) }}')">
+                            <img src="{{ asset($theme['thumbnail']) }}" alt="{{ $theme['name'] }}" class="w-full h-full object-contain">
                         </div>
                         <div class="flex items-center justify-between">
                             <div>
@@ -69,6 +65,16 @@
                     </div>
                 @endforeach
             </div>
+        </div>
+    </div>
+
+    {{-- Image Lightbox --}}
+    <div x-show="lightboxOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" @click="lightboxOpen = false">
+        <div class="relative max-w-4xl max-h-[90vh] w-full" @click.stop>
+            <img :src="lightboxSrc" alt="Theme preview" class="w-full h-full object-contain max-h-[90vh] rounded-lg">
+            <button @click="lightboxOpen = false" class="absolute -top-3 -right-3 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center text-gray-700 hover:text-gray-900 transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
         </div>
     </div>
 
@@ -220,6 +226,12 @@
 function storefrontSettings() {
     return {
         activeTab: '{{ request("tab", "theme") }}',
+        lightboxSrc: null,
+        lightboxOpen: false,
+        openLightbox(src) {
+            this.lightboxSrc = src;
+            this.lightboxOpen = true;
+        },
     }
 }
 

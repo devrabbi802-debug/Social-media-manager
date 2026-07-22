@@ -10,7 +10,7 @@ class ThemeController extends Controller
     const THEMES = [
         'clothing-fashion' => [
             'name' => 'Clothing Fashion',
-            'thumbnail' => '/images/themes/clothing-fashion.jpg',
+            'thumbnail' => '/images/themes/clothing-fashion.png',
             'config' => [
                 'colors' => [
                     'primary' => '#3B82F6',
