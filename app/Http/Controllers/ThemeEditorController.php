@@ -17,7 +17,7 @@ class ThemeEditorController extends Controller
             'banners' => $data['banners'] ?? [],
             'category_banner' => $data['category_banner'] ?? null,
             'features' => $data['features'] ?? [],
-            'notices' => $data['notices'] ?? [],
+            'notices' => isset($data['notices']) ? $data['notices'] : null,
             'categories' => $data['categories'] ?? [],
             'all_categories' => $data['all_categories'] ?? [],
             'section_titles' => $data['section_titles'] ?? [],

@@ -9,13 +9,6 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import CartDrawer from './components/CartDrawer';
 
-const defaultNotices = [
-  '🚚 Free Shipping on orders over ৳1500',
-  '🎉 Summer Sale — Up to 40% Off',
-  '📦 Cash on Delivery Available',
-  '✨ New Arrivals Added Weekly',
-];
-
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
@@ -26,7 +19,14 @@ function NoticeBar() {
   const { isEditorMode } = useEditor();
   const [isHovered, setIsHovered] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
-  const notices = window.__editor_notices || defaultNotices;
+  const [notices, setNotices] = useState(null);
+
+  useEffect(() => {
+    if (window.__editor_notices !== undefined) setNotices(window.__editor_notices);
+    const handler = () => setNotices(window.__editor_notices ?? []);
+    window.addEventListener('notices:updated', handler);
+    return () => window.removeEventListener('notices:updated', handler);
+  }, []);
 
   return (
     <>
@@ -36,13 +36,17 @@ function NoticeBar() {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="absolute inset-0 flex items-center whitespace-nowrap ticker-track">
-        {[...Array(20)].flatMap(() => notices).map((text, i) => (
-          <span key={i} className="inline-block text-white text-[11px] uppercase tracking-[0.2em] font-medium px-8">
-            {text}
-          </span>
-        ))}
-      </div>
+      {notices === null ? (
+        <div className="absolute inset-0 bg-gray-800 animate-pulse" />
+      ) : (
+        <div className="absolute inset-0 flex items-center whitespace-nowrap ticker-track">
+          {[...Array(20)].flatMap(() => notices).map((text, i) => (
+            <span key={i} className="inline-block text-white text-[11px] uppercase tracking-[0.2em] font-medium px-8">
+              {text}
+            </span>
+          ))}
+        </div>
+      )}
       <style>{`
         .ticker-track {
           animation: ticker 40s linear infinite;

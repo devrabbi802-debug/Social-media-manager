@@ -32,6 +32,7 @@ export default function NoticeEditorModal({ sectionData, onClose, onSaved }) {
     try {
       await api.put('/editor/sections/notices', { notices: texts });
       window.__editor_notices = texts;
+      window.dispatchEvent(new Event('notices:updated'));
       if (onSaved) onSaved(texts);
       onClose();
     } catch (err) {

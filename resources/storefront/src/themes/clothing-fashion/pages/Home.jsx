@@ -63,6 +63,10 @@ export default function Home() {
       setAllCategories(res.all_categories || null);
       if (res.section_titles) setSectionTitles(res.section_titles);
       if (res.category_banner) setCategoryBanner(res.category_banner);
+      if (res.notices !== undefined) {
+        window.__editor_notices = res.notices;
+        window.dispatchEvent(new Event('notices:updated'));
+      }
     }).catch(() => {
       setBanners([]);
     }).finally(() => {

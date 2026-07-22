@@ -130,6 +130,7 @@ class StorefrontApiController extends Controller
             'categories' => $categories,
             'all_categories' => $allCategories,
             'section_titles' => $storefront?->sections_data['section_titles'] ?? [],
+            'notices' => isset($storefront->sections_data['notices']) ? $storefront->sections_data['notices'] : null,
             'brands' => $brands,
         ]);
     }
