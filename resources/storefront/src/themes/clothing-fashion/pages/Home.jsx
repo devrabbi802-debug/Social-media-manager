@@ -69,6 +69,7 @@ export default function Home() {
         if (res.category_products?.length) {
           setCategoryProducts(res.category_products);
         }
+        if (res.section_titles) setSectionTitles(res.section_titles);
       });
     };
 

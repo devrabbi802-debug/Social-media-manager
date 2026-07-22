@@ -206,6 +206,10 @@ class ThemeEditorController extends Controller
 
         $sectionsData = $storefront->sections_data ?? [];
         $sectionsData['category_products'] = $validated;
+        $sectionsData['section_titles'] = array_merge(
+            $sectionsData['section_titles'] ?? [],
+            ['category-products' => $validated['title'] ?? 'Jackets Collection']
+        );
 
         $storefront->update(['sections_data' => $sectionsData]);
 
