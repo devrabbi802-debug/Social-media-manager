@@ -219,6 +219,11 @@ function RouterContent({ isEditorMode, onExitEditor }) {
         const cfg = window.__STOREFRONT_DATA__ || await api.get('/storefront/config');
         setConfig(cfg);
 
+        if (cfg?.notices !== undefined) {
+          window.__editor_notices = cfg.notices;
+          window.dispatchEvent(new Event('notices:updated'));
+        }
+
         const urlTheme = new URLSearchParams(window.location.search).get('theme');
         const slug = urlTheme || cfg?.theme_slug || cfg?.theme?.slug || 'clothing-fashion';
         const theme = await loadTheme(slug);

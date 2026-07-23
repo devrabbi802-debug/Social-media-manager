@@ -15,7 +15,7 @@ function ScrollToTop() {
   return null;
 }
 
-function NoticeBar() {
+function NoticeBar({ config }) {
   const { isEditorMode } = useEditor();
   const [isHovered, setIsHovered] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
@@ -27,6 +27,13 @@ function NoticeBar() {
     window.addEventListener('notices:updated', handler);
     return () => window.removeEventListener('notices:updated', handler);
   }, []);
+
+  useEffect(() => {
+    if (config?.notices && Array.isArray(config.notices)) {
+      window.__editor_notices = config.notices;
+      setNotices(config.notices);
+    }
+  }, [config]);
 
   return (
     <>
@@ -84,7 +91,7 @@ export default function Layout({ children, config }) {
     <CartProvider>
       <WishlistProvider>
       <ScrollToTop />
-      <NoticeBar />
+      <NoticeBar config={config} />
       <div className="min-h-screen flex flex-col pt-8 bg-white">
         <Header
           storeName={config?.store_name}

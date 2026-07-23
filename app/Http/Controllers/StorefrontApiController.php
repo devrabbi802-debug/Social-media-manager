@@ -61,6 +61,7 @@ class StorefrontApiController extends Controller
                 'logo' => $storefront->footer_logo,
                 'copyright' => $storefront->footer_copyright_text,
             ],
+            'notices' => isset($storefront->sections_data['notices']) ? $storefront->sections_data['notices'] : null,
         ]);
     }
 

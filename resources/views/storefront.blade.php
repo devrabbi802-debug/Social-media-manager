@@ -146,6 +146,7 @@
             store_logo: {!! json_encode($storefront?->store_logo ? Storage::disk('public')->url($storefront->store_logo) : null) !!},
             theme: {!! json_encode($themeConfig) !!},
             theme_slug: {!! json_encode($themeSlug ?? 'clothing-fashion') !!},
+            notices: {!! json_encode(isset($storefront->sections_data['notices']) ? $storefront->sections_data['notices'] : null) !!},
         };
     </script>
 </body>

@@ -46,6 +46,9 @@ export default function Home() {
       if (window.__editor_section_titles) setSectionTitles(window.__editor_section_titles);
       if (window.__editor_category_banner) setCategoryBanner(window.__editor_category_banner);
       if (window.__editor_category_products_data) setCategoryProductsData(window.__editor_category_products_data);
+      if (window.__editor_notices !== undefined) {
+        window.dispatchEvent(new Event('notices:updated'));
+      }
       setLoading(false);
       loadProducts();
       return;
