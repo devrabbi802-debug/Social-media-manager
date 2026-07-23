@@ -400,16 +400,16 @@ export default function Header({ storeName, storeLogo }) {
         {mobileMenuOpen && (
           <div className="lg:hidden py-4 border-t border-gray-200 max-h-[80vh] overflow-y-auto bg-white text-gray-900 shadow-lg">
             <nav className="flex flex-col space-y-1">
-              <Link to="/" className="py-2.5 text-sm uppercase tracking-widest font-medium">Home</Link>
+              <Link to="/" onClick={() => setMobileMenuOpen(false)} className="py-2.5 text-sm uppercase tracking-widest font-medium">Home</Link>
               {!navLoading && hasNavItems && navItems.map((item, i) => (
                 <div key={i}>
-                  <Link to={item.link} className="py-2.5 text-sm uppercase tracking-widest font-medium block">
+                  <Link to={item.link} onClick={() => setMobileMenuOpen(false)} className="py-2.5 text-sm uppercase tracking-widest font-medium block">
                     {item.label}
                   </Link>
                   {item.submenu.length > 0 && (
                     <div className="pl-4 pb-2 space-y-1">
                       {item.submenu.map((sub, j) => (
-                        <Link key={j} to={`/category/${sub.slug}`} className="block py-1.5 text-xs text-gray-500 hover:text-gray-900 transition">
+                        <Link key={j} to={`/category/${sub.slug}`} onClick={() => setMobileMenuOpen(false)} className="block py-1.5 text-xs text-gray-500 hover:text-gray-900 transition">
                           {sub.name}
                         </Link>
                       ))}
@@ -417,8 +417,8 @@ export default function Header({ storeName, storeLogo }) {
                   )}
                 </div>
               ))}
-              <Link to="/products" className="py-2.5 text-sm uppercase tracking-widest font-medium">Shop All</Link>
-              <button onClick={openDrawer} className="py-2.5 text-sm uppercase tracking-widest font-medium text-left">Cart ({itemCount})</button>
+              <Link to="/products" onClick={() => setMobileMenuOpen(false)} className="py-2.5 text-sm uppercase tracking-widest font-medium">Shop All</Link>
+              <button onClick={() => { openDrawer(); setMobileMenuOpen(false); }} className="py-2.5 text-sm uppercase tracking-widest font-medium text-left">Cart ({itemCount})</button>
             </nav>
           </div>
         )}
