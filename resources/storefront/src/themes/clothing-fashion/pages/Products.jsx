@@ -235,20 +235,23 @@ export default function Products() {
               <SlidersHorizontal className="w-3.5 h-3.5" />
               Filter
             </button>
-            <select
-              value={sort}
-              onChange={(e) => {
-                const newParams = new URLSearchParams(searchParams);
-                newParams.set('sort', e.target.value);
-                setSearchParams(newParams);
-                setPage(1);
-              }}
-              className="border border-gray-200 px-3 py-2 text-xs focus:outline-none focus:border-gray-900 uppercase tracking-wider"
-            >
-              <option value="newest">Newest</option>
-              <option value="price_asc">Price: Low</option>
-              <option value="price_desc">Price: High</option>
-            </select>
+            <div className="relative">
+              <select
+                value={sort}
+                onChange={(e) => {
+                  const newParams = new URLSearchParams(searchParams);
+                  newParams.set('sort', e.target.value);
+                  setSearchParams(newParams);
+                  setPage(1);
+                }}
+                className="appearance-none bg-white border border-gray-200 rounded-lg pl-3 pr-8 py-2.5 text-xs font-medium text-gray-700 focus:outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900 transition cursor-pointer hover:border-gray-400"
+              >
+                <option value="newest">Newest</option>
+                <option value="price_asc">Price: Low to High</option>
+                <option value="price_desc">Price: High to Low</option>
+              </select>
+              <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            </div>
           </div>
         </div>
 
