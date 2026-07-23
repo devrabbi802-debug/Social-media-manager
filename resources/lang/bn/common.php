@@ -102,6 +102,7 @@ return [
     'click_to_select' => 'ক্লিক করে সিলেক্ট করুন',
     'file_hint' => 'PNG, JPG, WEBP (সর্বোচ্চ ৫MB প্রতিটি)',
     'ai_analyze_hint' => 'AI অটোমেটিক্যালি ইমেজ বিশ্লেষণ করবে।',
+    'clear' => 'ক্লিয়ার',
     'select' => 'নির্বাচন করুন',
     'go_to' => 'এ যান',
     'signup_or_login' => 'Sign Up বা Login করুন',

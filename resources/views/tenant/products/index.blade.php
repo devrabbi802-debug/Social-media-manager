@@ -34,12 +34,59 @@
         <div class="bg-white rounded-2xl p-6 shadow-sm mb-6">
             <form action="{{ route('inventory.products.index') }}" method="GET" class="flex flex-wrap gap-4">
                 <input type="text" name="search" value="{{ request('search') }}" placeholder="@lang('products.search_placeholder')" class="flex-1 min-w-[200px] px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                <select name="category_id" class="px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                    <option value="">@lang('products.all_categories')</option>
-                    @foreach($categories as $category)
-                        <option value="{{ $category->id }}" {{ request('category_id') == $category->id ? 'selected' : '' }}>{{ $category->name }}</option>
-                    @endforeach
-                </select>
+                @php
+                    $categoryOptions = [];
+                    foreach ($categories as $cat) {
+                        $categoryOptions[] = ['id' => $cat->id, 'name' => $cat->name, 'depth' => 0];
+                        foreach ($cat->children as $child) {
+                            $categoryOptions[] = ['id' => $child->id, 'name' => $child->name, 'depth' => 1];
+                        }
+                    }
+                @endphp
+                <div x-data="{
+                    open: false,
+                    search: '',
+                    selectedId: {{ request('category_id') ?: 'null' }},
+                    selectedName: '',
+                    options: @js($categoryOptions),
+                    get filtered() {
+                        if (!this.search) return this.options;
+                        let q = this.search.toLowerCase();
+                        return this.options.filter(o => o.name.toLowerCase().includes(q));
+                    },
+                    select(item) {
+                        this.selectedId = item.id;
+                        this.selectedName = item.name;
+                        this.search = '';
+                        this.open = false;
+                        $el.querySelector('[name=category_id]').value = item.id;
+                        $el.closest('form').submit();
+                    },
+                    init() {
+                        if (this.selectedId) {
+                            let found = this.options.find(o => o.id === this.selectedId);
+                            if (found) this.selectedName = found.name;
+                        }
+                    }
+                }" @click.outside="open = false" @keydown.escape="open = false" class="relative min-w-[200px]">
+                    <input type="hidden" name="category_id" value="{{ request('category_id') }}">
+                    <div @click="open = !open" class="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent cursor-pointer flex items-center justify-between bg-white gap-2">
+                        <span :class="selectedId ? 'text-gray-900' : 'text-gray-400'" x-text="selectedId ? selectedName : '@lang('products.all_categories')'" class="truncate"></span>
+                        <svg class="w-4 h-4 text-gray-400 shrink-0" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </div>
+                    <div x-show="open" x-cloak class="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                        <div class="sticky top-0 bg-white border-b border-gray-100 p-2">
+                            <input type="text" x-model="search" placeholder="Search categories..." class="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none">
+                        </div>
+                        <template x-for="item in filtered" :key="item.id">
+                            <div @click="select(item)" :class="item.id === selectedId ? 'bg-purple-50 text-purple-700' : 'text-gray-700 hover:bg-gray-50'" class="px-4 py-2 cursor-pointer text-sm flex items-center gap-2">
+                                <span x-show="item.depth === 1" class="text-gray-300">—</span>
+                                <span :class="item.depth === 1 ? 'ml-2 text-gray-500' : 'font-medium'" x-text="item.name"></span>
+                            </div>
+                        </template>
+                        <div x-show="filtered.length === 0" class="px-4 py-3 text-sm text-gray-400 text-center">No categories found</div>
+                    </div>
+                </div>
                 <select name="brand_id" class="px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
                     <option value="">@lang('products.all_brands')</option>
                     @foreach($brands as $brand)
@@ -47,6 +94,9 @@
                     @endforeach
                 </select>
                 <button type="submit" class="bg-gray-100 text-gray-700 px-6 py-2 rounded-xl font-medium hover:bg-gray-200 transition">@lang('common.filter')</button>
+                @if(request()->anyFilled(['search', 'category_id', 'brand_id', 'status']))
+                    <a href="{{ route('inventory.products.index') }}" class="bg-red-50 text-red-600 px-6 py-2 rounded-xl font-medium hover:bg-red-100 transition">@lang('common.clear')</a>
+                @endif
             </form>
         </div>
 

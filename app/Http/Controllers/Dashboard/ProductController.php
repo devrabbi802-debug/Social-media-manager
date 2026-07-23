@@ -28,7 +28,10 @@ class ProductController extends Controller
         }
 
         if ($request->filled('category_id')) {
-            $query->where('category_id', $request->category_id);
+            $categoryIds = [$request->category_id];
+            $childIds = Category::where('parent_id', $request->category_id)->pluck('id')->toArray();
+            $categoryIds = array_merge($categoryIds, $childIds);
+            $query->whereIn('category_id', $categoryIds);
         }
 
         if ($request->filled('brand_id')) {
@@ -44,7 +47,7 @@ class ProductController extends Controller
         }
 
         $products = $query->latest()->paginate(20);
-        $categories = Category::whereNull('parent_id')->orderBy('name')->get();
+        $categories = Category::whereNull('parent_id')->with('children')->orderBy('name')->get();
         $brands = Brand::where('is_active', true)->orderBy('name')->get();
 
         return view('tenant.products.index', compact('products', 'categories', 'brands'));

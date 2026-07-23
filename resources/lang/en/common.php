@@ -102,6 +102,7 @@ return [
     'click_to_select' => 'Click to select',
     'file_hint' => 'PNG, JPG, WEBP (max 5MB each)',
     'ai_analyze_hint' => 'AI will automatically analyze images.',
+    'clear' => 'Clear',
     'select' => 'Select',
     'go_to' => 'Go to',
     'signup_or_login' => 'Sign Up or Login',
