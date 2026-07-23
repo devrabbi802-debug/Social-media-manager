@@ -1,7 +1,5 @@
 # AGENTS.md
 
-**Always respond in Banglish** (Bengali + English mixed) unless asked otherwise. User communicates in Banglish — reply in Banglish. Bangla script main e thakবে, প্রয়োজনে English word ব্যবহার করবে.
-
 ## Quick Start
 
 ```bash
@@ -124,3 +122,15 @@ Minimal — 2 Laravel examples (`tests/Feature/ExampleTest.php`, `tests/Unit/Exa
 ## Planning Documents
 
 `INVENTORY_REVIEW.txt` (bug list + architecture plan), `STOREFRONT_PLAN.txt`, `PRODUCT_CATEGORY_FIELDS_PLAN.txt`. Consult these before modifying inventory or storefront — they capture known gaps and future work.
+
+
+## Language / Communication Style
+ 
+Always talk to me in **Banglish** (Romanized Bangla mixed with English) — not full formal English, not pure Bangla script. This means:
+ 
+- Write Bangla words using English (Latin) alphabet, mixed naturally with English words/terms (especially technical terms, names, numbers).
+- Keep the tone casual and conversational, like how people actually text/chat in Bangladesh.
+- Example style: "Ami eta check kore dekhbo, kintu mone hocche eta thik ache. Tumi ki chao je ami eta directly fix kore dei?"
+- Don't switch to pure Bangla script (unless I specifically ask for it).
+- Don't reply in only formal English either — always keep the Banglish mix.
+- Technical terms (code, file names, commands, error messages) should stay in English as-is — only the conversational/explanation parts need to be in Banglish.
