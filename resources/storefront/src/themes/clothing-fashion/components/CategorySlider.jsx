@@ -1,15 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { CategorySliderSkeleton } from '../../../components/shared/SectionSkeletons';
 
 export default function CategorySlider({ categories = [], loading }) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [visibleCount, setVisibleCount] = useState(5);
+
+  useEffect(() => {
+    const update = () => setVisibleCount(window.innerWidth < 768 ? 2 : 5);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
 
   if (loading) return <CategorySliderSkeleton />;
   if (categories.length === 0) return null;
 
-  const visibleCount = 5;
   const maxIndex = Math.max(0, categories.length - visibleCount);
   const canGoLeft = currentIndex > 0;
   const canGoRight = currentIndex < maxIndex;
@@ -28,7 +35,7 @@ export default function CategorySlider({ categories = [], loading }) {
           {canGoLeft && (
             <button
               onClick={goLeft}
-              className="absolute -left-3 md:left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white shadow-lg border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition"
+              className="absolute -left-3 md:left-0 top-1/2 -translate-y-1/2 z-[61] w-10 h-10 bg-white shadow-lg border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition"
             >
               <ChevronLeft className="w-5 h-5 text-gray-700" />
             </button>
@@ -63,7 +70,7 @@ export default function CategorySlider({ categories = [], loading }) {
           {canGoRight && (
             <button
               onClick={goRight}
-              className="absolute -right-3 md:right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white shadow-lg border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition"
+              className="absolute -right-3 md:right-0 top-1/2 -translate-y-1/2 z-[61] w-10 h-10 bg-white shadow-lg border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition"
             >
               <ChevronRight className="w-5 h-5 text-gray-700" />
             </button>
