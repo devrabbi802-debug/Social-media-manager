@@ -55,7 +55,7 @@ php artisan tenants:seed      # seed tenant DBs
 - **Build**: `cd resources/storefront && npm run build` → `public/storefront/` (manifest enabled)
 - **Watch**: `npm run watch` — auto-rebuild on change (no HMR)
 - **Dev proxy**: `vite.config.js` proxies `/api` → `http://localhost:8000`
-- **Themes**: lazy-loaded via `resources/storefront/src/themes/index.js`; `clothing-fashion` (default) and `classic`
+- **Themes**: lazy-loaded via `resources/storefront/src/themes/index.js`; `clothing-fashion` (default) and `classic` (both registered but dirs may not exist yet)
 - **Cart**: client-side React Context (localStorage) — no backend cart API
 - **Editor mode**: `?editor=true` URL param toggles `EditableSection` overlays
 - **`sections_data`** JSON column on `StorefrontSettings` stores editor state (categories, all_categories, banners, section_titles)
@@ -72,7 +72,7 @@ docker exec laravel-app php artisan <command>
 - `docker-entrypoint.sh`: waits for MySQL → `composer install --no-dev` → `npm install` (root only) → `key:generate` → `migrate` → `artisan serve --host=0.0.0.0 --port=8000`
 - Node service runs `npm install && npm run dev -- --host 0.0.0.0`
 - **Storefront not auto-built in Docker** — build manually
-- Worker runs Supervisor + Horizon (`docker/worker-entrypoint.sh` + `docker/supervisord.conf`)
+- Worker image reuses `socialmediamanager-app:latest`; runs Supervisor + Horizon (`docker/worker-entrypoint.sh` + `docker/supervisord.conf`)
 - CLIP server: Dockerfile in `clip-server/`, port 8089, persists model cache to `clip-models` volume
 
 ## Queue / Horizon
@@ -82,6 +82,7 @@ docker exec laravel-app php artisan <command>
 - **Jobs**: `SendAiReplyJob`, `AnalyzeProductImageJob`, `AnalyzeVariantImageJob`, `ProcessImageBatch`, `SyncCategoryAttributeTemplates`
 - `SyncCategoryAttributeTemplates` syncs `BusinessCategory.extra_fields` JSON → `attribute_templates` in ALL tenant DBs (runs on BusinessCategory created/updated)
 - Horizon dashboard at `/horizon` (local) or configured `HORIZON_PATH`
+- Horizon supervisor config: `docker/supervisord.conf` (3 tries, 1800s timeout, 5-30 procs)
 
 ## Key Services (`app/Services/`)
 
@@ -101,6 +102,12 @@ Products, variants, categories, brands, attribute templates, warehouses, stock m
 ## Tests
 
 Minimal — 2 Laravel examples (`tests/Feature/ExampleTest.php`, `tests/Unit/ExampleTest.php`). No tenant-specific tests. Run with `composer test` (SQLite :memory:, `QUEUE_CONNECTION=sync`).
+
+## Formatting & Editor Config
+
+- `.editorconfig`: 4-space indent, LF endings (2-space for `.yml`/`.yaml`, 4-space for compose files)
+- PHP formatting: `./vendor/bin/pint` (Laravel Pint, no custom config file)
+- No Prettier, ESLint, or stylelint configs exist
 
 ## Gotchas
 
