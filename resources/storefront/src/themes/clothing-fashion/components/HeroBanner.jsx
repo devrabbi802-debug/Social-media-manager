@@ -3,42 +3,15 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Skeleton from '../../../components/shared/Skeleton';
 import { HeroBannerSkeleton } from '../../../components/shared/SectionSkeletons';
 
-const staticBanners = [
-  {
-    id: 1,
-    title: 'Summer Collection 2026',
-    subtitle: 'Get up to 40% off on trending styles',
-    btn_text: 'Shop Now',
-    link: '/products',
-    image: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1920&q=80',
-    align: 'left',
-  },
-  {
-    id: 2,
-    title: 'New Arrivals',
-    subtitle: 'Streetwear & Casual Fashion',
-    btn_text: 'Explore',
-    link: '/products',
-    image: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=1920&q=80',
-    align: 'center',
-  },
-  {
-    id: 3,
-    title: 'Premium Denim',
-    subtitle: 'Limited edition collection',
-    btn_text: 'Discover',
-    link: '/products',
-    image: 'https://images.unsplash.com/photo-1445205170230-053b83016050?w=1920&q=80',
-    align: 'right',
-  },
-];
-
 export default function HeroBanner({ banners }) {
   if (banners === null) {
     return <HeroBannerSkeleton />;
   }
+  if (banners.length === 0) {
+    return null;
+  }
 
-  const slides = banners.length > 0 ? banners : staticBanners;
+  const slides = banners;
   const [current, setCurrent] = useState(0);
   const [touchStart, setTouchStart] = useState(0);
   const [imagesLoaded, setImagesLoaded] = useState({});

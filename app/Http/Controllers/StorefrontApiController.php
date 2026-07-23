@@ -201,13 +201,25 @@ class StorefrontApiController extends Controller
     {
         $query = Product::active()->with(['category', 'brand', 'images']);
 
-        // Filters
+        // Search
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhereHas('category', fn($cq) => $cq->where('name', 'like', "%{$search}%"))
+                  ->orWhereHas('brand', fn($bq) => $bq->where('name', 'like', "%{$search}%"));
+            });
+        }
+
+        // Filters (comma-separated for multiple values)
         if ($request->filled('category')) {
-            $query->whereHas('category', fn($q) => $q->where('slug', $request->category));
+            $categories = explode(',', $request->category);
+            $query->whereHas('category', fn($q) => $q->whereIn('slug', $categories));
         }
 
         if ($request->filled('brand')) {
-            $query->whereHas('brand', fn($q) => $q->where('slug', $request->brand));
+            $brands = explode(',', $request->brand);
+            $query->whereHas('brand', fn($q) => $q->whereIn('slug', $brands));
         }
 
         if ($request->filled('min_price')) {

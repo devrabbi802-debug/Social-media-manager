@@ -93,7 +93,7 @@ export default function Layout({ children, config }) {
         <main className="flex-1 pt-16">
           {children}
         </main>
-        <Footer />
+        <Footer storeName={config?.store_name} config={config} />
         <CartDrawer />
       </div>
       </WishlistProvider>

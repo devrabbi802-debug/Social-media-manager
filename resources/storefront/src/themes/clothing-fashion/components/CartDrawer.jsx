@@ -5,7 +5,7 @@ import { useCart } from '../contexts/CartContext';
 
 export default function CartDrawer() {
   const { items, drawerOpen, closeDrawer, updateQuantity, removeItem } = useCart();
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const subtotal = items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
 
   return (
     <>
@@ -35,7 +35,7 @@ export default function CartDrawer() {
             ) : (
               <div className="space-y-4">
                 {items.map((item) => (
-                  <div key={item.id} className="flex gap-3 pb-4 border-b border-gray-50">
+                  <div key={item.product_id} className="flex gap-3 pb-4 border-b border-gray-50">
                     <Link to={`/products/${item.slug}`} onClick={closeDrawer} className="w-20 h-20 bg-gray-50 flex-shrink-0">
                       <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                     </Link>
@@ -43,21 +43,23 @@ export default function CartDrawer() {
                       <Link to={`/products/${item.slug}`} onClick={closeDrawer}>
                         <h3 className="text-sm font-medium text-gray-900 line-clamp-1 hover:text-gray-600 transition">{item.name}</h3>
                       </Link>
-                      <p className="text-xs text-gray-400 mt-0.5">{item.color} / {item.size}</p>
-                      <p className="text-sm font-bold mt-1">৳{item.price * item.quantity}</p>
+                      {(item.color || item.size) && (
+                        <p className="text-xs text-gray-400 mt-0.5">{[item.color, item.size].filter(Boolean).join(' / ')}</p>
+                      )}
+                      <p className="text-sm font-bold mt-1">৳{item.unit_price * item.quantity}</p>
                       <div className="flex items-center justify-between mt-2">
                         <div className="flex items-center border border-gray-200">
-                          <button onClick={() => updateQuantity(item.id, -1)} className="w-7 h-7 flex items-center justify-center hover:bg-gray-50 transition">
+                          <button onClick={() => updateQuantity(item.product_id, -1)} className="w-7 h-7 flex items-center justify-center hover:bg-gray-50 transition">
                             <Minus className="w-3 h-3" />
                           </button>
                           <span className="w-7 h-7 flex items-center justify-center text-xs font-medium border-x border-gray-200">
                             {item.quantity}
                           </span>
-                          <button onClick={() => updateQuantity(item.id, 1)} className="w-7 h-7 flex items-center justify-center hover:bg-gray-50 transition">
+                          <button onClick={() => updateQuantity(item.product_id, 1)} className="w-7 h-7 flex items-center justify-center hover:bg-gray-50 transition">
                             <Plus className="w-3 h-3" />
                           </button>
                         </div>
-                        <button onClick={() => removeItem(item.id)} className="text-gray-300 hover:text-red-500 transition">
+                        <button onClick={() => removeItem(item.product_id)} className="text-gray-300 hover:text-red-500 transition">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>

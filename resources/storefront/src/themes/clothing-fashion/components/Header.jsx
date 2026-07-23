@@ -1,32 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Search, ShoppingCart, Menu, X, ChevronDown, User, LayoutDashboard, LogOut, ArrowRight, Camera, Upload, X as XIcon } from 'lucide-react';
+import { Search, ShoppingCart, Menu, X, ChevronDown, User, LayoutDashboard, LogOut, ArrowRight, Camera, X as XIcon } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import api from '../../../api/client';
 
-const searchProducts = [
-  { id: 1, name: 'Classic Cotton T-Shirt', slug: 'classic-cotton-tshirt', base_price: 1200, discount_price: 799, effective_price: 799, image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=200&q=80', category: 'T-Shirts' },
-  { id: 2, name: 'Slim Fit Denim Jeans', slug: 'slim-fit-denim-jeans', base_price: 2500, discount_price: 1899, effective_price: 1899, image: 'https://images.unsplash.com/photo-1542272454315-4c01d7abdf4a?w=200&q=80', category: 'Denim' },
-  { id: 3, name: 'Oversized Hoodie', slug: 'oversized-hoodie', base_price: 1800, discount_price: null, effective_price: 1800, image: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=200&q=80', category: 'Hoodies' },
-  { id: 4, name: 'Leather Biker Jacket', slug: 'leather-biker-jacket', base_price: 5500, discount_price: 4200, effective_price: 4200, image: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=200&q=80', category: 'Jackets' },
-  { id: 5, name: 'Running Shoes Pro', slug: 'running-shoes-pro', base_price: 3200, discount_price: 2599, effective_price: 2599, image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=200&q=80', category: 'Shoes' },
-  { id: 6, name: 'Premium Cap', slug: 'premium-cap', base_price: 600, discount_price: 399, effective_price: 399, image: 'https://images.unsplash.com/photo-1606760227091-3dd870d97f1d?w=200&q=80', category: 'Accessories' },
-  { id: 7, name: 'Graphic Print T-Shirt', slug: 'graphic-print-tshirt', base_price: 1500, discount_price: null, effective_price: 1500, image: 'https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=200&q=80', category: 'T-Shirts' },
-  { id: 8, name: 'Cargo Pants', slug: 'cargo-pants', base_price: 2200, discount_price: 1799, effective_price: 1799, image: 'https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=200&q=80', category: 'Denim' },
-  { id: 9, name: 'Wool Blend Hoodie', slug: 'wool-blend-hoodie', base_price: 2400, discount_price: 1999, effective_price: 1999, image: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=200&q=80', category: 'Hoodies' },
-  { id: 10, name: 'Bomber Jacket', slug: 'bomber-jacket', base_price: 4800, discount_price: 3800, effective_price: 3800, image: 'https://images.unsplash.com/photo-1594736797933-d0501ba2fe65?w=200&q=80', category: 'Jackets' },
-  { id: 11, name: 'Summer Linen Shirt', slug: 'summer-linen-shirt', base_price: 1600, discount_price: null, effective_price: 1600, image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=200&q=80', category: 'T-Shirts' },
-  { id: 12, name: 'Casual Sneakers', slug: 'casual-sneakers', base_price: 2800, discount_price: null, effective_price: 2800, image: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=200&q=80', category: 'Shoes' },
-  { id: 13, name: 'Ripped Skinny Jeans', slug: 'ripped-skinny-jeans', base_price: 2800, discount_price: 2200, effective_price: 2200, image: 'https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=200&q=80', category: 'Denim' },
-  { id: 14, name: 'Denim Jacket', slug: 'denim-jacket', base_price: 4200, discount_price: 3500, effective_price: 3500, image: 'https://images.unsplash.com/photo-1576995853123-5a10305d93c0?w=200&q=80', category: 'Jackets' },
-  { id: 15, name: 'Leather Belt', slug: 'leather-belt', base_price: 900, discount_price: 699, effective_price: 699, image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=200&q=80', category: 'Accessories' },
-  { id: 16, name: 'Polo T-Shirt', slug: 'polo-tshirt', base_price: 1400, discount_price: 1099, effective_price: 1099, image: 'https://images.unsplash.com/photo-1598713125249-ba7e3b3c02ba?w=200&q=80', category: 'T-Shirts' },
-  { id: 17, name: 'Sport Shoes Elite', slug: 'sport-shoes-elite', base_price: 4500, discount_price: 3600, effective_price: 3600, image: 'https://images.unsplash.com/photo-1608231387042-66d1773070a5?w=200&q=80', category: 'Shoes' },
-  { id: 18, name: 'Winter Beanie', slug: 'winter-beanie', base_price: 500, discount_price: 399, effective_price: 399, image: 'https://images.unsplash.com/photo-1576871337622-98d48d1cf531?w=200&q=80', category: 'Accessories' },
-  { id: 19, name: 'Puffer Jacket', slug: 'puffer-jacket', base_price: 6200, discount_price: 4900, effective_price: 4900, image: 'https://images.unsplash.com/photo-1604644401890-0bd678c83788?w=200&q=80', category: 'Jackets' },
-  { id: 20, name: 'Chino Pants', slug: 'chino-pants', base_price: 2000, discount_price: null, effective_price: 2000, image: 'https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=200&q=80', category: 'Denim' },
-];
+let searchTimeout;
 
 export default function Header({ storeName, storeLogo }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -47,6 +26,8 @@ export default function Header({ storeName, storeLogo }) {
 
   const [categories, setCategories] = useState([]);
   const [navLoading, setNavLoading] = useState(true);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,6 +43,26 @@ export default function Header({ storeName, storeLogo }) {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    if (searchImagePreview) return;
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      setSearchLoading(true);
+      api.get('/storefront/products', { params: { search: searchQuery, per_page: 6 } }).then((res) => {
+        setSearchResults(res.data || []);
+      }).catch(() => {
+        setSearchResults([]);
+      }).finally(() => {
+        setSearchLoading(false);
+      });
+    }, 300);
+    return () => clearTimeout(searchTimeout);
+  }, [searchQuery, searchImagePreview]);
+
   const navItems = useMemo(() => {
     return categories.map((cat) => ({
       label: cat.name,
@@ -75,14 +76,7 @@ export default function Header({ storeName, storeLogo }) {
 
   const hasNavItems = navItems.length > 0;
 
-  const suggestions = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    const q = searchQuery.toLowerCase();
-    return searchProducts
-      .filter((p) => p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q))
-      .slice(0, 6);
-  }, [searchQuery]);
-
+  const suggestions = searchResults;
   const hasSuggestions = suggestions.length > 0;
 
   useEffect(() => {
@@ -349,7 +343,11 @@ export default function Header({ storeName, storeLogo }) {
 
             {searchQuery.trim() && !searchImagePreview && (
               <div className={`absolute top-full left-0 right-0 mt-0.5 shadow-2xl border border-gray-100 ${suggestionBg} max-h-96 overflow-y-auto`}>
-                {hasSuggestions ? (
+                {searchLoading ? (
+                  <div className="px-4 py-8 text-center text-sm text-gray-400">
+                    <div className="inline-block w-5 h-5 border-2 border-gray-300 border-t-gray-900 rounded-full animate-spin" />
+                  </div>
+                ) : hasSuggestions ? (
                   <>
                     <div className="px-4 py-2 border-b border-gray-100">
                       <span className="text-xs font-medium uppercase tracking-wider text-gray-400">Products</span>
@@ -370,7 +368,7 @@ export default function Header({ storeName, storeLogo }) {
                           <p className="text-sm font-medium line-clamp-1 text-gray-900">
                             {highlightMatch(product.name, searchQuery)}
                           </p>
-                          <p className="text-xs text-gray-400 mt-0.5">{product.category}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{product.category?.name || product.category || ''}</p>
                         </div>
                         <div className="text-right flex-shrink-0">
                           <p className="text-sm font-bold text-gray-900">৳{product.effective_price}</p>

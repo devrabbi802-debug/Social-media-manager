@@ -3,19 +3,11 @@ import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { CategoryBannerSkeleton } from '../../../components/shared/SectionSkeletons';
 
-const defaultBanner = {
-  image: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=1920&q=80',
-  label: 'Limited Edition',
-  title: 'Winter Collection',
-  subtitle: 'Up to 50% off on jackets & coats',
-  btn_text: 'Shop Collection',
-  link: '/category/jackets',
-};
-
 export default function CategoryBanner({ banner, loading }) {
   if (loading) return <CategoryBannerSkeleton />;
+  if (!banner) return null;
 
-  const data = banner || defaultBanner;
+  const data = banner;
 
   return (
     <section className="py-8 md:py-12">

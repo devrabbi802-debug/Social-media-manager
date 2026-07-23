@@ -1,12 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { SlidersHorizontal, X, ChevronDown } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
-import { allProducts as sharedProducts } from '../data/products';
-
-const categories = [...new Set(sharedProducts.map((p) => p.category.name))];
-const brands = [...new Set(sharedProducts.map((p) => p.brand.name))];
-const colors = [...new Set(sharedProducts.flatMap((p) => p.variants?.map((v) => v.color) || []))];
-const sizes = [...new Set(sharedProducts.flatMap((p) => p.variants?.map((v) => v.size) || []))];
+import api from '../../../api/client';
 
 function FilterSection({ title, open, onToggle, children }) {
   return (
@@ -21,74 +17,123 @@ function FilterSection({ title, open, onToggle, children }) {
 }
 
 export default function Products() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [mobileFilter, setMobileFilter] = useState(false);
-  const [openSections, setOpenSections] = useState({ category: true, price: true, color: true, size: true, brand: true });
+  const [openSections, setOpenSections] = useState({ category: true, price: true, brand: true });
 
-  const [filters, setFilters] = useState({
-    category: [],
-    brand: [],
-    color: [],
-    size: [],
-    minPrice: '',
-    maxPrice: '',
-  });
-  const [sort, setSort] = useState('newest');
-  const [visibleCount, setVisibleCount] = useState(8);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [lastPage, setLastPage] = useState(1);
+  const [page, setPage] = useState(1);
 
-  const toggleSection = (key) => setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  const [categories, setCategories] = useState([]);
+  const [brands, setBrands] = useState([]);
+
+  const searchValue = searchParams.get('search') || '';
+  const minPrice = searchParams.get('min_price') || '';
+  const maxPrice = searchParams.get('max_price') || '';
+  const sort = searchParams.get('sort') || 'newest';
+  const filterKey = searchParams.toString();
+
+  useEffect(() => {
+    api.get('/storefront/categories').then((data) => {
+      if (Array.isArray(data)) setCategories(data);
+    }).catch(() => {});
+    api.get('/storefront/brands').then((data) => {
+      if (Array.isArray(data)) setBrands(data);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    const params = { per_page: 12, page, sort };
+    const selectedCategories = searchParams.getAll('category');
+    const selectedBrands = searchParams.getAll('brand');
+    const search = searchParams.get('search') || '';
+    if (search) params.search = search;
+    if (selectedCategories.length > 0) params.category = selectedCategories.join(',');
+    if (selectedBrands.length > 0) params.brand = selectedBrands.join(',');
+    if (minPrice) params.min_price = minPrice;
+    if (maxPrice) params.max_price = maxPrice;
+
+    api.get('/storefront/products', { params }).then((res) => {
+      setProducts(res.data || []);
+      setTotal(res.meta?.total || 0);
+      setLastPage(res.meta?.last_page || 1);
+    }).catch(() => {
+      setProducts([]);
+    }).finally(() => {
+      setLoading(false);
+    });
+  }, [filterKey, sort, page]);
+
+  const updateFilter = (key, values) => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete(key);
+    values.forEach((v) => newParams.append(key, v));
+    setSearchParams(newParams);
+    setPage(1);
+  };
 
   const toggleFilter = (key, value) => {
-    setFilters((prev) => ({
-      ...prev,
-      [key]: prev[key].includes(value) ? prev[key].filter((v) => v !== value) : [...prev[key], value],
-    }));
-    setVisibleCount(8);
+    const current = key === 'category' ? searchParams.getAll('category') : searchParams.getAll('brand');
+    const updated = current.includes(value)
+      ? current.filter((v) => v !== value)
+      : [...current, value];
+    updateFilter(key, updated);
   };
 
   const handlePriceChange = (key, value) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-    setVisibleCount(8);
+    const newParams = new URLSearchParams(searchParams);
+    if (value) newParams.set(key === 'min' ? 'min_price' : 'max_price', value);
+    else newParams.delete(key === 'min' ? 'min_price' : 'max_price');
+    setSearchParams(newParams);
+    setPage(1);
   };
-
-  const filteredProducts = useMemo(() => {
-    let result = [...sharedProducts];
-    if (filters.category.length > 0) result = result.filter((p) => filters.category.includes(p.category.name));
-    if (filters.brand.length > 0) result = result.filter((p) => filters.brand.includes(p.brand.name));
-    if (filters.color.length > 0) result = result.filter((p) => p.variants?.some((v) => filters.color.includes(v.color)));
-    if (filters.size.length > 0) result = result.filter((p) => p.variants?.some((v) => filters.size.includes(v.size)));
-    if (filters.minPrice) result = result.filter((p) => p.effective_price >= Number(filters.minPrice));
-    if (filters.maxPrice) result = result.filter((p) => p.effective_price <= Number(filters.maxPrice));
-    if (sort === 'price_asc') result.sort((a, b) => a.effective_price - b.effective_price);
-    if (sort === 'price_desc') result.sort((a, b) => b.effective_price - a.effective_price);
-    return result;
-  }, [filters, sort]);
-
-  const showMore = () => setVisibleCount((prev) => prev + 8);
-  const displayedProducts = filteredProducts.slice(0, visibleCount);
-  const hasMore = visibleCount < filteredProducts.length;
 
   const clearFilters = () => {
-    setFilters({ category: [], brand: [], color: [], size: [], minPrice: '', maxPrice: '' });
-    setVisibleCount(8);
+    setSearchParams({});
+    setPage(1);
   };
 
-  const hasFilters = Object.values(filters).some((v) => (Array.isArray(v) ? v.length > 0 : v !== ''));
+  const hasFilters = searchParams.getAll('category').length > 0 || searchParams.getAll('brand').length > 0 || minPrice || maxPrice;
 
-  const renderFilterCheckboxes = (key, options) => (
-    <div className="space-y-1.5 max-h-40 overflow-y-auto">
-      {options.map((option) => (
-        <label key={option} className="flex items-center gap-2.5 py-1 cursor-pointer group">
-          <input
-            type="checkbox"
-            checked={filters[key].includes(option)}
-            onChange={() => toggleFilter(key, option)}
-            className="accent-gray-900 w-3.5 h-3.5"
-          />
-          <span className="text-sm text-gray-600 group-hover:text-gray-900 transition">{option}</span>
-        </label>
-      ))}
-    </div>
-  );
+  const toggleSection = (key) => setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const allCategoryOptions = useMemo(() => {
+    const flat = [];
+    categories.forEach((cat) => {
+      flat.push({ slug: cat.slug, name: cat.name });
+      (cat.children || []).forEach((child) => {
+        flat.push({ slug: child.slug, name: child.name });
+      });
+    });
+    return flat;
+  }, [categories]);
+
+  const maxPriceLimit = 100000;
+
+  const renderFilterCheckboxes = (key, options) => {
+    const selected = key === 'category' ? searchParams.getAll('category') : searchParams.getAll('brand');
+    return (
+      <div className="space-y-1.5 max-h-40 overflow-y-auto">
+        {options.map((opt) => (
+          <label key={opt.slug} className="flex items-center gap-2.5 py-1 cursor-pointer group">
+            <input
+              type="checkbox"
+              checked={selected.includes(opt.slug)}
+              onChange={() => toggleFilter(key, opt.slug)}
+              className="accent-gray-900 w-3.5 h-3.5"
+            />
+            <span className="text-sm text-gray-600 group-hover:text-gray-900 transition">{opt.name}</span>
+          </label>
+        ))}
+      </div>
+    );
+  };
+
+  const formatPrice = (val) => `৳${Number(val).toLocaleString()}`;
 
   const filterContent = (
     <div>
@@ -102,7 +147,7 @@ export default function Products() {
       </div>
 
       <FilterSection title="Category" open={openSections.category} onToggle={() => toggleSection('category')}>
-        {renderFilterCheckboxes('category', categories)}
+        {renderFilterCheckboxes('category', allCategoryOptions)}
       </FilterSection>
 
       <FilterSection title="Price Range" open={openSections.price} onToggle={() => toggleSection('price')}>
@@ -111,52 +156,44 @@ export default function Products() {
             <div className="absolute inset-0 bg-gray-200 rounded-full" />
             <div
               className="absolute h-full bg-gray-900 rounded-full"
-              style={{ left: `${(Number(filters.minPrice) || 0) / 100}%`, right: `${100 - (Number(filters.maxPrice) || 10000) / 100}%` }}
+              style={{ left: `${(Number(minPrice) || 0) / (maxPriceLimit / 100)}%`, right: `${100 - (Number(maxPrice) || maxPriceLimit) / (maxPriceLimit / 100)}%` }}
             />
             <input
               type="range"
               min={0}
-              max={10000}
+              max={maxPriceLimit}
               step={100}
-              value={filters.minPrice || 0}
+              value={Number(minPrice) || 0}
               onChange={(e) => {
                 const val = Number(e.target.value);
-                const max = Number(filters.maxPrice) || 10000;
-                if (val <= max) handlePriceChange('minPrice', val);
+                const max = Number(maxPrice) || maxPriceLimit;
+                if (val <= max) handlePriceChange('min', val || '');
               }}
               className="absolute inset-0 w-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-gray-900 [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-gray-900 [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:shadow [&::-moz-range-thumb]:cursor-pointer"
             />
             <input
               type="range"
               min={0}
-              max={10000}
+              max={maxPriceLimit}
               step={100}
-              value={filters.maxPrice || 10000}
+              value={Number(maxPrice) || maxPriceLimit}
               onChange={(e) => {
                 const val = Number(e.target.value);
-                const min = Number(filters.minPrice) || 0;
-                if (val >= min) handlePriceChange('maxPrice', val);
+                const min = Number(minPrice) || 0;
+                if (val >= min) handlePriceChange('max', val >= maxPriceLimit ? '' : val);
               }}
               className="absolute inset-0 w-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-gray-900 [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-gray-900 [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:shadow [&::-moz-range-thumb]:cursor-pointer"
             />
           </div>
           <div className="flex items-center justify-between text-xs text-gray-500">
-            <span>৳{Number(filters.minPrice) || 0}</span>
-            <span>৳{Number(filters.maxPrice) || 10000}</span>
+            <span>{formatPrice(minPrice || 0)}</span>
+            <span>{formatPrice(maxPrice || maxPriceLimit)}+</span>
           </div>
         </div>
       </FilterSection>
 
-      <FilterSection title="Color" open={openSections.color} onToggle={() => toggleSection('color')}>
-        {renderFilterCheckboxes('color', colors)}
-      </FilterSection>
-
-      <FilterSection title="Size" open={openSections.size} onToggle={() => toggleSection('size')}>
-        {renderFilterCheckboxes('size', sizes)}
-      </FilterSection>
-
       <FilterSection title="Brand" open={openSections.brand} onToggle={() => toggleSection('brand')}>
-        {renderFilterCheckboxes('brand', brands)}
+        {renderFilterCheckboxes('brand', brands.map((b) => ({ slug: b.slug, name: b.name })))}
       </FilterSection>
     </div>
   );
@@ -167,8 +204,8 @@ export default function Products() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="w-1 h-6 bg-gray-900" />
-            <h1 className="text-lg md:text-2xl font-bold tracking-tight">All Products</h1>
-            <span className="text-sm text-gray-400">({filteredProducts.length})</span>
+            <h1 className="text-lg md:text-2xl font-bold tracking-tight">{searchValue ? `Search: "${searchValue}"` : 'All Products'}</h1>
+            <span className="text-sm text-gray-400">({total})</span>
           </div>
           <div className="flex items-center gap-3">
             <button onClick={() => setMobileFilter(true)} className="lg:hidden flex items-center gap-1.5 text-xs uppercase tracking-wider border border-gray-200 px-3 py-2 hover:border-gray-900 transition">
@@ -177,7 +214,12 @@ export default function Products() {
             </button>
             <select
               value={sort}
-              onChange={(e) => setSort(e.target.value)}
+              onChange={(e) => {
+                const newParams = new URLSearchParams(searchParams);
+                newParams.set('sort', e.target.value);
+                setSearchParams(newParams);
+                setPage(1);
+              }}
               className="border border-gray-200 px-3 py-2 text-xs focus:outline-none focus:border-gray-900 uppercase tracking-wider"
             >
               <option value="newest">Newest</option>
@@ -206,7 +248,13 @@ export default function Products() {
           )}
 
           <div className="flex-1 min-w-0">
-            {displayedProducts.length === 0 ? (
+            {loading ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="bg-gray-100 animate-pulse rounded-lg aspect-[3/4]" />
+                ))}
+              </div>
+            ) : products.length === 0 ? (
               <div className="text-center py-16">
                 <p className="text-gray-400 text-lg">No products match your filters.</p>
                 {hasFilters && (
@@ -218,19 +266,26 @@ export default function Products() {
             ) : (
               <>
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5">
-                  {displayedProducts.map((product) => (
+                  {products.map((product) => (
                     <ProductCard key={product.id} product={product} />
                   ))}
                 </div>
 
-                {hasMore && (
-                  <div className="flex justify-center mt-10">
-                    <button
-                      onClick={showMore}
-                      className="px-10 py-3 border border-gray-900 text-gray-900 text-sm font-medium hover:bg-gray-900 hover:text-white transition uppercase tracking-wider"
-                    >
-                      Load More ({filteredProducts.length - visibleCount})
-                    </button>
+                {lastPage > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-10">
+                    {Array.from({ length: lastPage }).map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setPage(i + 1)}
+                        className={`w-8 h-8 text-xs font-medium transition ${
+                          page === i + 1
+                            ? 'bg-gray-900 text-white'
+                            : 'border border-gray-200 text-gray-600 hover:border-gray-900'
+                        }`}
+                      >
+                        {i + 1}
+                      </button>
+                    ))}
                   </div>
                 )}
               </>

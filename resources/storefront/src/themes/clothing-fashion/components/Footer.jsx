@@ -1,9 +1,27 @@
 import React, { useState } from 'react';
 import { Facebook, Instagram, Youtube, Linkedin } from 'lucide-react';
 
-export default function Footer() {
+const socialIcons = {
+  facebook: { icon: Facebook, hover: 'hover:bg-blue-600' },
+  instagram: { icon: Instagram, hover: 'hover:bg-pink-600' },
+  youtube: { icon: Youtube, hover: 'hover:bg-red-600' },
+  linkedin: { icon: Linkedin, hover: 'hover:bg-blue-700' },
+};
+
+export default function Footer({ storeName, config }) {
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
+  const name = storeName || 'FASHION';
+  const footerConfig = config?.footer || {};
+  const socialConfig = config?.social || {};
+  const year = new Date().getFullYear();
+
+  const socialLinks = [
+    socialConfig.facebook && { key: 'facebook', url: socialConfig.facebook },
+    socialConfig.instagram && { key: 'instagram', url: socialConfig.instagram },
+    socialConfig.youtube && { key: 'youtube', url: socialConfig.youtube },
+    socialConfig.whatsapp && { key: 'whatsapp', url: `https://wa.me/${socialConfig.whatsapp}` },
+  ].filter(Boolean);
 
   const handleSubscribe = (e) => {
     e.preventDefault();
@@ -18,33 +36,30 @@ export default function Footer() {
       <div className="container mx-auto px-4 py-16">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10 md:gap-8">
           <div className="md:col-span-2 lg:col-span-1">
-            <h3 className="text-lg font-bold mb-4 tracking-tight">ONE UMMAH BD</h3>
-            <p className="text-sm text-gray-400 leading-relaxed mb-4">
-              Partner with One Ummah BD through our profit-sharing opportunities designed with AAOIFI (Accounting and Auditing Organization for Islamic Financial Institutions) standard clarity and trust.
-            </p>
-            <div className="flex items-center gap-3 mt-6">
-              <a href="#" target="_blank" rel="noopener noreferrer" className="w-9 h-9 flex items-center justify-center bg-white/10 hover:bg-blue-600 transition">
-                <Facebook className="w-4 h-4" />
-              </a>
-              <a href="#" target="_blank" rel="noopener noreferrer" className="w-9 h-9 flex items-center justify-center bg-white/10 hover:bg-pink-600 transition">
-                <Instagram className="w-4 h-4" />
-              </a>
-              <a href="#" target="_blank" rel="noopener noreferrer" className="w-9 h-9 flex items-center justify-center bg-white/10 hover:bg-red-600 transition">
-                <Youtube className="w-4 h-4" />
-              </a>
-              <a href="#" target="_blank" rel="noopener noreferrer" className="w-9 h-9 flex items-center justify-center bg-white/10 hover:bg-blue-700 transition">
-                <Linkedin className="w-4 h-4" />
-              </a>
-            </div>
+            <h3 className="text-lg font-bold mb-4 tracking-tight">{name}</h3>
+            {footerConfig.about_text && (
+              <p className="text-sm text-gray-400 leading-relaxed mb-4">{footerConfig.about_text}</p>
+            )}
+            {socialLinks.length > 0 && (
+              <div className="flex items-center gap-3 mt-6">
+                {socialLinks.map(({ key, url }) => {
+                  const S = socialIcons[key]?.icon;
+                  if (!S) return null;
+                  return (
+                    <a key={key} href={url} target="_blank" rel="noopener noreferrer" className={`w-9 h-9 flex items-center justify-center bg-white/10 transition ${socialIcons[key].hover}`}>
+                      <S className="w-4 h-4" />
+                    </a>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div>
             <h4 className="text-sm font-bold uppercase tracking-wider mb-5">Quick Links</h4>
             <ul className="space-y-3">
-              <li><a href="#" className="text-sm text-gray-400 hover:text-white transition">Store Locator</a></li>
-              <li><a href="#" className="text-sm text-gray-400 hover:text-white transition">Security</a></li>
-              <li><a href="#" className="text-sm text-gray-400 hover:text-white transition">Fundify.xyz</a></li>
-              <li><a href="#" className="text-sm text-gray-400 hover:text-white transition">Blogs</a></li>
+              <li><a href="/products" className="text-sm text-gray-400 hover:text-white transition">Shop All</a></li>
+              <li><a href="/" className="text-sm text-gray-400 hover:text-white transition">Home</a></li>
             </ul>
           </div>
 
@@ -85,7 +100,7 @@ export default function Footer() {
 
       <div className="border-t border-gray-800">
         <div className="container mx-auto px-4 py-6 text-center text-sm text-gray-500">
-          © 2026 One Ummah BD. All rights reserved.
+          {footerConfig.copyright ? footerConfig.copyright.replace(':year', year) : `© ${year} ${name}. All rights reserved.`}
         </div>
       </div>
     </footer>

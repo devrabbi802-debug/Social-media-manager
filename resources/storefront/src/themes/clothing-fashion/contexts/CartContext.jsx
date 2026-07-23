@@ -41,6 +41,8 @@ export function CartProvider({ children }) {
           slug: product.slug,
           image: product.image,
           unit_price: product.effective_price || product.price,
+          color: product.color || null,
+          size: product.size || null,
           quantity: 1,
         },
       ];
