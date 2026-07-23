@@ -84,7 +84,7 @@ docker exec laravel-app php artisan <command>
 
 **7 services**: app(8000), mysql(3307), node(5173), redis(6379), phpmyadmin(8080), worker(Horizon via Supervisor), clip-server(8089).
 
-- `docker-entrypoint.sh`: waits for MySQL → `composer install --no-dev` → `npm install` (root only) → `key:generate` → `migrate` → `artisan serve --host=0.0.0.0 --port=8000`
+- `docker-entrypoint.sh`: waits for MySQL → `composer install --no-dev` → `npm install` (root only) → `key:generate` → `migrate` → `octane:start --server=swoole --host=0.0.0.0 --port=8000`
 - Node service runs `npm install && npm run dev -- --host 0.0.0.0`
 - **Storefront not auto-built in Docker** — build manually inside container or locally
 - Worker reuses `socialmediamanager-app:latest` image; runs Supervisor + Horizon

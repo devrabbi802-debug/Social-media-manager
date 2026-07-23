@@ -105,6 +105,7 @@ services:
       - APP_KEY=base64:/8PieXOXBmNOsbD8OLArU9AhXik1dXecMl4qoS2Dmbo=
       - APP_URL=http://smm.test
       - APP_DOMAIN=smm.test
+      - OCTANE_SERVER=swoole
     entrypoint: ["bash", "/var/www/docker/worker-entrypoint.sh"]
     networks:
       - laravel-net

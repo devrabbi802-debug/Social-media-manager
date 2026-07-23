@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install pdo_mysql pdo_pgsql mbstring exif pcntl bcmath gd intl opcache zip \
     && pecl install redis && docker-php-ext-enable redis \
+    && pecl install swoole && docker-php-ext-enable swoole \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install Composer
