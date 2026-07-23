@@ -69,7 +69,7 @@ export default function Auth() {
     }`;
 
   return (
-    <div className="pt-20 min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-sm mx-auto px-4 py-12">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold tracking-tight mb-2">

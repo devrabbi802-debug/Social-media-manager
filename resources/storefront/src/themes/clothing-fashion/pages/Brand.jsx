@@ -36,7 +36,7 @@ export default function Brand() {
   }, [slug, sort, page]);
 
   return (
-    <div className="pt-20">
+    <div>
       <div className="container mx-auto px-4 py-8">
         <nav className="flex items-center gap-2 text-sm text-gray-400 mb-6">
           <Link to="/" className="hover:text-gray-900 transition">Home</Link>

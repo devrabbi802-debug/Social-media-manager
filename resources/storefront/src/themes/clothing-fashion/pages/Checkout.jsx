@@ -90,7 +90,7 @@ export default function Checkout() {
 
   if (success) {
     return (
-      <div className="pt-20 min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center max-w-md mx-auto px-4">
           <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
             <CheckCircle className="w-8 h-8 text-green-600" />
@@ -106,7 +106,7 @@ export default function Checkout() {
   }
 
   return (
-    <div className="pt-20">
+    <div>
       <div className="container mx-auto px-4 py-8">
         {/* Register prompt - upore option */}
         {!isAuthenticated && !showRegister && (

@@ -7,7 +7,7 @@ export default function Cart() {
   const { items, updateQuantity, removeItem, subtotal, itemCount } = useCart();
 
   return (
-    <div className="pt-20">
+    <div>
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-xl md:text-2xl font-bold tracking-tight">Shopping Cart</h1>

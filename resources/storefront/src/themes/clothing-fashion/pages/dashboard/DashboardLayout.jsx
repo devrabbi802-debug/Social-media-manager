@@ -18,7 +18,7 @@ export default function DashboardLayout() {
   const { user, logout } = useAuth();
 
   return (
-    <div className="pt-20 min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center gap-2 text-xs text-gray-400 mb-6">
           <Link to="/" className="hover:text-gray-900 transition">Home</Link>
