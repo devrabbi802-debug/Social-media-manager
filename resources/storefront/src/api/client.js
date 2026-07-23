@@ -23,11 +23,29 @@ api.interceptors.request.use(
   }
 );
 
+// Request interceptor - attach auth token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 // Response interceptor
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
-    console.error('API Error:', error);
+    if (error.response?.status === 401) {
+      localStorage.removeItem('auth_token');
+      const isAuthPage = window.location.pathname === '/auth';
+      if (!isAuthPage) {
+        window.location.href = '/auth';
+      }
+    }
     return Promise.reject(error);
   }
 );

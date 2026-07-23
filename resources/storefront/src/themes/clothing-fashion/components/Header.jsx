@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Search, ShoppingCart, Menu, X, ChevronDown, User, LayoutDashboard, ArrowRight, Camera, Upload, X as XIcon } from 'lucide-react';
+import { Search, ShoppingCart, Menu, X, ChevronDown, User, LayoutDashboard, LogOut, ArrowRight, Camera, Upload, X as XIcon } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
+import { useAuth } from '../../../contexts/AuthContext';
 
 const menuItems = [
   {
@@ -56,12 +57,15 @@ export default function Header({ storeName, storeLogo }) {
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const [searchImage, setSearchImage] = useState(null);
   const [searchImagePreview, setSearchImagePreview] = useState(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const searchInputRef = useRef(null);
   const searchPanelRef = useRef(null);
   const imageInputRef = useRef(null);
+  const userMenuRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { openDrawer, itemCount } = useCart();
+  const { user, isAuthenticated, logout } = useAuth();
 
   const suggestions = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -92,6 +96,9 @@ export default function Header({ storeName, storeLogo }) {
         setSearchOpen(false);
         setSearchQuery('');
         setFocusedIndex(-1);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setUserMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -222,13 +229,45 @@ export default function Header({ storeName, storeLogo }) {
               </span>
             </button>
 
-            <Link to="/auth" className="hidden md:block p-2 hover:opacity-70 transition" title="My Account">
-              <User className="w-5 h-5" />
-            </Link>
+            <div className="relative" ref={userMenuRef}>
+              <button
+                onClick={() => isAuthenticated ? setUserMenuOpen(!userMenuOpen) : navigate('/auth')}
+                className="hidden md:flex p-2 hover:opacity-70 transition items-center gap-1.5"
+                title="My Account"
+              >
+                {isAuthenticated && user ? (
+                  <span className="w-5 h-5 rounded-full bg-gray-900 text-white text-[10px] font-bold flex items-center justify-center">
+                    {user.name?.charAt(0)?.toUpperCase() || 'U'}
+                  </span>
+                ) : (
+                  <User className="w-5 h-5" />
+                )}
+              </button>
 
-            <Link to="/dashboard" className="hidden lg:block p-2 hover:opacity-70 transition" title="Dashboard">
-              <LayoutDashboard className="w-5 h-5" />
-            </Link>
+              {isAuthenticated && userMenuOpen && (
+                <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-100 shadow-xl z-50 py-1">
+                  <div className="px-4 py-2 border-b border-gray-50">
+                    <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
+                    <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                  </div>
+                  <Link
+                    to="/dashboard"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition"
+                  >
+                    <LayoutDashboard className="w-4 h-4" />
+                    Dashboard
+                  </Link>
+                  <button
+                    onClick={() => { setUserMenuOpen(false); logout(); }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
 
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}

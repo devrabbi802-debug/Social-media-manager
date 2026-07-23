@@ -1,50 +1,86 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, ArrowLeft, LogIn, UserPlus } from 'lucide-react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { Mail, Lock, ArrowLeft, LogIn, UserPlus, Eye, EyeOff } from 'lucide-react';
+import { useAuth } from '../../../contexts/AuthContext';
 
 export default function Auth() {
+  const { login, register } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirect = searchParams.get('redirect') || '/dashboard';
+
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const navigate = useNavigate();
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const validate = () => {
+    const errs = {};
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) errs.email = 'Valid email required';
+    if (password.length < 6) errs.password = 'Min 6 characters';
+    if (!isLogin && password !== passwordConfirmation) errs.password_confirmation = 'Passwords do not match';
+    setFieldErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    if (!validate()) return;
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setError('Please enter a valid email address');
-      return;
-    }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
-
-    if (isLogin) {
-      navigate('/dashboard');
-    } else {
-      setIsLogin(true);
-      setPassword('');
-      setEmail('');
+    setLoading(true);
+    try {
+      if (isLogin) {
+        await login(email, password);
+      } else {
+        await register({ email, password, password_confirmation: passwordConfirmation });
+      }
+      navigate(redirect, { replace: true });
+    } catch (err) {
+      const data = err.response?.data;
+      if (data?.errors) {
+        const errs = {};
+        Object.keys(data.errors).forEach((key) => {
+          errs[key] = data.errors[key][0];
+        });
+        setFieldErrors(errs);
+      } else {
+        setError(data?.message || 'Something went wrong. Please try again.');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
+  const toggleMode = () => {
+    setIsLogin(!isLogin);
+    setError('');
+    setFieldErrors({});
+  };
+
+  const inputClass = (field) =>
+    `w-full border pl-10 pr-10 py-3 text-sm focus:outline-none transition ${
+      fieldErrors[field] ? 'border-red-400' : 'border-gray-200 focus:border-gray-900'
+    }`;
+
   return (
-    <div className="pt-20 min-h-screen flex items-center justify-center">
+    <div className="pt-20 min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-sm mx-auto px-4 py-12">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold tracking-tight mb-2">
             {isLogin ? 'Welcome Back' : 'Create Account'}
           </h1>
           <p className="text-sm text-gray-400">
-            {isLogin ? 'Sign in with your email address' : 'Register with your email address'}
+            {isLogin ? 'Sign in to your account' : 'Register a new account'}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3 bg-white p-6 border border-gray-100 rounded-lg">
           <div className="relative">
             <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
@@ -53,84 +89,89 @@ export default function Auth() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Email Address"
               required
-              className="w-full border border-gray-200 pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-gray-900 transition"
+              className={inputClass('email')}
             />
+            {fieldErrors.email && <p className="text-xs text-red-500 mt-1">{fieldErrors.email}</p>}
           </div>
 
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Password"
               required
-              className="w-full border border-gray-200 pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-gray-900 transition"
+              className={inputClass('password')}
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-900 transition"
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+            {fieldErrors.password && <p className="text-xs text-red-500 mt-1">{fieldErrors.password}</p>}
           </div>
 
-          {error && (
-            <p className="text-xs text-red-500">{error}</p>
+          {!isLogin && (
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={passwordConfirmation}
+                onChange={(e) => setPasswordConfirmation(e.target.value)}
+                placeholder="Confirm Password"
+                required
+                className={inputClass('password_confirmation')}
+              />
+              {fieldErrors.password_confirmation && <p className="text-xs text-red-500 mt-1">{fieldErrors.password_confirmation}</p>}
+            </div>
           )}
+
+          {error && <p className="text-xs text-red-500 text-center">{error}</p>}
 
           {isLogin && (
             <div className="text-right">
-              <button type="button" className="text-xs text-gray-400 hover:text-gray-900 transition">
+              <Link to="/forgot-password" className="text-xs text-gray-400 hover:text-gray-900 transition">
                 Forgot password?
-              </button>
+              </Link>
             </div>
           )}
 
           <button
             type="submit"
-            className="w-full bg-gray-900 text-white py-3 text-sm font-medium hover:bg-gray-800 transition uppercase tracking-wider flex items-center justify-center gap-2"
+            disabled={loading}
+            className="w-full bg-gray-900 text-white py-3 text-sm font-medium hover:bg-gray-800 transition uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-50"
           >
-            {isLogin ? <LogIn className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-            {isLogin ? 'Login' : 'Register'}
+            {loading ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : isLogin ? (
+              <LogIn className="w-4 h-4" />
+            ) : (
+              <UserPlus className="w-4 h-4" />
+            )}
+            {loading ? (isLogin ? 'Signing in...' : 'Creating account...') : isLogin ? 'Login' : 'Register'}
           </button>
         </form>
 
-        <div className="mt-4">
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-100" />
-            </div>
-            <div className="relative flex justify-center text-xs">
-              <span className="bg-white px-3 text-gray-400">or</span>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            className="w-full mt-4 border border-gray-200 text-gray-600 py-3 text-sm font-medium hover:border-gray-900 hover:text-gray-900 transition flex items-center justify-center gap-2"
-          >
-            <svg viewBox="0 0 24 24" className="w-5 h-5">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            Continue with Google
-          </button>
-        </div>
-
         <div className="mt-6 text-center">
           <button
-            onClick={() => { setIsLogin(!isLogin); setError(''); }}
+            onClick={toggleMode}
             className="text-sm text-gray-400 hover:text-gray-900 transition"
           >
             {isLogin ? "Don't have an account? Register" : 'Already have an account? Sign In'}
           </button>
         </div>
 
-        <div className="mt-6 text-center">
-          <button
-            onClick={() => navigate('/')}
+        <div className="mt-4 text-center">
+          <Link
+            to="/"
             className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-900 transition"
           >
             <ArrowLeft className="w-3 h-3" />
             Back to Store
-          </button>
+          </Link>
         </div>
       </div>
     </div>

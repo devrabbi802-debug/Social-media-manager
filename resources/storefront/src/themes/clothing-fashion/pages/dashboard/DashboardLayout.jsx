@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import { User, Package, Heart, MapPin, Settings as SettingsIcon, LogOut, ChevronRight, PackageSearch } from 'lucide-react';
-import { profile } from './data';
+import { useAuth } from '../../../../contexts/AuthContext';
 
 const sidebarItems = [
   { key: '', label: 'Overview', icon: User, path: '/dashboard' },
@@ -15,6 +15,7 @@ const sidebarItems = [
 export default function DashboardLayout() {
   const location = useLocation();
   const activeKey = location.pathname.replace('/dashboard/', '');
+  const { user, logout } = useAuth();
 
   return (
     <div className="pt-20 min-h-screen bg-gray-50">
@@ -30,12 +31,14 @@ export default function DashboardLayout() {
             <div className="bg-white border border-gray-100 rounded-lg overflow-hidden sticky top-24">
               <div className="p-4 border-b border-gray-50 bg-gray-50">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-                    <img src={profile.avatar} alt="" className="w-full h-full object-cover" />
+                  <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-gray-700 flex items-center justify-center">
+                    <span className="text-sm font-bold text-white/80">
+                      {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                    </span>
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-bold text-gray-900 line-clamp-1">{profile.name}</p>
-                    <p className="text-xs text-gray-400 line-clamp-1">{profile.email}</p>
+                    <p className="text-sm font-bold text-gray-900 line-clamp-1">{user?.name || 'User'}</p>
+                    <p className="text-xs text-gray-400 line-clamp-1">{user?.email || ''}</p>
                   </div>
                 </div>
               </div>
@@ -60,13 +63,13 @@ export default function DashboardLayout() {
                 })}
               </nav>
               <div className="p-2 border-t border-gray-50">
-                <Link
-                  to="/auth"
-                  className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-400 hover:text-red-500 transition rounded-md hover:bg-red-50"
+                <button
+                  onClick={logout}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-400 hover:text-red-500 transition rounded-md hover:bg-red-50"
                 >
                   <LogOut className="w-4 h-4" />
                   Sign Out
-                </Link>
+                </button>
               </div>
             </div>
           </aside>

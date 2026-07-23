@@ -1,6 +1,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, useSearchParams } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { AuthProvider } from './contexts/AuthContext';
 import { loadTheme } from './themes';
 import { EditorProvider, useEditor } from './components/editor/EditorContext';
 import EditorToolbar from './components/editor/EditorToolbar';
@@ -12,6 +13,9 @@ import CategoryBannerEditorModal from './components/editor/CategoryBannerEditorM
 import CategoryProductsEditorModal from './components/editor/CategoryProductsEditorModal';
 import ChunkErrorBoundary from './components/shared/ChunkErrorBoundary';
 import Skeleton from './components/shared/Skeleton';
+import RequireAuth from './components/auth/RequireAuth';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import api from './api/client';
 
 function EditorOverlay({ onExit }) {
@@ -197,9 +201,11 @@ function AppContent() {
   };
 
   return (
-    <EditorProvider isEditorMode={isEditorMode}>
-      <RouterContent isEditorMode={isEditorMode} onExitEditor={exitEditor} />
-    </EditorProvider>
+    <AuthProvider>
+      <EditorProvider isEditorMode={isEditorMode}>
+        <RouterContent isEditorMode={isEditorMode} onExitEditor={exitEditor} />
+      </EditorProvider>
+    </AuthProvider>
   );
 }
 
@@ -238,7 +244,7 @@ function RouterContent({ isEditorMode, onExitEditor }) {
   const {
     Layout, Home, Products, ProductDetail, Category, Brand, Cart, Checkout, Auth, NotFound,
     DashboardLayout, DashboardHome, DashboardOrders, DashboardTracking,
-    DashboardWishlist, DashboardAddresses, DashboardSettings,
+    DashboardWishlist, DashboardAddresses, DashboardSettings, DashboardOrderDetail,
   } = themeComponents;
 
   return (
@@ -251,25 +257,30 @@ function RouterContent({ isEditorMode, onExitEditor }) {
         <ChunkErrorBoundary onChunkError="reload">
             <Suspense fallback={<PageContentSkeleton />}>
               {isEditorMode && <div className="h-[44px]" />}
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/products" element={<Products />} />
-              <Route path="/products/:slug" element={<ProductDetail />} />
-              <Route path="/category/:slug" element={<Category />} />
-              <Route path="/brand/:slug" element={<Brand />} />
-              <Route path="/cart" element={<Cart />} />
-              <Route path="/checkout" element={<Checkout />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route element={<DashboardLayout />}>
-                <Route path="/dashboard" element={<DashboardHome />} />
-                <Route path="/dashboard/orders" element={<DashboardOrders />} />
-                <Route path="/dashboard/tracking" element={<DashboardTracking />} />
-                <Route path="/dashboard/wishlist" element={<DashboardWishlist />} />
-                <Route path="/dashboard/addresses" element={<DashboardAddresses />} />
-                <Route path="/dashboard/settings" element={<DashboardSettings />} />
-              </Route>
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/products" element={<Products />} />
+                <Route path="/products/:slug" element={<ProductDetail />} />
+                <Route path="/category/:slug" element={<Category />} />
+                <Route path="/brand/:slug" element={<Brand />} />
+                <Route path="/cart" element={<Cart />} />
+                <Route path="/checkout" element={<Checkout />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route element={<RequireAuth />}>
+                  <Route element={<DashboardLayout />}>
+                    <Route path="/dashboard" element={<DashboardHome />} />
+                    <Route path="/dashboard/orders" element={<DashboardOrders />} />
+                    <Route path="/dashboard/orders/:id" element={<DashboardOrderDetail />} />
+                    <Route path="/dashboard/tracking" element={<DashboardTracking />} />
+                    <Route path="/dashboard/wishlist" element={<DashboardWishlist />} />
+                    <Route path="/dashboard/addresses" element={<DashboardAddresses />} />
+                    <Route path="/dashboard/settings" element={<DashboardSettings />} />
+                  </Route>
+                </Route>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
           </Suspense>
         </ChunkErrorBoundary>
       </Layout>
