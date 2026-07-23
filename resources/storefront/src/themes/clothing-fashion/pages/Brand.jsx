@@ -63,7 +63,24 @@ export default function Brand() {
         {loading ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="bg-gray-100 animate-pulse rounded-lg aspect-[3/4]" />
+              <div key={i} className="bg-white rounded-xl border border-gray-100 overflow-hidden animate-pulse">
+                <div className="aspect-[3/4] bg-gray-200" />
+                <div className="p-4 space-y-3">
+                  <div className="h-2.5 w-16 bg-gray-200 rounded" />
+                  <div className="h-3.5 w-full bg-gray-200 rounded" />
+                  <div className="h-5 w-20 bg-gray-200 rounded" />
+                  <div className="flex gap-1.5">
+                    {Array.from({ length: 4 }).map((_, j) => (
+                      <div key={j} className="w-5 h-5 rounded-full bg-gray-200" />
+                    ))}
+                  </div>
+                  <div className="flex gap-1.5">
+                    {Array.from({ length: 3 }).map((_, j) => (
+                      <div key={j} className="h-6 w-10 bg-gray-200 rounded-md" />
+                    ))}
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         ) : products.length === 0 ? (
@@ -76,8 +93,10 @@ export default function Brand() {
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-              {products.map((product) => (
-                <ProductCard key={product.id} product={product} />
+              {products.map((product, i) => (
+                <div key={product.id} className="animate-fade-in" style={{ animationDelay: `${i * 40}ms` }}>
+                  <ProductCard product={product} />
+                </div>
               ))}
             </div>
 
