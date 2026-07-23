@@ -29,6 +29,7 @@ export default function Products() {
 
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
+  const [priceRange, setPriceRange] = useState({ min: 0, max: 100000 });
 
   const searchValue = searchParams.get('search') || '';
   const minPrice = searchParams.get('min_price') || '';
@@ -42,6 +43,9 @@ export default function Products() {
     }).catch(() => {});
     api.get('/storefront/brands').then((data) => {
       if (Array.isArray(data)) setBrands(data);
+    }).catch(() => {});
+    api.get('/storefront/price-range').then((data) => {
+      if (data?.max) setPriceRange({ min: data.min || 0, max: data.max });
     }).catch(() => {});
   }, []);
 
@@ -100,8 +104,6 @@ export default function Products() {
   const hasFilters = searchParams.getAll('category').length > 0 || searchParams.getAll('brand').length > 0 || minPrice || maxPrice;
 
   const toggleSection = (key) => setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
-
-  const maxPriceLimit = 100000;
 
   const renderFilterCheckboxes = (key, options) => {
     const selected = key === 'category' ? searchParams.getAll('category') : searchParams.getAll('brand');
@@ -177,17 +179,17 @@ export default function Products() {
             <div className="absolute inset-0 bg-gray-200 rounded-full" />
             <div
               className="absolute h-full bg-gray-900 rounded-full"
-              style={{ left: `${(Number(minPrice) || 0) / (maxPriceLimit / 100)}%`, right: `${100 - (Number(maxPrice) || maxPriceLimit) / (maxPriceLimit / 100)}%` }}
+              style={{ left: `${(Number(minPrice) || 0) / (priceRange.max / 100)}%`, right: `${100 - (Number(maxPrice) || priceRange.max) / (priceRange.max / 100)}%` }}
             />
             <input
               type="range"
               min={0}
-              max={maxPriceLimit}
+              max={priceRange.max}
               step={100}
               value={Number(minPrice) || 0}
               onChange={(e) => {
                 const val = Number(e.target.value);
-                const max = Number(maxPrice) || maxPriceLimit;
+                const max = Number(maxPrice) || priceRange.max;
                 if (val <= max) handlePriceChange('min', val || '');
               }}
               className="absolute inset-0 w-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-gray-900 [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-gray-900 [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:shadow [&::-moz-range-thumb]:cursor-pointer"
@@ -195,20 +197,20 @@ export default function Products() {
             <input
               type="range"
               min={0}
-              max={maxPriceLimit}
+              max={priceRange.max}
               step={100}
-              value={Number(maxPrice) || maxPriceLimit}
+              value={Number(maxPrice) || priceRange.max}
               onChange={(e) => {
                 const val = Number(e.target.value);
                 const min = Number(minPrice) || 0;
-                if (val >= min) handlePriceChange('max', val >= maxPriceLimit ? '' : val);
+                if (val >= min) handlePriceChange('max', val >= priceRange.max ? '' : val);
               }}
               className="absolute inset-0 w-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-gray-900 [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-gray-900 [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:shadow [&::-moz-range-thumb]:cursor-pointer"
             />
           </div>
           <div className="flex items-center justify-between text-xs text-gray-500">
             <span>{formatPrice(minPrice || 0)}</span>
-            <span>{formatPrice(maxPrice || maxPriceLimit)}+</span>
+            <span>{formatPrice(maxPrice || priceRange.max)}+</span>
           </div>
         </div>
       </FilterSection>

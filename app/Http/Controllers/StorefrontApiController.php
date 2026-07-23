@@ -367,6 +367,21 @@ class StorefrontApiController extends Controller
     }
 
     /**
+     * Min & max price across active products
+     */
+    public function priceRange()
+    {
+        $range = Product::active()
+            ->selectRaw('MIN(base_price) as min_price, MAX(base_price) as max_price')
+            ->first();
+
+        return response()->json([
+            'min' => (int) ($range->min_price ?? 0),
+            'max' => (int) ($range->max_price ?? 100000),
+        ]);
+    }
+
+    /**
      * Format product for API response
      */
     private function formatProduct(Product $product, bool $detailed = false): array
