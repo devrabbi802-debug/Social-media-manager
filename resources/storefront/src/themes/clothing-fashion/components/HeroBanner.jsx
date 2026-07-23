@@ -116,20 +116,20 @@ export default function HeroBanner({ banners }) {
         <>
           <button
             onClick={goToPrev}
-            className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition border border-white/20 group"
+            className="absolute left-4 bottom-24 -translate-y-0 md:top-1/2 md:-translate-y-1/2 z-[61] w-12 h-12 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition border border-white/20 group"
           >
             <ChevronLeft className="w-5 h-5 text-white group-hover:scale-110 transition" />
           </button>
           <button
             onClick={goToNext}
-            className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition border border-white/20 group"
+            className="absolute right-4 bottom-24 -translate-y-0 md:top-1/2 md:-translate-y-1/2 z-[61] w-12 h-12 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition border border-white/20 group"
           >
             <ChevronRight className="w-5 h-5 text-white group-hover:scale-110 transition" />
           </button>
         </>
       )}
 
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2">
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[61] flex items-center gap-2">
         {slides.map((_, index) => (
           <button
             key={index}
