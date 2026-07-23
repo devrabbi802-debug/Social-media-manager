@@ -119,7 +119,7 @@ export default function ImageZoom({ src, alt, images = [], onImageChange, curren
             ref={imgRef}
             src={src}
             alt={alt}
-            className="w-full h-full object-cover select-none"
+            className="w-full h-full object-contain select-none"
             draggable={false}
             onError={() => setLoadError(true)}
           />
