@@ -24,8 +24,6 @@ class CategoryController extends Controller
             } else {
                 $query->where('parent_id', $request->parent_id);
             }
-        } elseif (!$request->filled('search')) {
-            $query->whereNull('parent_id');
         }
 
         $categories = $query->orderBy('sort_order')->orderBy('name')->paginate(20);

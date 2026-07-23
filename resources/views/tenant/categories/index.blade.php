@@ -24,6 +24,28 @@
         @endif
 
         <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <div class="p-4 border-b bg-gray-50">
+                <form method="GET" class="flex gap-4 items-end">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Main Category</label>
+                        <select name="parent_id" class="rounded-xl border-gray-300 shadow-sm focus:ring-purple-500 focus:border-purple-500 px-4 py-2 border" onchange="this.form.submit()">
+                            <option value="">All Categories</option>
+                            <option value="root" {{ request('parent_id') === 'root' ? 'selected' : '' }}>Root Categories</option>
+                            @foreach($rootCategories as $root)
+                                <option value="{{ $root->id }}" {{ request('parent_id') == $root->id ? 'selected' : '' }}>{{ $root->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                        <input type="text" name="search" value="{{ request('search') }}" placeholder="Search categories..." class="rounded-xl border-gray-300 shadow-sm focus:ring-purple-500 focus:border-purple-500 px-4 py-2 border">
+                    </div>
+                    <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded-xl hover:bg-purple-700 transition">Filter</button>
+                    @if(request()->anyFilled(['search', 'parent_id']))
+                        <a href="{{ route('inventory.categories.index') }}" class="text-gray-600 px-4 py-2 hover:text-gray-800">Clear</a>
+                    @endif
+                </form>
+            </div>
             @if($categories->count() > 0)
                 <table class="w-full">
                     <thead class="bg-gray-50">

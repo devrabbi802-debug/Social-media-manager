@@ -1,6 +1,6 @@
 # AGENTS.md
 
-**Always respond in Banglish** (Bengali + English mixed) unless asked otherwise.
+**Always respond in Banglish** (Bengali + English mixed) unless asked otherwise. User communicates in Banglish — reply in Banglish. Bangla script main e thakবে, প্রয়োজনে English word ব্যবহার করবে.
 
 ## Quick Start
 
