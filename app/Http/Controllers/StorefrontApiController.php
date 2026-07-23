@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AttributeTemplate;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\StorefrontSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -233,6 +235,19 @@ class StorefrontApiController extends Controller
             $query->where('base_price', '<=', $request->max_price);
         }
 
+        // Variant attribute filters (e.g. ?color=red&size=m)
+        $attributeTemplates = AttributeTemplate::where('is_variant_option', true)
+            ->where('is_active', true)->pluck('id', 'slug');
+        foreach ($attributeTemplates as $slug => $templateId) {
+            if ($request->filled($slug)) {
+                $values = explode(',', $request->$slug);
+                $query->whereHas('variants.attributeValues', function ($q) use ($templateId, $values) {
+                    $q->where('attribute_template_id', $templateId)
+                      ->whereIn('value', $values);
+                });
+            }
+        }
+
         // Sort
         switch ($request->get('sort', 'newest')) {
             case 'price_asc':
@@ -379,6 +394,32 @@ class StorefrontApiController extends Controller
             'min' => (int) ($range->min_price ?? 0),
             'max' => (int) ($range->max_price ?? 100000),
         ]);
+    }
+
+    /**
+     * Available variant attributes for filtering
+     */
+    public function attributes()
+    {
+        $templates = AttributeTemplate::where('is_variant_option', true)
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->get();
+
+        return response()->json($templates->map(function ($template) {
+            $values = VariantAttributeValue::where('attribute_template_id', $template->id)
+                ->whereHas('variant.product', fn($q) => $q->active())
+                ->select('value')
+                ->distinct()
+                ->pluck('value')
+                ->values();
+
+            return [
+                'name' => $template->name,
+                'slug' => $template->slug,
+                'values' => $values,
+            ];
+        })->filter(fn($a) => $a['values']->isNotEmpty())->values());
     }
 
     /**

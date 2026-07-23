@@ -29,6 +29,7 @@ export default function Products() {
 
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
+  const [attributes, setAttributes] = useState([]);
   const [priceRange, setPriceRange] = useState({ min: 0, max: 100000 });
 
   const searchValue = searchParams.get('search') || '';
@@ -46,6 +47,9 @@ export default function Products() {
     }).catch(() => {});
     api.get('/storefront/price-range').then((data) => {
       if (data?.max) setPriceRange({ min: data.min || 0, max: data.max });
+    }).catch(() => {});
+    api.get('/storefront/attributes').then((data) => {
+      if (Array.isArray(data)) setAttributes(data);
     }).catch(() => {});
   }, []);
 
@@ -81,7 +85,7 @@ export default function Products() {
   };
 
   const toggleFilter = (key, value) => {
-    const current = key === 'category' ? searchParams.getAll('category') : searchParams.getAll('brand');
+    const current = searchParams.getAll(key);
     const updated = current.includes(value)
       ? current.filter((v) => v !== value)
       : [...current, value];
@@ -101,7 +105,7 @@ export default function Products() {
     setPage(1);
   };
 
-  const hasFilters = searchParams.getAll('category').length > 0 || searchParams.getAll('brand').length > 0 || minPrice || maxPrice;
+  const hasFilters = ['category', 'brand', ...attributes.map((a) => a.slug)].some((k) => searchParams.getAll(k).length > 0) || !!minPrice || !!maxPrice;
 
   const toggleSection = (key) => setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
 
@@ -218,6 +222,24 @@ export default function Products() {
       <FilterSection title="Brand" open={openSections.brand} onToggle={() => toggleSection('brand')}>
         {renderFilterCheckboxes('brand', brands.map((b) => ({ slug: b.slug, name: b.name })))}
       </FilterSection>
+
+      {attributes.map((attr) => (
+        <FilterSection key={attr.slug} title={attr.name} open={openSections[attr.slug] ?? true} onToggle={() => toggleSection(attr.slug)}>
+          <div className="space-y-1 max-h-40 overflow-y-auto">
+            {attr.values.map((val) => (
+              <label key={val} className="flex items-center gap-2.5 py-0.5 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={searchParams.getAll(attr.slug).includes(val)}
+                  onChange={() => toggleFilter(attr.slug, val)}
+                  className="accent-gray-900 w-3.5 h-3.5"
+                />
+                <span className="text-sm text-gray-500 group-hover:text-gray-900 transition">{val}</span>
+              </label>
+            ))}
+          </div>
+        </FilterSection>
+      ))}
     </div>
   );
 

@@ -36,6 +36,7 @@ Route::middleware([
     Route::get('/brands', [StorefrontApiController::class, 'brands']);
     Route::get('/featured', [StorefrontApiController::class, 'featured']);
     Route::get('/price-range', [StorefrontApiController::class, 'priceRange']);
+    Route::get('/attributes', [StorefrontApiController::class, 'attributes']);
 });
 
 // Theme endpoints (public)
