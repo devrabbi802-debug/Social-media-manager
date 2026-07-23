@@ -9,7 +9,7 @@ export default function Auth() {
   const [searchParams] = useSearchParams();
   const redirect = searchParams.get('redirect') || '/dashboard';
 
-  const [isLogin, setIsLogin] = useState(true);
+  const [isLogin, setIsLogin] = useState(searchParams.get('tab') !== 'register');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');

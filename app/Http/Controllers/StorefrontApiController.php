@@ -213,8 +213,11 @@ class StorefrontApiController extends Controller
 
         // Filters (comma-separated for multiple values)
         if ($request->filled('category')) {
-            $categories = explode(',', $request->category);
-            $query->whereHas('category', fn($q) => $q->whereIn('slug', $categories));
+            $categorySlugs = explode(',', $request->category);
+            $categoryIds = Category::whereIn('slug', $categorySlugs)
+                ->orWhereHas('parent', fn($q) => $q->whereIn('slug', $categorySlugs))
+                ->pluck('id');
+            $query->whereIn('category_id', $categoryIds);
         }
 
         if ($request->filled('brand')) {

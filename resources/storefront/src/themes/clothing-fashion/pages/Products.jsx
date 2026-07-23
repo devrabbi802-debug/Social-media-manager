@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { SlidersHorizontal, X, ChevronDown, Star } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
@@ -101,17 +101,6 @@ export default function Products() {
 
   const toggleSection = (key) => setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
 
-  const allCategoryOptions = useMemo(() => {
-    const flat = [];
-    categories.forEach((cat) => {
-      flat.push({ slug: cat.slug, name: cat.name });
-      (cat.children || []).forEach((child) => {
-        flat.push({ slug: child.slug, name: child.name });
-      });
-    });
-    return flat;
-  }, [categories]);
-
   const maxPriceLimit = 100000;
 
   const renderFilterCheckboxes = (key, options) => {
@@ -147,7 +136,39 @@ export default function Products() {
       </div>
 
       <FilterSection title="Category" open={openSections.category} onToggle={() => toggleSection('category')}>
-        {renderFilterCheckboxes('category', allCategoryOptions)}
+        <div className="space-y-1 max-h-40 overflow-y-auto">
+          {categories.map((cat) => (
+            <div key={cat.slug}>
+              <label className="flex items-center gap-2.5 py-1 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={searchParams.getAll('category').includes(cat.slug)}
+                  onChange={() => toggleFilter('category', cat.slug)}
+                  className="accent-gray-900 w-3.5 h-3.5"
+                />
+                <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition">{cat.name}</span>
+              </label>
+              {cat.children?.length > 0 && (
+                <div className="ml-4 space-y-0.5 border-l border-gray-100 pl-3">
+                  {cat.children.map((child) => (
+                    <label key={child.slug} className="flex items-center gap-2.5 py-0.5 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={searchParams.getAll('category').includes(child.slug)}
+                        onChange={() => toggleFilter('category', child.slug)}
+                        className="accent-gray-900 w-3 h-3"
+                      />
+                      <span className="text-sm text-gray-500 group-hover:text-gray-900 transition">{child.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          {categories.length === 0 && (
+            <p className="text-xs text-gray-400 py-2">No categories</p>
+          )}
+        </div>
       </FilterSection>
 
       <FilterSection title="Price Range" open={openSections.price} onToggle={() => toggleSection('price')}>
