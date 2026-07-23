@@ -3,29 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Search, ShoppingCart, Menu, X, ChevronDown, User, LayoutDashboard, LogOut, ArrowRight, Camera, Upload, X as XIcon } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../../../contexts/AuthContext';
-
-const menuItems = [
-  {
-    label: 'Men',
-    link: '/products?category=men',
-    submenu: ['T-Shirts', 'Shirts', 'Jeans', 'Jackets', 'Hoodies', 'Shoes'],
-  },
-  {
-    label: 'Women',
-    link: '/products?category=women',
-    submenu: ['Dresses', 'Tops', 'Skirts', 'Jeans', 'Jackets', 'Accessories'],
-  },
-  {
-    label: 'Kids',
-    link: '/products?category=kids',
-    submenu: ['Boys', 'Girls', 'Infants', 'Toys', 'School'],
-  },
-  {
-    label: 'Collection',
-    link: '/products',
-    submenu: ['Summer 2026', 'New Arrivals', 'Best Sellers', 'Sale'],
-  },
-];
+import api from '../../../api/client';
 
 const searchProducts = [
   { id: 1, name: 'Classic Cotton T-Shirt', slug: 'classic-cotton-tshirt', base_price: 1200, discount_price: 799, effective_price: 799, image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=200&q=80', category: 'T-Shirts' },
@@ -66,6 +44,36 @@ export default function Header({ storeName, storeLogo }) {
   const location = useLocation();
   const { openDrawer, itemCount } = useCart();
   const { user, isAuthenticated, logout } = useAuth();
+
+  const [categories, setCategories] = useState([]);
+  const [navLoading, setNavLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/storefront/categories').then((data) => {
+      if (cancelled) return;
+      const arr = Array.isArray(data) ? data : [];
+      setCategories(arr);
+    }).catch(() => {
+      if (!cancelled) setCategories([]);
+    }).finally(() => {
+      if (!cancelled) setNavLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const navItems = useMemo(() => {
+    return categories.map((cat) => ({
+      label: cat.name,
+      link: `/category/${cat.slug}`,
+      submenu: (cat.children || []).map((child) => ({
+        name: child.name,
+        slug: child.slug,
+      })),
+    }));
+  }, [categories]);
+
+  const hasNavItems = navItems.length > 0;
 
   const suggestions = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -186,26 +194,28 @@ export default function Header({ storeName, storeLogo }) {
             <Link to="/" className="text-sm uppercase tracking-[0.15em] hover:opacity-70 transition font-medium">
               Home
             </Link>
-            {menuItems.map((item, i) => (
+            {!navLoading && hasNavItems && navItems.map((item, i) => (
               <div key={i} className="relative group">
                 <Link
                   to={item.link}
                   className="flex items-center gap-1 text-sm uppercase tracking-[0.15em] hover:opacity-70 transition font-medium"
                 >
                   {item.label}
-                  <ChevronDown className="w-3 h-3" />
+                  {item.submenu.length > 0 && <ChevronDown className="w-3 h-3" />}
                 </Link>
-                <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 min-w-[180px] shadow-xl py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ${submenuBg}`}>
-                  {item.submenu.map((sub, j) => (
-                    <Link
-                      key={j}
-                      to={`/products?category=${sub.toLowerCase().replace(/\s+/g, '-')}`}
-                      className={`block px-5 py-2 text-sm ${submenuText} transition`}
-                    >
-                      {sub}
-                    </Link>
-                  ))}
-                </div>
+                {item.submenu.length > 0 && (
+                  <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 min-w-[180px] shadow-xl py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ${submenuBg}`}>
+                    {item.submenu.map((sub, j) => (
+                      <Link
+                        key={j}
+                        to={`/category/${sub.slug}`}
+                        className={`block px-5 py-2 text-sm ${submenuText} transition`}
+                      >
+                        {sub.name}
+                      </Link>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
             <Link to="/products" className="text-sm uppercase tracking-[0.15em] hover:opacity-70 transition font-medium">
@@ -393,18 +403,20 @@ export default function Header({ storeName, storeLogo }) {
           <div className="lg:hidden py-4 border-t border-gray-200 max-h-[80vh] overflow-y-auto bg-white text-gray-900 shadow-lg">
             <nav className="flex flex-col space-y-1">
               <Link to="/" className="py-2.5 text-sm uppercase tracking-widest font-medium">Home</Link>
-              {menuItems.map((item, i) => (
+              {!navLoading && hasNavItems && navItems.map((item, i) => (
                 <div key={i}>
                   <Link to={item.link} className="py-2.5 text-sm uppercase tracking-widest font-medium block">
                     {item.label}
                   </Link>
-                  <div className="pl-4 pb-2 space-y-1">
-                    {item.submenu.map((sub, j) => (
-                      <Link key={j} to={`/products?category=${sub.toLowerCase().replace(/\s+/g, '-')}`} className="block py-1.5 text-xs text-gray-500 hover:text-gray-900 transition">
-                        {sub}
-                      </Link>
-                    ))}
-                  </div>
+                  {item.submenu.length > 0 && (
+                    <div className="pl-4 pb-2 space-y-1">
+                      {item.submenu.map((sub, j) => (
+                        <Link key={j} to={`/category/${sub.slug}`} className="block py-1.5 text-xs text-gray-500 hover:text-gray-900 transition">
+                          {sub.name}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
               <Link to="/products" className="py-2.5 text-sm uppercase tracking-widest font-medium">Shop All</Link>

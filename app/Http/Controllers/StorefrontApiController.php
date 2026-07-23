@@ -262,11 +262,13 @@ class StorefrontApiController extends Controller
     }
 
     /**
-     * All active categories
+     * All active categories (parent + children)
      */
     public function categories()
     {
         $categories = Category::where('is_active', true)
+            ->whereNull('parent_id')
+            ->with(['children' => fn($q) => $q->where('is_active', true)->orderBy('sort_order')])
             ->withCount(['products' => fn($q) => $q->active()])
             ->orderBy('sort_order')
             ->get()
@@ -276,6 +278,13 @@ class StorefrontApiController extends Controller
                 'slug' => $cat->slug,
                 'image' => $cat->image ? Storage::disk('public')->url($cat->image) : null,
                 'products_count' => (int) $cat->products_count,
+                'children' => $cat->children->map(fn($child) => [
+                    'id' => $child->id,
+                    'name' => $child->name,
+                    'slug' => $child->slug,
+                    'image' => $child->image ? Storage::disk('public')->url($child->image) : null,
+                    'products_count' => (int) $child->products()->active()->count(),
+                ]),
             ]);
 
         return response()->json($categories);
