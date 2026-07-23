@@ -1,5 +1,7 @@
 # AGENTS.md
 
+**Always respond in Banglish** (Bengali + English mixed) unless asked otherwise.
+
 ## Quick Start
 
 ```bash
