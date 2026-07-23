@@ -132,15 +132,6 @@ export default function Products() {
 
   const filterContent = (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-bold uppercase tracking-wider">Filters</span>
-        {hasFilters && (
-          <button onClick={clearFilters} className="text-xs text-gray-400 hover:text-gray-900 transition underline">
-            Clear All
-          </button>
-        )}
-      </div>
-
       <FilterSection title="Category" open={openSections.category} onToggle={() => toggleSection('category')}>
         <div className="space-y-1 max-h-40 overflow-y-auto">
           {categories.map((cat) => (
@@ -279,16 +270,33 @@ export default function Products() {
 
         <div className="flex gap-8">
           <aside className="hidden lg:block w-56 flex-shrink-0">
-            <div className="sticky top-24">{filterContent}</div>
+            <div className="sticky top-24">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-bold uppercase tracking-wider">Filters</span>
+                {hasFilters && (
+                  <button onClick={clearFilters} className="text-xs text-gray-400 hover:text-gray-900 transition underline">
+                    Clear All
+                  </button>
+                )}
+              </div>
+              {filterContent}
+            </div>
           </aside>
 
           {mobileFilter && (
             <>
-              <div className="fixed inset-0 bg-black/40 z-50 lg:hidden" onClick={() => setMobileFilter(false)} />
-              <div className="fixed inset-y-0 left-0 w-72 bg-white z-50 p-6 overflow-y-auto lg:hidden">
+              <div className="fixed inset-0 bg-black/40 z-[70] lg:hidden" onClick={() => setMobileFilter(false)} />
+              <div className="fixed left-0 w-72 bg-white z-[70] p-6 overflow-y-auto lg:hidden" style={{ top: '32px', bottom: 0 }}>
                 <div className="flex items-center justify-between mb-6">
                   <span className="text-sm font-bold uppercase tracking-wider">Filters</span>
-                  <button onClick={() => setMobileFilter(false)}><X className="w-5 h-5" /></button>
+                  <div className="flex items-center gap-3">
+                    {hasFilters && (
+                      <button onClick={clearFilters} className="text-xs text-gray-400 hover:text-gray-900 transition underline">
+                        Clear All
+                      </button>
+                    )}
+                    <button onClick={() => setMobileFilter(false)}><X className="w-5 h-5" /></button>
+                  </div>
                 </div>
                 {filterContent}
               </div>
