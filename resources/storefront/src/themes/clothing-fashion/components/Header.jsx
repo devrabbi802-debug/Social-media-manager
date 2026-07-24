@@ -212,9 +212,6 @@ export default function Header({ storeName, storeLogo }) {
                 )}
               </div>
             ))}
-            <Link to="/products" className="text-sm uppercase tracking-[0.15em] hover:opacity-70 transition font-medium">
-              Shop All
-            </Link>
           </nav>
 
           <div className="flex items-center space-x-3">
@@ -417,7 +414,6 @@ export default function Header({ storeName, storeLogo }) {
                   )}
                 </div>
               ))}
-              <Link to="/products" onClick={() => setMobileMenuOpen(false)} className="py-2.5 text-sm uppercase tracking-widest font-medium">Shop All</Link>
               <button onClick={() => { openDrawer(); setMobileMenuOpen(false); }} className="py-2.5 text-sm uppercase tracking-widest font-medium text-left">Cart ({itemCount})</button>
             </nav>
           </div>

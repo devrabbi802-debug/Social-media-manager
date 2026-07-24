@@ -134,6 +134,8 @@ Minimal — 2 Laravel examples (`tests/Feature/ExampleTest.php`, `tests/Unit/Exa
 ## Planning Documents
 
 `INVENTORY_REVIEW.txt` (bug list + architecture plan), `STOREFRONT_PLAN.txt`, `PRODUCT_CATEGORY_FIELDS_PLAN.txt`. Consult before modifying inventory or storefront — they capture known gaps and future work.
+
+
 ## Language / Communication Style
  
 Always talk to me in **Banglish** (Romanized Bangla mixed with English) — not full formal English, not pure Bangla script. This means:
