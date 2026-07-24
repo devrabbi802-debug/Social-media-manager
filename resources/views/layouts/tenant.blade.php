@@ -138,6 +138,10 @@
                     ['label' => __('sidebar.attributes'), 'route' => 'inventory.attributes.index', 'icon' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>'],
                 ];
 
+                $orderItems = [
+                    ['label' => __('sidebar.orders'), 'route' => 'orders.index', 'icon' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>'],
+                ];
+
                 $webSetupItems = [
                     ['label' => __('sidebar.storefront_preview'), 'url' => '/', 'icon' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>', 'target' => '_blank'],
                     ['label' => __('sidebar.storefront_settings'), 'route' => 'storefront-settings.index', 'icon' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>'],
@@ -158,6 +162,18 @@
             {{-- Inventory Section --}}
             <div class="pt-4 pb-2 px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">@lang('sidebar.inventory')</div>
             @foreach($inventoryItems as $item)
+                @php
+                    $isActive = request()->routeIs($item['route']);
+                @endphp
+                <a href="{{ route($item['route']) }}" class="flex items-center px-4 py-2.5 rounded-lg transition text-sm {{ $isActive ? 'bg-purple-50 text-purple-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                    <svg class="w-4 h-4 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">{!! $item['icon'] !!}</svg>
+                    {{ $item['label'] }}
+                </a>
+            @endforeach
+
+            {{-- Orders Section --}}
+            <div class="pt-4 pb-2 px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider border-t border-gray-100 mt-4">@lang('sidebar.order_management')</div>
+            @foreach($orderItems as $item)
                 @php
                     $isActive = request()->routeIs($item['route']);
                 @endphp

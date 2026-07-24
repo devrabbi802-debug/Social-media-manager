@@ -200,6 +200,17 @@ Route::middleware([
                 Route::delete('/alerts/{alert}', [InventoryController::class, 'destroyAlert'])->name('alerts.destroy');
             });
 
+            // Order Management
+            Route::prefix('orders')->name('orders.')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Dashboard\OrderController::class, 'index'])->name('index');
+                Route::get('/export', [\App\Http\Controllers\Dashboard\OrderController::class, 'export'])->name('export');
+                Route::post('/bulk-update', [\App\Http\Controllers\Dashboard\OrderController::class, 'bulkUpdate'])->name('bulk-update');
+                Route::get('/{order}', [\App\Http\Controllers\Dashboard\OrderController::class, 'show'])->name('show');
+                Route::get('/{order}/edit', [\App\Http\Controllers\Dashboard\OrderController::class, 'edit'])->name('edit');
+                Route::put('/{order}', [\App\Http\Controllers\Dashboard\OrderController::class, 'update'])->name('update');
+                Route::get('/{order}/print', [\App\Http\Controllers\Dashboard\OrderController::class, 'print'])->name('print');
+            });
+
             // AI Setup
             Route::get('/ai-setup', [AiSettingController::class, 'index'])->name('ai.setup');
             Route::post('/ai-setup', [AiSettingController::class, 'store'])->name('ai.setup.store');

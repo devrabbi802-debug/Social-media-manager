@@ -20,4 +20,6 @@ return [
     'theme_selection' => 'থিম সিলেকশন',
     'storefront_settings' => 'স্টোরফ্রন্ট সেটিংস',
     'banner_management' => 'ব্যানার ম্যানেজমেন্ট',
+    'order_management' => 'অর্ডার ম্যানেজমেন্ট',
+    'orders' => 'অর্ডার সমূহ',
 ];

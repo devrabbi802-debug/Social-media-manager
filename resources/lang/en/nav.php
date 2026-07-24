@@ -5,4 +5,5 @@ return [
     'ai_setup' => 'AI Setup',
     'conversations' => 'Conversations',
     'inventory' => 'Inventory',
+    'orders' => 'Orders',
 ];

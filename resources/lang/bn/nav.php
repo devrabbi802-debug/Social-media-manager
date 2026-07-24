@@ -5,4 +5,5 @@ return [
     'ai_setup' => 'AI সেটআপ',
     'conversations' => 'কথোপকথন',
     'inventory' => 'ইনভেন্টরি',
+    'orders' => 'অর্ডার সমূহ',
 ];

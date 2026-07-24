@@ -20,4 +20,6 @@ return [
     'theme_selection' => 'Theme Selection',
     'storefront_settings' => 'Storefront Settings',
     'banner_management' => 'Banner Management',
+    'order_management' => 'Order Management',
+    'orders' => 'Orders',
 ];
