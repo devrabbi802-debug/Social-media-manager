@@ -26,25 +26,37 @@ export function WishlistProvider({ children }) {
           price: p.effective_price || p.price || p.base_price,
         })));
       }
-    }).catch(() => {}).finally(() => setLoading(false));
+    }).catch((err) => {
+      console.error('[Wishlist] fetch wishlist error:', err);
+    }).finally(() => setLoading(false));
   }, [isAuthenticated]);
 
   const toggleWishlist = useCallback(async (product) => {
+    console.log('[Wishlist] toggleWishlist called', { product, isAuthenticated, wishlistLength: wishlist.length });
     if (!isAuthenticated) {
+      console.log('[Wishlist] not authenticated, showing login popup');
       setShowLoginPopup(true);
       return;
     }
 
+    console.log('[Wishlist] product.id:', product?.id);
+
     const exists = wishlist.find((item) => item.id === product.id);
+    console.log('[Wishlist] exists in wishlist:', exists);
 
     if (exists) {
       try {
-        await api.delete(`/customer/wishlist/${product.id}`);
+        const result = await api.delete(`/customer/wishlist/${product.id}`);
+        console.log('[Wishlist] delete success:', result);
         setWishlist((prev) => prev.filter((item) => item.id !== product.id));
-      } catch {}
+      } catch (err) {
+        console.error('[Wishlist] delete error:', err?.response?.data || err);
+      }
     } else {
       try {
-        await api.post('/customer/wishlist', { product_id: product.id });
+        console.log('[Wishlist] posting to add:', { product_id: product.id });
+        const result = await api.post('/customer/wishlist', { product_id: product.id });
+        console.log('[Wishlist] post success:', result);
         setWishlist((prev) => [...prev, {
           id: product.id,
           name: product.name,
@@ -52,7 +64,9 @@ export function WishlistProvider({ children }) {
           image: product.image,
           price: product.effective_price || product.price || product.base_price,
         }]);
-      } catch {}
+      } catch (err) {
+        console.error('[Wishlist] post error:', err?.response?.data || err?.message || err);
+      }
     }
   }, [isAuthenticated, wishlist]);
 

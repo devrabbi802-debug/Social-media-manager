@@ -10,6 +10,7 @@ use App\Models\Wishlist;
 use App\Models\Review;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class CustomerController extends Controller
@@ -142,9 +143,37 @@ class CustomerController extends Controller
             ->with(['product.images', 'product.category', 'product.brand'])
             ->latest()
             ->get()
-            ->map(fn($w) => $w->product);
+            ->map(fn($w) => $this->formatWishlistProduct($w->product));
 
         return response()->json($items);
+    }
+
+    private function formatWishlistProduct(Product $product): array
+    {
+        return [
+            'id' => $product->id,
+            'name' => $product->name,
+            'slug' => $product->slug,
+            'base_price' => $product->base_price,
+            'discount_price' => $product->discount_price,
+            'effective_price' => $product->effective_price,
+            'price' => $product->price,
+            'stock_quantity' => $product->stock_quantity,
+            'status' => $product->status,
+            'is_featured' => $product->is_featured,
+            'category' => $product->category ? [
+                'id' => $product->category->id,
+                'name' => $product->category->name,
+                'slug' => $product->category->slug,
+            ] : null,
+            'brand' => $product->brand ? [
+                'id' => $product->brand->id,
+                'name' => $product->brand->name,
+                'slug' => $product->brand->slug,
+            ] : null,
+            'image' => $product->images->first()?->image_url ?? null,
+            'images' => $product->images->map(fn($img) => $img->image_url),
+        ];
     }
 
     public function addToWishlist(Request $request): JsonResponse
@@ -157,7 +186,7 @@ class CustomerController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $existing = Wishlist::where('customer_id', $this->customerId($request))
+        $existing = Wishlist::where("customer_id", $this->customerId($request))
             ->where('product_id', $request->product_id)
             ->first();
 
