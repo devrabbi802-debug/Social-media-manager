@@ -3,6 +3,7 @@
 @section('title', __('attributes.create_title').' - SocialBoost AI')
 
 @section('content')
+@php $optionValues = old('options') ? array_map('trim', explode(',', old('options'))) : []; @endphp
 <div class="min-h-screen bg-gray-50">
     <div class="bg-white shadow-sm border-b">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -45,8 +46,38 @@
                     <p class="text-xs text-gray-500 mt-1">@lang('attributes.variant_help')</p>
                 </div>
                 <div>
+                    <label class="flex items-center space-x-3">
+                        <input type="checkbox" name="is_color" value="1" {{ old('is_color') ? 'checked' : '' }} class="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500">
+                        <span class="text-sm text-gray-700">@lang('attributes.is_color')</span>
+                    </label>
+                    <p class="text-xs text-gray-500 mt-1">@lang('attributes.color_help')</p>
+                </div>
+                <div x-data="{
+                    values: @js($optionValues),
+                    newValue: '',
+                    get optionsString() { return this.values.join(', '); },
+                    addValue() { var v = this.newValue.trim(); if (v && !this.values.includes(v)) { this.values.push(v); } this.newValue = ''; },
+                    removeValue(idx) { this.values.splice(idx, 1); }
+                }">
                     <label class="block text-sm font-medium text-gray-700 mb-1">@lang('attributes.options')</label>
-                    <textarea name="options" rows="3" placeholder="@lang('attributes.options_placeholder')" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">{{ old('options') }}</textarea>
+                    <div class="flex gap-2 mb-2">
+                        <input type="text" x-model="newValue" @keydown.enter.prevent="addValue()"
+                               placeholder="@lang('attributes.options_placeholder')"
+                               class="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                        <button type="button" @click="addValue()"
+                                class="px-4 py-3 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition text-sm whitespace-nowrap">
+                            + @lang('attributes.add')
+                        </button>
+                    </div>
+                    <div class="flex flex-wrap gap-2 mb-1">
+                        <template x-for="(val, idx) in values" :key="idx">
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg text-sm font-medium">
+                                <span x-text="val"></span>
+                                <button type="button" @click="removeValue(idx)" class="text-purple-400 hover:text-red-500 transition">&times;</button>
+                            </span>
+                        </template>
+                    </div>
+                    <input type="hidden" name="options" x-model="optionsString">
                     <p class="text-xs text-gray-500 mt-1">@lang('attributes.options_help')</p>
                 </div>
             </div>

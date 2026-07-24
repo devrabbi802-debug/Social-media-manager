@@ -11,6 +11,13 @@ const colorMap = {
   Orange: '#f97316', Cream: '#fef3c7', Maroon: '#7f1d1d', Camel: '#c19a6b',
 };
 
+const hexColorRegex = /^#[0-9a-fA-F]{3,8}$/;
+
+function resolveColor(value) {
+  if (hexColorRegex.test(value)) return value;
+  return colorMap[value] || '#ccc';
+}
+
 export default function ProductCard({ product }) {
   const { addToCart } = useCart();
   const { toggleWishlist, isWishlisted } = useWishlist();
@@ -19,15 +26,38 @@ export default function ProductCard({ product }) {
     image, category, stock_quantity, variants,
   } = product;
 
+  const colorAttrName = useMemo(() => {
+    if (!variants || !variants.length) return 'color';
+    const first = variants[0];
+    if (first.attributes) {
+      const colorAttr = first.attributes.find((a) => a.is_color);
+      if (colorAttr) return colorAttr.attribute.toLowerCase();
+    }
+    return 'color';
+  }, [variants]);
+
+  const sizeAttrName = useMemo(() => {
+    if (!variants || !variants.length) return 'size';
+    const first = variants[0];
+    if (first.attributes) {
+      const colorAttr = first.attributes.find((a) => a.is_color);
+      const sizeAttr = first.attributes.find((a) => a !== colorAttr && !a.is_color);
+      if (sizeAttr) return sizeAttr.attribute.toLowerCase();
+    }
+    return 'size';
+  }, [variants]);
+
   const uniqueColors = useMemo(() => {
     if (!variants || variants.length === 0) return [];
-    return [...new Set(variants.map((v) => v.color))];
-  }, [variants]);
+    const attr = colorAttrName || 'color';
+    return [...new Set(variants.map((v) => v[attr]).filter(Boolean))];
+  }, [variants, colorAttrName]);
 
   const uniqueSizes = useMemo(() => {
     if (!variants || variants.length === 0) return [];
-    return [...new Set(variants.map((v) => v.size))];
-  }, [variants]);
+    const attr = sizeAttrName || 'size';
+    return [...new Set(variants.map((v) => v[attr]).filter(Boolean))];
+  }, [variants, sizeAttrName]);
 
   const [selectedColor, setSelectedColor] = useState(uniqueColors[0] || null);
   const [selectedSize, setSelectedSize] = useState(null);
@@ -36,17 +66,19 @@ export default function ProductCard({ product }) {
 
   const activeVariant = useMemo(() => {
     if (!variants || variants.length === 0) return null;
+    const colorAttr = colorAttrName || 'color';
+    const sizeAttr = sizeAttrName || 'size';
     if (selectedColor && selectedSize) {
-      return variants.find((v) => v.color === selectedColor && v.size === selectedSize) || null;
+      return variants.find((v) => v[colorAttr] === selectedColor && v[sizeAttr] === selectedSize) || null;
     }
     if (selectedColor) {
-      return variants.find((v) => v.color === selectedColor) || null;
+      return variants.find((v) => v[colorAttr] === selectedColor) || null;
     }
     if (selectedSize) {
-      return variants.find((v) => v.size === selectedSize) || null;
+      return variants.find((v) => v[sizeAttr] === selectedSize) || null;
     }
     return null;
-  }, [variants, selectedColor, selectedSize]);
+  }, [variants, selectedColor, selectedSize, colorAttrName, sizeAttrName]);
 
   const variantSelectionComplete = useMemo(() => {
     if (!hasVariants) return true;
@@ -67,25 +99,29 @@ export default function ProductCard({ product }) {
   const discountPercent = hasDiscount ? Math.round((1 - displayPrice / displayBasePrice) * 100) : 0;
 
   const cartItem = activeVariant
-    ? { ...product, image: displayImage, price: displayPrice, effective_price: displayPrice, stock_quantity: displayStock, variant_id: activeVariant.id, size: selectedSize, color: selectedColor }
+    ? { ...product, image: displayImage, price: displayPrice, effective_price: displayPrice, stock_quantity: displayStock, variant_id: activeVariant.id, size: selectedSize, color: selectedColor, colorAttrName, sizeAttrName }
     : product;
 
   const colorVariants = useMemo(() => {
     if (!variants) return [];
-    if (!selectedSize) return [...new Map(variants.map((v) => [v.color, v])).values()];
-    return variants.filter((v) => v.size === selectedSize).reduce((acc, v) => {
-      if (!acc.find((a) => a.color === v.color)) acc.push(v);
+    const attr = colorAttrName || 'color';
+    if (!selectedSize) return [...new Map(variants.map((v) => [v[attr], v])).values()];
+    const sizeAttr = sizeAttrName || 'size';
+    return variants.filter((v) => v[sizeAttr] === selectedSize).reduce((acc, v) => {
+      if (!acc.find((a) => a[attr] === v[attr])) acc.push(v);
       return acc;
     }, []);
-  }, [variants, selectedSize]);
+  }, [variants, selectedSize, colorAttrName, sizeAttrName]);
 
   const sizeVariants = useMemo(() => {
     if (!variants) return [];
-    return variants.filter((v) => v.color === selectedColor).reduce((acc, v) => {
-      if (!acc.find((a) => a.size === v.size)) acc.push(v);
+    const attr = colorAttrName || 'color';
+    return variants.filter((v) => v[attr] === selectedColor).reduce((acc, v) => {
+      const sizeAttr = sizeAttrName || 'size';
+      if (!acc.find((a) => a[sizeAttr] === v[sizeAttr])) acc.push(v);
       return acc;
     }, []);
-  }, [variants, selectedColor]);
+  }, [variants, selectedColor, colorAttrName, sizeAttrName]);
 
   const handleAddToCart = (e) => {
     e.preventDefault();
@@ -187,37 +223,43 @@ export default function ProductCard({ product }) {
 
         {uniqueColors.length > 0 && (
           <div className="flex items-center gap-2 mb-0.5">
-            {colorVariants.map((v) => (
-              <button
-                key={v.color}
-                onClick={(e) => { e.preventDefault(); setSelectedColor(v.color); setSelectedSize(null); }}
-                className={`w-5 h-5 rounded-full transition-all duration-200 ${
-                  selectedColor === v.color
-                    ? 'ring-2 ring-gray-900 ring-offset-2 scale-110'
-                    : 'ring-1 ring-gray-300 hover:ring-gray-400'
-                }`}
-                style={{ backgroundColor: colorMap[v.color] || '#ccc' }}
-                title={v.color}
-              />
-            ))}
+            {colorVariants.map((v) => {
+              const attr = colorAttrName || 'color';
+              return (
+                <button
+                  key={v[attr]}
+                  onClick={(e) => { e.preventDefault(); setSelectedColor(v[attr]); setSelectedSize(null); }}
+                  className={`w-5 h-5 rounded-full transition-all duration-200 ${
+                    selectedColor === v[attr]
+                      ? 'ring-2 ring-gray-900 ring-offset-2 scale-110'
+                      : 'ring-1 ring-gray-300 hover:ring-gray-400'
+                  }`}
+                  style={{ backgroundColor: resolveColor(v[attr]) }}
+                  title={v[attr]}
+                />
+              );
+            })}
           </div>
         )}
 
         {uniqueSizes.length > 0 && selectedColor && (
           <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
-            {sizeVariants.map((v) => (
-              <button
-                key={v.size}
-                onClick={(e) => { e.preventDefault(); setSelectedSize(selectedSize === v.size ? null : v.size); }}
-                className={`text-[11px] px-2.5 py-1 font-medium rounded-md transition-all duration-200 ${
-                  selectedSize === v.size
-                    ? 'bg-gray-900 text-white shadow-sm'
-                    : 'bg-gray-50 text-gray-600 border border-gray-200 hover:border-gray-900 hover:text-gray-900'
-                }`}
-              >
-                {v.size}
-              </button>
-            ))}
+            {sizeVariants.map((v) => {
+              const attr = sizeAttrName || 'size';
+              return (
+                <button
+                  key={v[attr]}
+                  onClick={(e) => { e.preventDefault(); setSelectedSize(selectedSize === v[attr] ? null : v[attr]); }}
+                  className={`text-[11px] px-2.5 py-1 font-medium rounded-md transition-all duration-200 ${
+                    selectedSize === v[attr]
+                      ? 'bg-gray-900 text-white shadow-sm'
+                      : 'bg-gray-50 text-gray-600 border border-gray-200 hover:border-gray-900 hover:text-gray-900'
+                  }`}
+                >
+                  {v[attr]}
+                </button>
+              );
+            })}
           </div>
         )}
 

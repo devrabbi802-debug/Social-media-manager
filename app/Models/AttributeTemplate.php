@@ -19,6 +19,7 @@ class AttributeTemplate extends Model
         'is_required',
         'is_global',
         'is_variant_option',
+        'is_color',
         'is_active',
         'sort_order',
     ];
@@ -28,6 +29,7 @@ class AttributeTemplate extends Model
         'is_required' => 'boolean',
         'is_global' => 'boolean',
         'is_variant_option' => 'boolean',
+        'is_color' => 'boolean',
         'is_active' => 'boolean',
     ];
 
@@ -97,5 +99,10 @@ class AttributeTemplate extends Model
     public function isBoolean(): bool
     {
         return $this->type === 'boolean';
+    }
+
+    public function isColor(): bool
+    {
+        return $this->is_color && $this->type === 'select';
     }
 }

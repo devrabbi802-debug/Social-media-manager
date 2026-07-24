@@ -52,12 +52,14 @@ class AttributeTemplateController extends Controller
             'options' => 'nullable|string',
             'is_required' => 'boolean',
             'is_global' => 'boolean',
+            'is_color' => 'boolean',
             'sort_order' => 'nullable|integer|min:0',
         ]);
 
         $validated['slug'] = Str::slug($validated['name']);
         $validated['is_required'] = $request->boolean('is_required');
         $validated['is_global'] = $isGlobal;
+        $validated['is_color'] = $request->boolean('is_color');
 
         if ($isGlobal) {
             $validated['category_id'] = null;
@@ -67,6 +69,10 @@ class AttributeTemplateController extends Controller
             $validated['options'] = array_map('trim', explode(',', $validated['options']));
         } else {
             $validated['options'] = null;
+        }
+
+        if ($validated['is_color'] && $validated['type'] !== 'select') {
+            return back()->withErrors(['type' => 'কালার অ্যাট্রিবিউটের টাইপ "Select" হতে হবে।'])->withInput();
         }
 
         AttributeTemplate::create($validated);
@@ -94,12 +100,14 @@ class AttributeTemplateController extends Controller
             'options' => 'nullable|string',
             'is_required' => 'boolean',
             'is_global' => 'boolean',
+            'is_color' => 'boolean',
             'sort_order' => 'nullable|integer|min:0',
         ]);
 
         $validated['slug'] = Str::slug($validated['name']);
         $validated['is_required'] = $request->boolean('is_required');
         $validated['is_global'] = $isGlobal;
+        $validated['is_color'] = $request->boolean('is_color');
 
         if ($isGlobal) {
             $validated['category_id'] = null;
@@ -109,6 +117,10 @@ class AttributeTemplateController extends Controller
             $validated['options'] = array_map('trim', explode(',', $validated['options']));
         } else {
             $validated['options'] = null;
+        }
+
+        if ($validated['is_color'] && $validated['type'] !== 'select') {
+            return back()->withErrors(['type' => 'কালার অ্যাট্রিবিউটের টাইপ "Select" হতে হবে।'])->withInput();
         }
 
         $attribute->update($validated);

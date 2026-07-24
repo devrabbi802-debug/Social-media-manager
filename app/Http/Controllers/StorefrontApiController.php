@@ -465,6 +465,7 @@ class StorefrontApiController extends Controller
                 'attributes' => $variant->attributeValues->map(fn($attr) => [
                     'attribute' => $attr->attributeTemplate->name ?? $attr->attribute_template_id,
                     'value' => $attr->value,
+                    'is_color' => $attr->attributeTemplate?->is_color ?? false,
                 ]),
                 'image' => $variant->images->first()?->image_url ?? null,
             ]);

@@ -14,6 +14,13 @@ const colorMap = {
   Orange: '#f97316', Cream: '#fef3c7', Maroon: '#7f1d1d', Camel: '#c19a6b',
 };
 
+const hexColorRegex = /^#[0-9a-fA-F]{3,8}$/;
+
+function resolveColor(value) {
+  if (hexColorRegex.test(value)) return value;
+  return colorMap[value] || '#ccc';
+}
+
 export default function ProductDetail() {
   const { slug } = useParams();
   const { addToCart } = useCart();
@@ -72,46 +79,73 @@ export default function ProductDetail() {
 
   const hasVariants = variants.length > 0;
 
+  const colorAttrName = useMemo(() => {
+    if (!variants.length) return null;
+    const first = variants[0];
+    if (first.attributes) {
+      const colorAttr = first.attributes.find((a) => a.is_color);
+      if (colorAttr) return colorAttr.attribute.toLowerCase();
+    }
+    return 'color';
+  }, [variants]);
+
+  const sizeAttrName = useMemo(() => {
+    if (!variants.length) return 'size';
+    const first = variants[0];
+    if (first.attributes) {
+      const colorAttr = first.attributes.find((a) => a.is_color);
+      const sizeAttr = first.attributes.find((a) => a !== colorAttr && !a.is_color);
+      if (sizeAttr) return sizeAttr.attribute.toLowerCase();
+    }
+    return 'size';
+  }, [variants]);
+
   const uniqueColors = useMemo(() => {
     if (!variants.length) return [];
-    return [...new Set(variants.map((v) => v.color).filter(Boolean))];
-  }, [variants]);
+    const attr = colorAttrName || 'color';
+    return [...new Set(variants.map((v) => v[attr]).filter(Boolean))];
+  }, [variants, colorAttrName]);
 
   const uniqueSizes = useMemo(() => {
     if (!variants.length) return [];
-    return [...new Set(variants.map((v) => v.size).filter(Boolean))];
-  }, [variants]);
+    const attr = sizeAttrName || 'size';
+    return [...new Set(variants.map((v) => v[attr]).filter(Boolean))];
+  }, [variants, sizeAttrName]);
 
   const colorVariants = useMemo(() => {
     if (!variants.length) return [];
-    if (!selectedSize) return [...new Map(variants.map((v) => [v.color, v])).values()];
-    return variants.filter((v) => v.size === selectedSize).reduce((acc, v) => {
-      if (!acc.find((a) => a.color === v.color)) acc.push(v);
+    const attr = colorAttrName || 'color';
+    if (!selectedSize) return [...new Map(variants.map((v) => [v[attr], v])).values()];
+    return variants.filter((v) => v[sizeAttrName] === selectedSize).reduce((acc, v) => {
+      if (!acc.find((a) => a[attr] === v[attr])) acc.push(v);
       return acc;
     }, []);
-  }, [variants, selectedSize]);
+  }, [variants, selectedSize, colorAttrName, sizeAttrName]);
 
   const sizeVariants = useMemo(() => {
     if (!variants.length) return [];
-    return variants.filter((v) => v.color === selectedColor).reduce((acc, v) => {
-      if (!acc.find((a) => a.size === v.size)) acc.push(v);
+    const attr = colorAttrName || 'color';
+    return variants.filter((v) => v[attr] === selectedColor).reduce((acc, v) => {
+      if (!acc.find((a) => a[sizeAttrName] === v[sizeAttrName])) acc.push(v);
       return acc;
     }, []);
-  }, [variants, selectedColor]);
+  }, [variants, selectedColor, colorAttrName, sizeAttrName]);
 
   const activeVariant = useMemo(() => {
     if (!variants.length) return null;
+    const colorAttr = colorAttrName || 'color';
+    const sizeAttr = sizeAttrName || 'size';
     if (selectedColor && selectedSize) {
-      return variants.find((v) => v.color === selectedColor && v.size === selectedSize) || null;
+      return variants.find((v) => v[colorAttr] === selectedColor && v[sizeAttr] === selectedSize) || null;
     }
     if (selectedColor) {
-      return variants.find((v) => v.color === selectedColor) || null;
+      return variants.find((v) => v[colorAttr] === selectedColor) || null;
     }
     if (selectedSize) {
-      return variants.find((v) => v.size === selectedSize) || null;
+      return variants.find((v) => v[sizeAttr] === selectedSize) || null;
     }
     return null;
-  }, [variants, selectedColor, selectedSize]);
+  }, [variants, selectedColor, selectedSize, colorAttrName, sizeAttrName]);
 
   const variantSelectionComplete = useMemo(() => {
     if (!hasVariants) return true;
@@ -379,22 +413,25 @@ export default function ProductDetail() {
             {uniqueColors.length > 0 && (
               <div className="mb-6">
                 <h4 className="text-xs font-bold uppercase tracking-wider mb-3">
-                  Color: <span className="text-gray-900">{selectedColor || uniqueColors[0]}</span>
+                  {colorAttrName ? colorAttrName.charAt(0).toUpperCase() + colorAttrName.slice(1) : 'Color'}: <span className="text-gray-900">{selectedColor || uniqueColors[0]}</span>
                 </h4>
                 <div className="flex gap-2">
-                  {colorVariants.map((v) => (
-                    <button
-                      key={v.color}
-                      onClick={() => { setSelectedColor(v.color); setSelectedSize(null); }}
-                      className={`w-10 h-10 rounded-full border-2 transition-all duration-200 ${
-                        selectedColor === v.color
-                          ? 'border-gray-900 ring-2 ring-gray-900 ring-offset-2 scale-110'
-                          : 'border-gray-200 hover:border-gray-400'
-                      }`}
-                      style={{ backgroundColor: colorMap[v.color] || '#ccc' }}
-                      title={v.color}
-                    />
-                  ))}
+                  {colorVariants.map((v) => {
+                    const attr = colorAttrName || 'color';
+                    return (
+                      <button
+                        key={v[attr]}
+                        onClick={() => { setSelectedColor(v[attr]); setSelectedSize(null); }}
+                        className={`w-10 h-10 rounded-full border-2 transition-all duration-200 ${
+                          selectedColor === v[attr]
+                            ? 'border-gray-900 ring-2 ring-gray-900 ring-offset-2 scale-110'
+                            : 'border-gray-200 hover:border-gray-400'
+                        }`}
+                        style={{ backgroundColor: resolveColor(v[attr]) }}
+                        title={v[attr]}
+                      />
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -402,22 +439,28 @@ export default function ProductDetail() {
             {uniqueSizes.length > 0 && (
               <div className="mb-6">
                 <h4 className="text-xs font-bold uppercase tracking-wider mb-3">
-                  Size: <span className="text-gray-900">{selectedSize || 'Select'}</span>
+                  {sizeAttrName ? sizeAttrName.charAt(0).toUpperCase() + sizeAttrName.slice(1) : 'Size'}: <span className="text-gray-900">{selectedSize || 'Select'}</span>
                 </h4>
                 <div className="flex gap-2 flex-wrap">
-                  {(selectedColor ? sizeVariants : variants).filter((v, i, a) => a.findIndex((x) => x.size === v.size) === i).map((v) => (
-                    <button
-                      key={v.size}
-                      onClick={() => setSelectedSize(selectedSize === v.size ? null : v.size)}
-                      className={`w-12 h-10 text-xs font-medium rounded-md border transition-all duration-200 ${
-                        selectedSize === v.size
-                          ? 'border-gray-900 bg-gray-900 text-white shadow-sm'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-900 hover:text-gray-900'
-                      }`}
-                    >
-                      {v.size}
-                    </button>
-                  ))}
+                  {(selectedColor ? sizeVariants : variants).filter((v, i, a) => {
+                    const attr = sizeAttrName || 'size';
+                    return a.findIndex((x) => x[attr] === v[attr]) === i;
+                  }).map((v) => {
+                    const attr = sizeAttrName || 'size';
+                    return (
+                      <button
+                        key={v[attr]}
+                        onClick={() => setSelectedSize(selectedSize === v[attr] ? null : v[attr])}
+                        className={`w-12 h-10 text-xs font-medium rounded-md border transition-all duration-200 ${
+                          selectedSize === v[attr]
+                            ? 'border-gray-900 bg-gray-900 text-white shadow-sm'
+                            : 'border-gray-200 text-gray-600 hover:border-gray-900 hover:text-gray-900'
+                        }`}
+                      >
+                        {v[attr]}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -455,6 +498,8 @@ export default function ProductDetail() {
                       variant_id: activeVariant?.id,
                       size: selectedSize,
                       color: selectedColor,
+                      colorAttrName,
+                      sizeAttrName,
                     });
                   }
                 }}
