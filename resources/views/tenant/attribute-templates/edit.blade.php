@@ -1,6 +1,6 @@
 @extends('layouts.tenant')
 
-@section('title', __('attributes.edit_title', ['name' => $template->name]).' - SocialBoost AI')
+@section('title', __('attributes.edit_title', ['name' => $attribute->name]).' - SocialBoost AI')
 
 @section('content')
 <div class="min-h-screen bg-gray-50">
@@ -8,7 +8,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-2xl font-bold text-gray-900">@lang('attributes.edit_title', ['name' => $template->name])</h1>
+                    <h1 class="text-2xl font-bold text-gray-900">@lang('attributes.edit_title', ['name' => $attribute->name])</h1>
                 </div>
                 <a href="{{ route('inventory.attributes.index') }}" class="text-gray-600 hover:text-purple-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -20,32 +20,32 @@
     </div>
 
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <form action="{{ route('inventory.attributes.update', $template) }}" method="POST">
+        <form action="{{ route('inventory.attributes.update', $attribute) }}" method="POST">
             @csrf
             @method('PUT')
             <div class="bg-white rounded-2xl p-6 shadow-sm space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">@lang('attributes.name') *</label>
-                    <input type="text" name="name" value="{{ old('name', $template->name) }}" required class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    <input type="text" name="name" value="{{ old('name', $attribute->name) }}" required class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
                     @error('name') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">@lang('attributes.type')</label>
                     <select name="type" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                        <option value="text" {{ old('type', $template->type) === 'text' ? 'selected' : '' }}>Text</option>
-                        <option value="number" {{ old('type', $template->type) === 'number' ? 'selected' : '' }}>Number</option>
-                        <option value="select" {{ old('type', $template->type) === 'select' ? 'selected' : '' }}>Select</option>
+                        <option value="text" {{ old('type', $attribute->type) === 'text' ? 'selected' : '' }}>Text</option>
+                        <option value="number" {{ old('type', $attribute->type) === 'number' ? 'selected' : '' }}>Number</option>
+                        <option value="select" {{ old('type', $attribute->type) === 'select' ? 'selected' : '' }}>Select</option>
                     </select>
                 </div>
                 <div>
                     <label class="flex items-center space-x-3">
-                        <input type="checkbox" name="is_variant_option" value="1" {{ old('is_variant_option', $template->is_variant_option) ? 'checked' : '' }} class="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500">
+                        <input type="checkbox" name="is_variant_option" value="1" {{ old('is_variant_option', $attribute->is_variant_option) ? 'checked' : '' }} class="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500">
                         <span class="text-sm text-gray-700">@lang('attributes.mark_variant')</span>
                     </label>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">@lang('attributes.options')</label>
-                    <textarea name="options" rows="3" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">{{ old('options', $template->options) }}</textarea>
+                    <textarea name="options" rows="3" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">{{ old('options', $attribute->options) }}</textarea>
                     <p class="text-xs text-gray-500 mt-1">@lang('attributes.options_help')</p>
                 </div>
             </div>
