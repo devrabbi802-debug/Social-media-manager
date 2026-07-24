@@ -45,7 +45,7 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">@lang('attributes.options')</label>
-                    <textarea name="options" rows="3" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">{{ old('options', $attribute->options) }}</textarea>
+                    <textarea name="options" rows="3" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">{{ old('options', is_array($attribute->options) ? implode(', ', $attribute->options) : $attribute->options) }}</textarea>
                     <p class="text-xs text-gray-500 mt-1">@lang('attributes.options_help')</p>
                 </div>
             </div>
