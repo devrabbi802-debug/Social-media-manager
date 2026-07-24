@@ -103,7 +103,7 @@ export default function ProductCard({ product }) {
 
         <button
           onClick={handleToggleWishlist}
-          className="absolute top-3 right-3 w-9 h-9 flex items-center justify-center bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white hover:scale-110 transition-all duration-200 z-10 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0"
+          className="absolute top-3 right-3 w-9 h-9 flex items-center justify-center bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white hover:scale-110 transition-all duration-200 z-10"
         >
           <Heart
             className={`w-[18px] h-[18px] transition ${
