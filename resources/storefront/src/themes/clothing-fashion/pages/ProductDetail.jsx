@@ -70,6 +70,8 @@ export default function ProductDetail() {
   const variants = product?.variants || [];
   const images = product?.images?.length > 0 ? product.images : [];
 
+  const hasVariants = variants.length > 0;
+
   const uniqueColors = useMemo(() => {
     if (!variants.length) return [];
     return [...new Set(variants.map((v) => v.color).filter(Boolean))];
@@ -105,8 +107,21 @@ export default function ProductDetail() {
     if (selectedColor) {
       return variants.find((v) => v.color === selectedColor) || null;
     }
+    if (selectedSize) {
+      return variants.find((v) => v.size === selectedSize) || null;
+    }
     return null;
   }, [variants, selectedColor, selectedSize]);
+
+  const variantSelectionComplete = useMemo(() => {
+    if (!hasVariants) return true;
+    const needsColor = uniqueColors.length > 0;
+    const needsSize = uniqueSizes.length > 0;
+    if (needsColor && needsSize) return !!selectedColor && !!selectedSize;
+    if (needsColor) return !!selectedColor;
+    if (needsSize) return !!selectedSize;
+    return true;
+  }, [hasVariants, uniqueColors, uniqueSizes, selectedColor, selectedSize]);
 
   const displayPrice = activeVariant?.price ?? product?.effective_price ?? product?.base_price ?? 0;
   const displayBasePrice = product?.base_price ?? 0;
@@ -437,16 +452,17 @@ export default function ProductDetail() {
                       image: activeVariant?.image || images[0] || product.image,
                       price: displayPrice,
                       effective_price: displayPrice,
+                      variant_id: activeVariant?.id,
                       size: selectedSize,
                       color: selectedColor,
                     });
                   }
                 }}
-                disabled={isOutOfStock}
+                disabled={isOutOfStock || !variantSelectionComplete}
                 className="flex-1 flex items-center justify-center gap-2 bg-gray-900 text-white py-3 px-6 text-sm font-medium hover:bg-gray-800 transition uppercase tracking-wider rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ShoppingCart className="w-4 h-4" />
-                {isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
+                {isOutOfStock ? 'Out of Stock' : !variantSelectionComplete ? 'Select Variant' : 'Add to Cart'}
               </button>
               <button
                 onClick={() => toggleWishlist(product)}

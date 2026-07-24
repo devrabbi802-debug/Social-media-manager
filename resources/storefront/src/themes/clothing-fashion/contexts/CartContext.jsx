@@ -2,10 +2,18 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 
 const CartContext = createContext(null);
 
+function cartKey(productId, variantId) {
+  return `${productId}-${variantId || '0'}`;
+}
+
 function loadCart() {
   try {
     const saved = localStorage.getItem('storefront_cart');
-    return saved ? JSON.parse(saved) : [];
+    const items = saved ? JSON.parse(saved) : [];
+    return items.map((item) => ({
+      ...item,
+      key: item.key || cartKey(item.product_id, item.variant_id),
+    }));
   } catch {
     return [];
   }
@@ -13,6 +21,10 @@ function loadCart() {
 
 function saveCart(items) {
   localStorage.setItem('storefront_cart', JSON.stringify(items));
+}
+
+function computeKey(item) {
+  return item.key || cartKey(item.product_id, item.variant_id);
 }
 
 export function CartProvider({ children }) {
@@ -26,15 +38,17 @@ export function CartProvider({ children }) {
 
   const addToCart = useCallback((product) => {
     setItems((prev) => {
-      const existing = prev.find((item) => item.product_id === product.id);
+      const key = cartKey(product.id, product.variant_id);
+      const existing = prev.find((item) => item.key === key);
       if (existing) {
         return prev.map((item) =>
-          item.product_id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+          item.key === key ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
       return [
         ...prev,
         {
+          key,
           product_id: product.id,
           variant_id: product.variant_id || null,
           name: product.name,
@@ -50,16 +64,16 @@ export function CartProvider({ children }) {
     setDrawerOpen(true);
   }, []);
 
-  const updateQuantity = useCallback((productId, delta) => {
+  const updateQuantity = useCallback((key, delta) => {
     setItems((prev) =>
       prev.map((item) =>
-        item.product_id === productId ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item
+        item.key === key ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item
       )
     );
   }, []);
 
-  const removeItem = useCallback((productId) => {
-    setItems((prev) => prev.filter((item) => item.product_id !== productId));
+  const removeItem = useCallback((key) => {
+    setItems((prev) => prev.filter((item) => item.key !== key));
   }, []);
 
   const clearCart = useCallback(() => {

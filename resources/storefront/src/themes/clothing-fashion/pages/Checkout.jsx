@@ -234,7 +234,7 @@ export default function Checkout() {
 
               <div className="space-y-3 mb-4">
                 {items.map((item) => (
-                  <div key={item.product_id} className="flex gap-3">
+                  <div key={item.key} className="flex gap-3">
                     <img src={item.image || 'https://placehold.co/56x56?text=Item'} alt={item.name} className="w-14 h-14 bg-gray-50 object-cover flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <h4 className="text-xs font-medium text-gray-900 line-clamp-1">{item.name}</h4>

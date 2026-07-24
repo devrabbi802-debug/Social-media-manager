@@ -26,7 +26,7 @@ export default function Cart() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-4">
               {items.map((item) => (
-                <div key={item.product_id} className="flex gap-4 p-4 border border-gray-100">
+                <div key={item.key} className="flex gap-4 p-4 border border-gray-100">
                   <Link to={`/products/${item.slug}`} className="w-24 h-24 md:w-28 md:h-28 bg-gray-50 flex-shrink-0">
                     <img src={item.image || 'https://placehold.co/112x112?text=Item'} alt={item.name} className="w-full h-full object-cover" />
                   </Link>
@@ -42,7 +42,7 @@ export default function Cart() {
                     <div className="flex items-center justify-between mt-3">
                       <div className="flex items-center border border-gray-200">
                         <button
-                          onClick={() => updateQuantity(item.product_id, -1)}
+                          onClick={() => updateQuantity(item.key, -1)}
                           className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 transition"
                         >
                           <Minus className="w-3 h-3" />
@@ -51,14 +51,14 @@ export default function Cart() {
                           {item.quantity}
                         </span>
                         <button
-                          onClick={() => updateQuantity(item.product_id, 1)}
+                          onClick={() => updateQuantity(item.key, 1)}
                           className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 transition"
                         >
                           <Plus className="w-3 h-3" />
                         </button>
                       </div>
                       <button
-                        onClick={() => removeItem(item.product_id)}
+                        onClick={() => removeItem(item.key)}
                         className="text-xs text-gray-400 hover:text-red-500 transition flex items-center gap-1"
                       >
                         <Trash2 className="w-3.5 h-3.5" />

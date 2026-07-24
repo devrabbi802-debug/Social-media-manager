@@ -32,6 +32,8 @@ export default function ProductCard({ product }) {
   const [selectedColor, setSelectedColor] = useState(uniqueColors[0] || null);
   const [selectedSize, setSelectedSize] = useState(null);
 
+  const hasVariants = variants && variants.length > 0;
+
   const activeVariant = useMemo(() => {
     if (!variants || variants.length === 0) return null;
     if (selectedColor && selectedSize) {
@@ -40,8 +42,21 @@ export default function ProductCard({ product }) {
     if (selectedColor) {
       return variants.find((v) => v.color === selectedColor) || null;
     }
+    if (selectedSize) {
+      return variants.find((v) => v.size === selectedSize) || null;
+    }
     return null;
   }, [variants, selectedColor, selectedSize]);
+
+  const variantSelectionComplete = useMemo(() => {
+    if (!hasVariants) return true;
+    const needsColor = uniqueColors.length > 0;
+    const needsSize = uniqueSizes.length > 0;
+    if (needsColor && needsSize) return !!selectedColor && !!selectedSize;
+    if (needsColor) return !!selectedColor;
+    if (needsSize) return !!selectedSize;
+    return true;
+  }, [hasVariants, uniqueColors, uniqueSizes, selectedColor, selectedSize]);
 
   const displayPrice = activeVariant?.price ?? effective_price;
   const displayImage = activeVariant?.image ?? image;
@@ -52,7 +67,7 @@ export default function ProductCard({ product }) {
   const discountPercent = hasDiscount ? Math.round((1 - displayPrice / displayBasePrice) * 100) : 0;
 
   const cartItem = activeVariant
-    ? { ...product, image: displayImage, price: displayPrice, effective_price: displayPrice, stock_quantity: displayStock, size: selectedSize, color: selectedColor }
+    ? { ...product, image: displayImage, price: displayPrice, effective_price: displayPrice, stock_quantity: displayStock, variant_id: activeVariant.id, size: selectedSize, color: selectedColor }
     : product;
 
   const colorVariants = useMemo(() => {
@@ -134,11 +149,11 @@ export default function ProductCard({ product }) {
         <div className="absolute inset-x-3 bottom-3 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 z-10">
           <button
             onClick={handleAddToCart}
-            disabled={isOutOfStock}
-            className="w-full bg-white text-gray-900 py-3 text-xs font-semibold tracking-wider uppercase hover:bg-gray-900 hover:text-white transition-all duration-300 shadow-lg rounded-lg flex items-center justify-center gap-2"
+            disabled={isOutOfStock || !variantSelectionComplete}
+            className="w-full bg-white text-gray-900 py-3 text-xs font-semibold tracking-wider uppercase hover:bg-gray-900 hover:text-white transition-all duration-300 shadow-lg rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ShoppingCart className="w-3.5 h-3.5" />
-            {isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
+            {isOutOfStock ? 'Out of Stock' : !variantSelectionComplete ? 'Select Variant' : 'Add to Cart'}
           </button>
         </div>
       </Link>
@@ -204,6 +219,12 @@ export default function ProductCard({ product }) {
               </button>
             ))}
           </div>
+        )}
+
+        {(selectedColor || selectedSize) && (
+          <p className="text-[10px] text-gray-500 mt-2">
+            {[selectedColor, selectedSize].filter(Boolean).join(' / ')}
+          </p>
         )}
       </div>
     </div>
