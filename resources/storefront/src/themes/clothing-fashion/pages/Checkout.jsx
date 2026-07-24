@@ -39,18 +39,15 @@ export default function Checkout() {
         quantity: item.quantity,
       })),
       payment_method: form.payment_method,
-    };
-
-    if (form.name) {
-      payload.shipping_address = {
+      shipping_address: {
         name: form.name,
         phone: form.phone,
         address: form.address,
         city: form.city,
         district: form.district,
         zip: form.zip,
-      };
-    }
+      },
+    };
 
     const res = await api.post('/checkout/place', payload);
     return res.order;
@@ -59,6 +56,8 @@ export default function Checkout() {
   const handleGuestOrder = async () => {
     setError('');
     if (items.length === 0) { setError('Your cart is empty.'); return; }
+    if (!form.phone) { setError('Phone number is required.'); return; }
+    if (!form.name || !form.address || !form.city || !form.district) { setError('Please fill in all shipping details.'); return; }
     setSubmitting(true);
     try {
       const order = await placeOrder();

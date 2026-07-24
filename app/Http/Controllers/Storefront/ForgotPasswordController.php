@@ -20,7 +20,7 @@ class ForgotPasswordController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $status = Password::sendResetLink($request->only('email'));
+        $status = Password::broker('customers')->sendResetLink($request->only('email'));
 
         if ($status === Password::RESET_LINK_SENT) {
             return response()->json(['message' => __($status)]);
@@ -41,10 +41,10 @@ class ForgotPasswordController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $status = Password::reset(
+        $status = Password::broker('customers')->reset(
             $request->only('email', 'password', 'password_confirmation', 'token'),
-            function ($user, $password) {
-                $user->forceFill(['password' => $password])->save();
+            function ($customer, $password) {
+                $customer->forceFill(['password' => $password])->save();
             }
         );
 

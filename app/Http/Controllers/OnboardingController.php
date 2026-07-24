@@ -163,6 +163,7 @@ class OnboardingController extends Controller
                     'phone' => $validated['phone'],
                     'company' => $validated['business_name'],
                     'password' => Hash::make($validated['password']),
+                    'type' => 'admin',
                 ]);
 
                 // remember_token fillable e nai, tai alada set koro

@@ -40,8 +40,6 @@ php artisan tenants:seed      # seed tenant DBs
 - **Central domains**: `127.0.0.1`, `localhost`, `smm.test`, `socialboost.com`, `www.socialboost.com`
 - **Tenant admin prefix**: `ADMIN_PANEL_PREFIX` env var (default `ax7k9m`)
 - **Central admin prefix**: hardcoded `/rootadmin`
-- **Dual auth guards**: `web` (User, tenant DB) + `admin` (Admin, landlord DB)
-- **Sanctum**: installed for SPA token auth — `personal_access_tokens` table in tenant DB
 - **`public` disk NOT tenant-aware** — use `tenant_asset()` not `asset()` (`config/tenancy.php:141` `asset_helper_tenancy => false`)
 - **`locale` middleware** on all tenant routes (sets locale from `user.locale` column)
 - **`central` middleware** (`PreventAccessFromNonCentralDomains`) on central-only routes
@@ -54,12 +52,14 @@ php artisan tenants:seed      # seed tenant DBs
 - **Build**: `cd resources/storefront && npm run build` → `public/storefront/` (manifest enabled)
 - **Watch**: `npm run watch` — auto-rebuild on change (no HMR)
 - **Dev proxy**: `vite.config.js` proxies `/api` → `http://localhost:8000`
-- **Auth**: Laravel Sanctum token-based. Token stored in `localStorage` as `auth_token`. Auto-attached via Axios interceptor. 401 response clears token and redirects to `/auth`.
+- **Auth (storefront)**: Laravel Sanctum token-based using **`customers`** table (Customer model). Token stored in `localStorage` as `auth_token`. Auto-attached via Axios interceptor. 401 response clears token and redirects to `/auth`.
+- **Auth (admin dashboard)**: Session-based using **`users`** table (User model, `web` guard) — separate from storefront auth.
+- **Sanctum multi-model**: `personal_access_tokens.tokenable_type` distinguishes Customer vs User tokens. `auth:sanctum` checks session first (`sanctum.guard` = `['web']`), then falls back to Bearer token. Active admin session can shadow Customer token — be aware when debugging storefront auth.
 - **Themes**: lazy-loaded via `resources/storefront/src/themes/index.js`. 2 registered: `clothing-fashion` (default) and `classic` — both exist at `resources/storefront/src/themes/{slug}/`.
 - **Cart**: client-side React Context + `localStorage` persistence (key `storefront_cart`). No backend cart API.
 - **Editor mode**: `?editor=true` URL param toggles `EditableSection` overlays for admin theme editing.
 - **`sections_data`** JSON column on `StorefrontSettings` stores editor state (banners, categories, section_titles, etc.)
-- **Guest checkout**: `POST /api/checkout/place` works without auth. Shipping address optional. No email required.
+- **Guest checkout**: `POST /api/checkout/place` works without auth. Phone required (validated backend + frontend). Guest auto-gets `Customer` record (type=`guest`) created/found by phone. Shipping address saved to `customer_addresses` table. Track order by phone + order number.
 - **Customer dashboard**: `/dashboard/*` routes protected by `RequireAuth` component. Data fetched from `/api/customer/*`.
 - **Shared pages** (not theme-specific): `resources/storefront/src/pages/` — ForgotPassword, ResetPassword
 

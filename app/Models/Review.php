@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Review extends Model
 {
-    protected $fillable = ['user_id', 'product_id', 'rating', 'text'];
+    protected $fillable = ['customer_id', 'product_id', 'rating', 'text'];
 
     protected function casts(): array
     {
@@ -16,9 +16,9 @@ class Review extends Model
         ];
     }
 
-    public function user(): BelongsTo
+    public function customer(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Customer::class, 'customer_id');
     }
 
     public function product(): BelongsTo

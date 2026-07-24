@@ -14,11 +14,16 @@ use Illuminate\Support\Facades\Validator;
 
 class CustomerController extends Controller
 {
+    private function customerId(Request $request): int
+    {
+        return $request->user()->id;
+    }
+
     // ─── Orders ───────────────────────────────────────────────
 
     public function orders(Request $request): JsonResponse
     {
-        $query = Order::where('user_id', $request->user()->id)
+        $query = Order::where('customer_id', $this->customerId($request))
             ->with(['items.product', 'items.variant'])
             ->orderBy('created_at', 'desc');
 
@@ -34,7 +39,7 @@ class CustomerController extends Controller
 
     public function orderDetail(Request $request, $id): JsonResponse
     {
-        $order = Order::where('user_id', $request->user()->id)
+        $order = Order::where('customer_id', $this->customerId($request))
             ->with(['items.product.images', 'items.variant.images'])
             ->findOrFail($id);
 
@@ -43,7 +48,7 @@ class CustomerController extends Controller
 
     public function orderTracking(Request $request, $id): JsonResponse
     {
-        $order = Order::where('user_id', $request->user()->id)
+        $order = Order::where('customer_id', $this->customerId($request))
             ->select('id', 'status', 'tracking_id', 'carrier', 'estimated_delivery', 'tracking_steps')
             ->findOrFail($id);
 
@@ -54,7 +59,7 @@ class CustomerController extends Controller
 
     public function addresses(Request $request): JsonResponse
     {
-        $addresses = CustomerAddress::where('user_id', $request->user()->id)
+        $addresses = CustomerAddress::where('customer_id', $this->customerId($request))
             ->orderBy('is_default', 'desc')
             ->orderBy('created_at', 'desc')
             ->get();
@@ -80,10 +85,10 @@ class CustomerController extends Controller
         }
 
         $data = $validator->validated();
-        $data['user_id'] = $request->user()->id;
+        $data['customer_id'] = $this->customerId($request);
 
         if (!empty($data['is_default'])) {
-            CustomerAddress::where('user_id', $request->user()->id)->update(['is_default' => false]);
+            CustomerAddress::where('customer_id', $this->customerId($request))->update(['is_default' => false]);
         }
 
         $address = CustomerAddress::create($data);
@@ -93,7 +98,7 @@ class CustomerController extends Controller
 
     public function updateAddress(Request $request, $id): JsonResponse
     {
-        $address = CustomerAddress::where('user_id', $request->user()->id)->findOrFail($id);
+        $address = CustomerAddress::where('customer_id', $this->customerId($request))->findOrFail($id);
 
         $validator = Validator::make($request->all(), [
             'label' => 'nullable|string|max:50',
@@ -113,7 +118,7 @@ class CustomerController extends Controller
         $data = $validator->validated();
 
         if (!empty($data['is_default'])) {
-            CustomerAddress::where('user_id', $request->user()->id)->update(['is_default' => false]);
+            CustomerAddress::where('customer_id', $this->customerId($request))->update(['is_default' => false]);
         }
 
         $address->update($data);
@@ -123,7 +128,7 @@ class CustomerController extends Controller
 
     public function deleteAddress(Request $request, $id): JsonResponse
     {
-        $address = CustomerAddress::where('user_id', $request->user()->id)->findOrFail($id);
+        $address = CustomerAddress::where('customer_id', $this->customerId($request))->findOrFail($id);
         $address->delete();
 
         return response()->json(['message' => 'Address deleted.']);
@@ -133,7 +138,7 @@ class CustomerController extends Controller
 
     public function wishlist(Request $request): JsonResponse
     {
-        $items = Wishlist::where('user_id', $request->user()->id)
+        $items = Wishlist::where('customer_id', $this->customerId($request))
             ->with(['product.images', 'product.category', 'product.brand'])
             ->latest()
             ->get()
@@ -152,7 +157,7 @@ class CustomerController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $existing = Wishlist::where('user_id', $request->user()->id)
+        $existing = Wishlist::where('customer_id', $this->customerId($request))
             ->where('product_id', $request->product_id)
             ->first();
 
@@ -161,7 +166,7 @@ class CustomerController extends Controller
         }
 
         Wishlist::create([
-            'user_id' => $request->user()->id,
+            'customer_id' => $this->customerId($request),
             'product_id' => $request->product_id,
         ]);
 
@@ -170,7 +175,7 @@ class CustomerController extends Controller
 
     public function removeFromWishlist(Request $request, $id): JsonResponse
     {
-        Wishlist::where('user_id', $request->user()->id)
+        Wishlist::where('customer_id', $this->customerId($request))
             ->where('product_id', $id)
             ->delete();
 
@@ -181,7 +186,7 @@ class CustomerController extends Controller
 
     public function reviews(Request $request): JsonResponse
     {
-        $reviews = Review::where('user_id', $request->user()->id)
+        $reviews = Review::where('customer_id', $this->customerId($request))
             ->with('product:id,name,slug')
             ->latest()
             ->get();
@@ -203,7 +208,7 @@ class CustomerController extends Controller
 
         $review = Review::updateOrCreate(
             [
-                'user_id' => $request->user()->id,
+                'customer_id' => $this->customerId($request),
                 'product_id' => $request->product_id,
             ],
             [
@@ -219,12 +224,12 @@ class CustomerController extends Controller
 
     public function dashboardStats(Request $request): JsonResponse
     {
-        $userId = $request->user()->id;
+        $customerId = $this->customerId($request);
 
-        $totalOrders = Order::where('user_id', $userId)->count();
-        $deliveredOrders = Order::where('user_id', $userId)->where('status', 'delivered')->count();
-        $totalSpent = Order::where('user_id', $userId)->where('status', 'delivered')->sum('total');
-        $wishlistCount = Wishlist::where('user_id', $userId)->count();
+        $totalOrders = Order::where('customer_id', $customerId)->count();
+        $deliveredOrders = Order::where('customer_id', $customerId)->where('status', 'delivered')->count();
+        $totalSpent = Order::where('customer_id', $customerId)->where('status', 'delivered')->sum('total');
+        $wishlistCount = Wishlist::where('customer_id', $customerId)->count();
 
         return response()->json([
             'total_orders' => $totalOrders,

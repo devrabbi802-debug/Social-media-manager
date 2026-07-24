@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Storefront;
 
 use App\Http\Controllers\Controller;
+use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -27,21 +28,14 @@ class CheckoutController extends Controller
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.name' => 'required|string',
             'items.*.unit_price' => 'required|numeric|min:0',
+
+            'shipping_address.name' => 'required|string|max:255',
+            'shipping_address.phone' => 'required|string|max:20',
+            'shipping_address.address' => 'required|string|max:500',
+            'shipping_address.city' => 'required|string|max:255',
+            'shipping_address.district' => 'required|string|max:255',
+            'shipping_address.zip' => 'nullable|string|max:20',
         ];
-
-        if ($isGuest) {
-            $rules['guest_email'] = 'nullable|string|email|max:255';
-            $rules['guest_name'] = 'nullable|string|max:255';
-        }
-
-        if ($request->filled('shipping_address')) {
-            $rules['shipping_address.name'] = 'required|string|max:255';
-            $rules['shipping_address.phone'] = 'required|string|max:20';
-            $rules['shipping_address.address'] = 'required|string|max:500';
-            $rules['shipping_address.city'] = 'required|string|max:255';
-            $rules['shipping_address.district'] = 'required|string|max:255';
-            $rules['shipping_address.zip'] = 'nullable|string|max:20';
-        }
 
         $validator = Validator::make($request->all(), $rules);
 
@@ -61,33 +55,44 @@ class CheckoutController extends Controller
         try {
             DB::beginTransaction();
 
-            $shippingAddressId = null;
-            if ($request->filled('shipping_address') && !$isGuest) {
-                $address = CustomerAddress::where('user_id', $request->user()->id)
-                    ->where('name', $validated['shipping_address']['name'])
-                    ->where('phone', $validated['shipping_address']['phone'])
-                    ->first();
-
-                if (!$address) {
-                    $address = CustomerAddress::create(array_merge(
-                        $validated['shipping_address'],
-                        ['user_id' => $request->user()->id]
-                    ));
-                }
-                $shippingAddressId = $address->id;
+            // ─── Find or create customer ───────────────────────
+            if ($isGuest) {
+                $customer = Customer::firstOrCreate(
+                    ['phone' => $validated['shipping_address']['phone']],
+                    [
+                        'name' => $validated['shipping_address']['name'],
+                        'phone' => $validated['shipping_address']['phone'],
+                        'type' => 'guest',
+                        'locale' => app()->getLocale(),
+                    ]
+                );
+            } else {
+                $customer = $request->user();
             }
 
+            // ─── Save shipping address ─────────────────────────
+            $address = CustomerAddress::create([
+                'customer_id' => $customer->id,
+                'name' => $validated['shipping_address']['name'],
+                'phone' => $validated['shipping_address']['phone'],
+                'address' => $validated['shipping_address']['address'],
+                'city' => $validated['shipping_address']['city'],
+                'district' => $validated['shipping_address']['district'],
+                'zip' => $validated['shipping_address']['zip'] ?? null,
+            ]);
+
+            // ─── Create order ──────────────────────────────────
             $order = Order::create([
-                'user_id' => $request->user()?->id,
+                'customer_id' => $customer->id,
+                'customer_name' => $validated['shipping_address']['name'],
+                'customer_phone' => $validated['shipping_address']['phone'],
                 'order_number' => $orderNumber,
                 'status' => 'processing',
                 'subtotal' => $subtotal,
                 'total' => $subtotal,
                 'payment_method' => $validated['payment_method'] ?? 'COD',
                 'payment_status' => 'pending',
-                'shipping_address_id' => $shippingAddressId,
-                'guest_email' => $validated['guest_email'] ?? null,
-                'guest_name' => $validated['guest_name'] ?? null,
+                'shipping_address_id' => $address->id,
             ]);
 
             foreach ($validated['items'] as $item) {
@@ -112,7 +117,7 @@ class CheckoutController extends Controller
                     'order_number' => $order->order_number,
                     'total' => $order->total,
                     'status' => $order->status,
-                    'guest_email' => $order->guest_email,
+                    'customer_phone' => $order->customer_phone,
                 ],
             ], 201);
 
@@ -126,7 +131,7 @@ class CheckoutController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'order_number' => 'required|string',
-            'email' => 'required|string|email',
+            'phone' => 'required|string|max:20',
         ]);
 
         if ($validator->fails()) {
@@ -135,8 +140,8 @@ class CheckoutController extends Controller
 
         $order = Order::where('order_number', $request->order_number)
             ->where(function ($q) use ($request) {
-                $q->where('guest_email', $request->email)
-                  ->orWhereHas('user', fn($u) => $u->where('email', $request->email));
+                $q->where('customer_phone', $request->phone)
+                  ->orWhereHas('customer', fn($c) => $c->where('phone', $request->phone));
             })
             ->with(['items.product:id,name,slug,image', 'shippingAddress'])
             ->first();

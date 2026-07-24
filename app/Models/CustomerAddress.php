@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CustomerAddress extends Model
 {
     protected $fillable = [
-        'user_id', 'label', 'name', 'phone', 'address',
+        'customer_id', 'label', 'name', 'phone', 'address',
         'city', 'district', 'zip', 'is_default',
     ];
 
@@ -19,8 +19,8 @@ class CustomerAddress extends Model
         ];
     }
 
-    public function user(): BelongsTo
+    public function customer(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Customer::class, 'customer_id');
     }
 }
