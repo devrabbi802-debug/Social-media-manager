@@ -31,10 +31,21 @@
     </style>
 </head>
 <body>
+    @php
+        $logoUrl = null;
+        if (isset($storefront) && $storefront && $storefront->store_logo) {
+            $logoUrl = asset('storage/' . $storefront->store_logo);
+        }
+    @endphp
     <div class="header">
-        <div class="invoice-title">
-            <h1>@lang('orders.invoice')</h1>
-            <p>#{{ $order->order_number }}</p>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            @if($logoUrl)
+                <img src="{{ $logoUrl }}" alt="Logo" style="height: 50px; width: auto; object-fit: contain;">
+            @endif
+            <div class="invoice-title">
+                <h1>@lang('orders.invoice')</h1>
+                <p>#{{ $order->order_number }}</p>
+            </div>
         </div>
         <div>
             @php
@@ -44,9 +55,13 @@
         </div>
     </div>
 
-    <div class="grid-2">
+    @php
+        $qrData = url('/supermaster/orders/' . $order->id);
+    @endphp
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 30px;">
         <div class="section">
-            <h3>@lang('orders.billing_to')</h3>
+            <h3>@lang('orders.customer_info')</h3>
             <p>
                 <strong>{{ $order->customer_name }}</strong><br>
                 {{ $order->customer_phone }}<br>
@@ -54,24 +69,28 @@
             </p>
         </div>
         <div class="section">
+            <h3>@lang('orders.shipping_info')</h3>
+            <p>
+                @if($order->shippingAddress)
+                    {{ $order->shippingAddress->address }}, {{ $order->shippingAddress->city }}, {{ $order->shippingAddress->district }}{{ $order->shippingAddress->zip ? ' - '.$order->shippingAddress->zip : '' }}<br>
+                @endif
+                @if($order->carrier)<strong>@lang('orders.carrier'):</strong> {{ $order->carrier }}<br>@endif
+                @if($order->tracking_id)<strong>@lang('orders.tracking_id'):</strong> {{ $order->tracking_id }}@endif
+            </p>
+        </div>
+        <div class="section" style="text-align: right;">
             <h3>@lang('orders.order_summary')</h3>
             <p>
                 <strong>@lang('orders.date'):</strong> {{ $order->created_at->format('d M, Y h:i A') }}<br>
                 <strong>@lang('orders.payment_method'):</strong> {{ $order->payment_method ?? '-' }}<br>
                 <strong>@lang('orders.payment_status'):</strong> {{ __("orders.{$order->payment_status}") }}
             </p>
+            <div style="margin-top: 10px;">
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data={{ urlencode($qrData) }}"
+                     alt="QR" style="image-rendering: pixelated; display: inline-block;">
+            </div>
         </div>
     </div>
-
-    @if($order->shippingAddress)
-    <div class="section" style="margin-bottom: 20px;">
-        <h3>@lang('orders.shipping_info')</h3>
-        <p>{{ $order->shippingAddress->address }}, {{ $order->shippingAddress->city }}, {{ $order->shippingAddress->district }}{{ $order->shippingAddress->zip ? ' - '.$order->shippingAddress->zip : '' }}</p>
-        @if($order->carrier || $order->tracking_id)
-            <p><strong>@lang('orders.carrier'):</strong> {{ $order->carrier ?? '-' }} | <strong>@lang('orders.tracking_id'):</strong> {{ $order->tracking_id ?? '-' }}</p>
-        @endif
-    </div>
-    @endif
 
     <table>
         <thead>

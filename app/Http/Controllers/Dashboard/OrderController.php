@@ -166,6 +166,7 @@ class OrderController extends Controller
     public function print(Order $order)
     {
         $order->load(['items.product', 'items.variant', 'customer', 'shippingAddress']);
-        return view('tenant.orders.print', compact('order'));
+        $storefront = \App\Models\StorefrontSettings::first();
+        return view('tenant.orders.print', compact('order', 'storefront'));
     }
 }

@@ -24,8 +24,47 @@
         </div>
     </div>
 
+    @php
+        $qrData = url('/supermaster/orders/' . $order->id);
+    @endphp
+
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         @include('tenant.partials._nav-tabs', ['activePage' => 'orders'])
+
+        {{-- Customer & Shipping Info (Top) --}}
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div class="bg-white rounded-2xl p-6 shadow-sm">
+                <h3 class="font-bold text-gray-900 mb-4">@lang('orders.customer_info')</h3>
+                <dl class="space-y-2 text-sm">
+                    <div class="flex justify-between"><dt class="text-gray-500">@lang('orders.name')</dt><dd class="font-medium text-gray-900">{{ $order->customer_name }}</dd></div>
+                    <div class="flex justify-between"><dt class="text-gray-500">@lang('orders.phone')</dt><dd class="font-medium text-gray-900">{{ $order->customer_phone }}</dd></div>
+                    @if($order->customer && $order->customer->email)
+                    <div class="flex justify-between"><dt class="text-gray-500">Email</dt><dd class="font-medium text-gray-900">{{ $order->customer->email }}</dd></div>
+                    @endif
+                </dl>
+            </div>
+
+            <div class="bg-white rounded-2xl p-6 shadow-sm">
+                <h3 class="font-bold text-gray-900 mb-4">@lang('orders.shipping_info')</h3>
+                <dl class="space-y-2 text-sm">
+                    @if($order->shippingAddress)
+                        <div><dt class="text-gray-500">Address</dt><dd class="font-medium text-gray-900">{{ $order->shippingAddress->address }}, {{ $order->shippingAddress->city }}, {{ $order->shippingAddress->district }}</dd></div>
+                    @endif
+                    <div class="flex justify-between"><dt class="text-gray-500">@lang('orders.carrier')</dt><dd class="font-medium text-gray-900">{{ $order->carrier ?? '-' }}</dd></div>
+                    <div class="flex justify-between"><dt class="text-gray-500">@lang('orders.tracking_id')</dt><dd class="font-medium text-gray-900">{{ $order->tracking_id ?? '-' }}</dd></div>
+                    <div class="flex justify-between"><dt class="text-gray-500">@lang('orders.estimated_delivery')</dt><dd class="font-medium text-gray-900">{{ $order->estimated_delivery ? $order->estimated_delivery->format('d M, Y') : '-' }}</dd></div>
+                </dl>
+            </div>
+
+            <div class="bg-white rounded-2xl p-6 shadow-sm flex flex-col items-center justify-center">
+                <h3 class="font-bold text-gray-900 mb-3">Order QR</h3>
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data={{ urlencode($qrData) }}"
+                     alt="QR for #{{ $order->order_number }}"
+                     class="rounded-lg"
+                     style="image-rendering: pixelated;">
+                <p class="text-xs text-gray-400 mt-2">#{{ $order->order_number }}</p>
+            </div>
+        </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {{-- Left Column --}}
@@ -105,18 +144,6 @@
                     </div>
                 </div>
 
-                {{-- Customer Info --}}
-                <div class="bg-white rounded-2xl p-6 shadow-sm">
-                    <h3 class="font-bold text-gray-900 mb-4">@lang('orders.customer_info')</h3>
-                    <dl class="space-y-2 text-sm">
-                        <div class="flex justify-between"><dt class="text-gray-500">@lang('orders.name')</dt><dd class="font-medium text-gray-900">{{ $order->customer_name }}</dd></div>
-                        <div class="flex justify-between"><dt class="text-gray-500">@lang('orders.phone')</dt><dd class="font-medium text-gray-900">{{ $order->customer_phone }}</dd></div>
-                        @if($order->customer && $order->customer->email)
-                        <div class="flex justify-between"><dt class="text-gray-500">Email</dt><dd class="font-medium text-gray-900">{{ $order->customer->email }}</dd></div>
-                        @endif
-                    </dl>
-                </div>
-
                 {{-- Payment Info --}}
                 <div class="bg-white rounded-2xl p-6 shadow-sm">
                     <h3 class="font-bold text-gray-900 mb-4">@lang('orders.payment_info')</h3>
@@ -128,19 +155,6 @@
                                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {{ $badgeColors[$order->payment_status] ?? 'bg-gray-100 text-gray-800' }}">{{ __("orders.{$order->payment_status}") }}</span>
                             </dd>
                         </div>
-                    </dl>
-                </div>
-
-                {{-- Shipping Info --}}
-                <div class="bg-white rounded-2xl p-6 shadow-sm">
-                    <h3 class="font-bold text-gray-900 mb-4">@lang('orders.shipping_info')</h3>
-                    <dl class="space-y-2 text-sm">
-                        @if($order->shippingAddress)
-                            <div><dt class="text-gray-500">Address</dt><dd class="font-medium text-gray-900">{{ $order->shippingAddress->address }}, {{ $order->shippingAddress->city }}, {{ $order->shippingAddress->district }}</dd></div>
-                        @endif
-                        <div class="flex justify-between"><dt class="text-gray-500">@lang('orders.carrier')</dt><dd class="font-medium text-gray-900">{{ $order->carrier ?? '-' }}</dd></div>
-                        <div class="flex justify-between"><dt class="text-gray-500">@lang('orders.tracking_id')</dt><dd class="font-medium text-gray-900">{{ $order->tracking_id ?? '-' }}</dd></div>
-                        <div class="flex justify-between"><dt class="text-gray-500">@lang('orders.estimated_delivery')</dt><dd class="font-medium text-gray-900">{{ $order->estimated_delivery ? $order->estimated_delivery->format('d M, Y') : '-' }}</dd></div>
                     </dl>
                 </div>
             </div>
