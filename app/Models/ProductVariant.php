@@ -55,6 +55,17 @@ class ProductVariant extends Model
 
     public function getDisplayAttribute(): string
     {
+        $jsonAttributes = $this->getAttribute('attributes') ?? [];
+
+        if (count($jsonAttributes)) {
+            $parts = [];
+            foreach ($jsonAttributes as $key => $value) {
+                $parts[] = ucfirst($key).': '.$value;
+            }
+
+            return $this->name ?? implode(' / ', $parts);
+        }
+
         if ($this->relationLoaded('attributeValues') && $this->attributeValues->count()) {
             $parts = [];
             foreach ($this->attributeValues as $av) {
@@ -64,12 +75,7 @@ class ProductVariant extends Model
             return $this->name ?? implode(' / ', $parts);
         }
 
-        $parts = [];
-        foreach ($this->attributes as $key => $value) {
-            $parts[] = ucfirst($key).': '.$value;
-        }
-
-        return $this->name ?? implode(' / ', $parts);
+        return $this->name ?? '';
     }
 
     public function scopeActive($query)
