@@ -89,14 +89,58 @@ export default function Checkout() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center max-w-md mx-auto px-4">
-          <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle className="w-8 h-8 text-green-600" />
+      <div className="min-h-screen bg-gray-50 py-10">
+        <div className="max-w-xl mx-auto px-4">
+          <div className="bg-white border text-center py-10 px-6 mb-6">
+            <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-7 h-7 text-green-600" />
+            </div>
+            <h1 className="text-xl font-bold mb-1">Order Placed!</h1>
+            <p className="text-gray-500 text-sm">#{success.order_number}</p>
           </div>
-          <h1 className="text-2xl font-bold mb-2">Order Placed!</h1>
-          <p className="text-gray-500 text-sm mb-6">Order #{success.order_number}</p>
-          <Link to="/" className="bg-gray-900 text-white px-6 py-2.5 text-sm font-medium hover:bg-gray-800 transition">
+
+          <div className="bg-white border divide-y mb-6">
+            <div className="px-6 py-4">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400">Items</h2>
+            </div>
+            {success.items?.map((item, idx) => (
+              <div key={idx} className="px-6 py-4 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{item.name}</p>
+                  {item.sku && <p className="text-xs text-gray-400">SKU: {item.sku}</p>}
+                  <p className="text-xs text-gray-400">Qty: {item.quantity} × ৳{item.unit_price}</p>
+                </div>
+                <span className="text-sm font-bold">৳{item.total_price}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white border divide-y mb-6">
+            <div className="px-6 py-3 flex justify-between text-sm">
+              <span className="text-gray-500">Subtotal</span>
+              <span className="font-medium">৳{success.subtotal}</span>
+            </div>
+            <div className="px-6 py-3 flex justify-between text-sm">
+              <span className="text-gray-500">Shipping</span>
+              <span className="text-green-600 font-medium">Free</span>
+            </div>
+            <div className="px-6 py-3 flex justify-between text-sm font-bold">
+              <span>Total</span>
+              <span>৳{success.total}</span>
+            </div>
+          </div>
+
+          <div className="bg-white border px-6 py-4 mb-6">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-2">Shipping To</h2>
+            <p className="text-sm text-gray-900">{success.customer_name}</p>
+            <p className="text-sm text-gray-500">{success.customer_phone}</p>
+            {success.shipping_address && (
+              <p className="text-sm text-gray-500">{success.shipping_address.address}, {success.shipping_address.city}, {success.shipping_address.district}</p>
+            )}
+            <p className="text-sm text-gray-500 mt-1">Payment: <span className="font-medium">{success.payment_method}</span></p>
+          </div>
+
+          <Link to="/" className="block text-center bg-gray-900 text-white py-3 text-sm font-medium hover:bg-gray-800 transition uppercase tracking-wider">
             Continue Shopping
           </Link>
         </div>

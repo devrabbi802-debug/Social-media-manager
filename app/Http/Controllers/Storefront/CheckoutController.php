@@ -87,7 +87,7 @@ class CheckoutController extends Controller
                 'customer_name' => $validated['shipping_address']['name'],
                 'customer_phone' => $validated['shipping_address']['phone'],
                 'order_number' => $orderNumber,
-                'status' => 'processing',
+                'status' => 'pending',
                 'subtotal' => $subtotal,
                 'total' => $subtotal,
                 'payment_method' => $validated['payment_method'] ?? 'COD',
@@ -110,14 +110,32 @@ class CheckoutController extends Controller
 
             DB::commit();
 
+            $order->load(['items', 'shippingAddress']);
+
             return response()->json([
                 'message' => 'Order placed successfully!',
                 'order' => [
                     'id' => $order->id,
                     'order_number' => $order->order_number,
+                    'subtotal' => $order->subtotal,
                     'total' => $order->total,
                     'status' => $order->status,
+                    'payment_method' => $order->payment_method,
+                    'payment_status' => $order->payment_status,
+                    'customer_name' => $order->customer_name,
                     'customer_phone' => $order->customer_phone,
+                    'shipping_address' => $order->shippingAddress ? [
+                        'address' => $order->shippingAddress->address,
+                        'city' => $order->shippingAddress->city,
+                        'district' => $order->shippingAddress->district,
+                    ] : null,
+                    'items' => $order->items->map(fn($i) => [
+                        'name' => $i->name,
+                        'sku' => $i->sku,
+                        'quantity' => $i->quantity,
+                        'unit_price' => $i->unit_price,
+                        'total_price' => $i->total_price,
+                    ]),
                 ],
             ], 201);
 
