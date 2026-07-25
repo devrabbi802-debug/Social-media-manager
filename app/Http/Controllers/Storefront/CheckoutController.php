@@ -96,12 +96,24 @@ class CheckoutController extends Controller
             ]);
 
             foreach ($validated['items'] as $item) {
+                $sku = $item['sku'] ?? '';
+
+                if (empty($sku) && !empty($item['variant_id'])) {
+                    $variant = ProductVariant::find($item['variant_id']);
+                    $sku = $variant?->sku ?? '';
+                }
+
+                if (empty($sku) && !empty($item['product_id'])) {
+                    $product = Product::find($item['product_id']);
+                    $sku = $product?->sku ?? '';
+                }
+
                 OrderItem::create([
                     'order_id' => $order->id,
                     'product_id' => $item['product_id'],
                     'variant_id' => $item['variant_id'] ?? null,
                     'name' => $item['name'],
-                    'sku' => $item['sku'] ?? '',
+                    'sku' => $sku,
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
                     'total_price' => $item['unit_price'] * $item['quantity'],
