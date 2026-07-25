@@ -865,6 +865,16 @@ class ProductController extends Controller
                     })
                     ->first();
 
+                // Fallback: try matching by slug (handles old data with different names)
+                if (! $attr) {
+                    $attr = Attribute::where('slug', Str::slug($attrName))
+                        ->where(function ($q) use ($product) {
+                            $q->where('category_id', $product->category_id)
+                                ->orWhere('is_global', true);
+                        })
+                        ->first();
+                }
+
                 if ($attr) {
                     ProductAttrValue::create([
                         'product_id' => $product->id,

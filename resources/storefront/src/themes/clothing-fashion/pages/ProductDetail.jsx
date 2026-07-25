@@ -418,6 +418,7 @@ export default function ProductDetail() {
                 <div className="flex gap-2">
                   {colorVariants.map((v) => {
                     const attr = colorAttrName || 'color';
+                    const swatch = v[attr + '_swatch'];
                     return (
                       <button
                         key={v[attr]}
@@ -427,7 +428,7 @@ export default function ProductDetail() {
                             ? 'border-gray-900 ring-2 ring-gray-900 ring-offset-2 scale-110'
                             : 'border-gray-200 hover:border-gray-400'
                         }`}
-                        style={{ backgroundColor: resolveColor(v[attr]) }}
+                        style={{ backgroundColor: swatch || resolveColor(v[attr]) }}
                         title={v[attr]}
                       />
                     );

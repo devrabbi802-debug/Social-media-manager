@@ -225,6 +225,7 @@ export default function ProductCard({ product }) {
           <div className="flex items-center gap-2 mb-0.5">
             {colorVariants.map((v) => {
               const attr = colorAttrName || 'color';
+              const swatch = v[attr + '_swatch'];
               return (
                 <button
                   key={v[attr]}
@@ -234,7 +235,7 @@ export default function ProductCard({ product }) {
                       ? 'ring-2 ring-gray-900 ring-offset-2 scale-110'
                       : 'ring-1 ring-gray-300 hover:ring-gray-400'
                   }`}
-                  style={{ backgroundColor: resolveColor(v[attr]) }}
+                  style={{ backgroundColor: swatch || resolveColor(v[attr]) }}
                   title={v[attr]}
                 />
               );

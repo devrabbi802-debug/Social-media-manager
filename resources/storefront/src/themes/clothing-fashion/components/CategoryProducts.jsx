@@ -6,7 +6,7 @@ import { ProductGridSkeleton } from '../../../components/shared/SectionSkeletons
 
 export default function CategoryProducts({ title, data = [], loading }) {
   if (loading) return <ProductGridSkeleton />;
-  if (data.length === 0) return null;
+  if (!data || data.length === 0) return null;
 
   return (
     <section className="py-8 md:py-12 bg-gray-50">

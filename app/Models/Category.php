@@ -58,9 +58,16 @@ class Category extends Model
         return $this->hasMany(Product::class);
     }
 
-    public function attributeTemplates(): HasMany
+    public function attributes(): HasMany
     {
-        return $this->hasMany(AttributeTemplate::class);
+        return $this->hasMany(Attribute::class, 'category_id');
+    }
+
+    public function pivotAttributes(): BelongsToMany
+    {
+        return $this->belongsToMany(Attribute::class, 'category_attributes')
+            ->withPivot(['required', 'sort_order'])
+            ->withTimestamps();
     }
 
     public function isRoot(): bool

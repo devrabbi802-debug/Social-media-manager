@@ -30,11 +30,9 @@ export default function Home() {
   useEffect(() => {
     const loadProducts = () => {
       api.get('/storefront/home').then((res) => {
-        setFeaturedProducts(res.featured_products?.length ? res.featured_products : null);
-        setNewArrivals(res.new_arrivals?.length ? res.new_arrivals : null);
-        if (res.category_products?.length) {
-          setCategoryProducts(res.category_products);
-        }
+        setFeaturedProducts(res.featured_products || []);
+        setNewArrivals(res.new_arrivals || []);
+        setCategoryProducts(res.category_products || []);
         if (res.section_titles) setSectionTitles(res.section_titles);
       });
     };
@@ -79,9 +77,9 @@ export default function Home() {
       setBanners(res.banners || []);
       setFeaturedCategories(res.categories ? res.categories.slice(0, 5) : null);
       setAllCategories(res.all_categories || null);
-      setFeaturedProducts(res.featured_products?.length ? res.featured_products : null);
-      setNewArrivals(res.new_arrivals?.length ? res.new_arrivals : null);
-      if (res.category_products?.length) setCategoryProducts(res.category_products);
+      setFeaturedProducts(res.featured_products || []);
+      setNewArrivals(res.new_arrivals || []);
+      setCategoryProducts(res.category_products || []);
       if (res.section_titles) setSectionTitles(res.section_titles);
       if (res.category_banner) setCategoryBanner(res.category_banner);
       if (res.notices !== undefined) {

@@ -6,7 +6,7 @@ export default function ProductSection({ title, products = [], initialCount = 8,
   const [showAll, setShowAll] = useState(false);
 
   if (loading) return <ProductGridSkeleton />;
-  if (products.length === 0) return null;
+  if (!products || products.length === 0) return null;
 
   const displayProducts = showAll ? products : products.slice(0, initialCount);
 

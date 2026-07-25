@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Attribute;
+use App\Models\AttributeValue;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
@@ -10,6 +11,7 @@ use App\Models\ProductAttrValue;
 use App\Models\StorefrontSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class StorefrontApiController extends Controller
 {
@@ -81,7 +83,7 @@ class StorefrontApiController extends Controller
                 ->values();
         }
 
-        $productWith = ['category', 'brand', 'images', 'variants.attributeValues.attributeTemplate', 'variants.images'];
+        $productWith = ['category', 'brand', 'images', 'variants.attributeValues.attribute', 'variants.images'];
 
         // Featured products
         $featuredProducts = Product::active()
@@ -237,13 +239,13 @@ class StorefrontApiController extends Controller
         }
 
         // Variant attribute filters (e.g. ?color=red&size=m)
-        $attributeTemplates = Attribute::where('is_variant', true)
+        $variantAttrs = Attribute::where('is_variant', true)
             ->where('is_active', true)->pluck('id', 'slug');
-        foreach ($attributeTemplates as $slug => $templateId) {
+        foreach ($variantAttrs as $slug => $attrId) {
             if ($request->filled($slug)) {
                 $values = explode(',', $request->$slug);
-                $query->whereHas('variants.attributeValues', function ($q) use ($templateId, $values) {
-                    $q->where('attribute_id', $templateId)
+                $query->whereHas('variants.attributeValues', function ($q) use ($attrId, $values) {
+                    $q->where('attribute_id', $attrId)
                         ->whereIn('value', $values);
                 });
             }
@@ -402,14 +404,14 @@ class StorefrontApiController extends Controller
      */
     public function attributes()
     {
-        $templates = Attribute::where('is_variant', true)
+        $attributes = Attribute::where('is_variant', true)
             ->where('is_filterable', true)
             ->where('is_active', true)
             ->orderBy('sort_order')
             ->get();
 
-        return response()->json($templates->map(function ($template) {
-            $values = ProductAttrValue::where('attribute_id', $template->id)
+        return response()->json($attributes->map(function ($attribute) {
+            $values = ProductAttrValue::where('attribute_id', $attribute->id)
                 ->whereNotNull('variant_id')
                 ->whereHas('variant.product', fn ($q) => $q->active())
                 ->select('value')
@@ -418,11 +420,64 @@ class StorefrontApiController extends Controller
                 ->values();
 
             return [
-                'name' => $template->name,
-                'slug' => $template->slug,
+                'name' => $attribute->name,
+                'slug' => $attribute->slug,
                 'values' => $values,
             ];
         })->filter(fn ($a) => $a['values']->isNotEmpty())->values());
+    }
+
+    private function buildVariantAttributes($variant): array
+    {
+        $attrs = collect();
+
+        // Relational data (product_attr_values) - prioritized
+        $relational = $variant->attributeValues->map(function ($attr) {
+            $attrValue = $attr->attributeValue;
+
+            // value_id NULL thakle attribute_id + value diye lookup
+            if (! $attrValue && $attr->attribute_id && $attr->value) {
+                $attrValue = AttributeValue::where('attribute_id', $attr->attribute_id)
+                    ->whereRaw('LOWER(value) = ?', [strtolower($attr->value)])
+                    ->first();
+            }
+
+            return [
+                'attribute' => $attr->attribute?->name ?? $attr->attribute_id,
+                'value' => $attr->value,
+                'is_color' => $attrValue?->is_color ?? false,
+                'swatch_hex' => $attrValue?->swatch_hex ?? null,
+            ];
+        });
+        $attrs = $attrs->merge($relational);
+
+        // Fallback: JSON attributes column (old data or hybrid)
+        $jsonAttrs = is_string($variant->attributes)
+            ? json_decode($variant->attributes, true)
+            : ($variant->attributes ?? []);
+        if (is_array($jsonAttrs)) {
+            $existingNames = $relational->pluck('attribute')->map(fn ($n) => strtolower($n))->all();
+            foreach ($jsonAttrs as $name => $value) {
+                if (! in_array(strtolower($name), $existingNames)) {
+                    $attrModel = Attribute::where('name', $name)->first()
+                        ?? Attribute::where('slug', Str::slug($name))->first()
+                        ?? Attribute::where('name', 'like', $name.'%')->orderBy('name')->first();
+                    $attrValue = $attrModel?->attributeValues()
+                        ->whereRaw('LOWER(value) = ?', [strtolower($value)])->first();
+                    $isColor = $attrValue?->is_color
+                        ?? ($attrModel ? $attrModel->attributeValues()->whereNotNull('swatch_hex')->exists() : false);
+                    $swatchHex = $attrValue?->swatch_hex ?? null;
+                    $attrs->push([
+                        'attribute' => $name,
+                        'value' => $value,
+                        'is_color' => $isColor,
+                        'swatch_hex' => $swatchHex,
+                    ]);
+                }
+            }
+        }
+
+        return $attrs->values()->toArray();
     }
 
     /**
@@ -464,17 +519,14 @@ class StorefrontApiController extends Controller
                 'price' => $variant->price,
                 'stock_quantity' => $variant->stock_quantity,
                 'stock' => $variant->stock_quantity,
-                'attributes' => $variant->attributeValues->map(fn ($attr) => [
-                    'attribute' => $attr->attribute?->name ?? $attr->attribute_id,
-                    'value' => $attr->value,
-                    'is_color' => $attr->attributeValue?->is_color ?? $attr->attribute?->isColor() ?? false,
-                ]),
+                'attributes' => $this->buildVariantAttributes($variant),
                 'image' => $variant->images->first()?->image_url ?? null,
             ]);
 
             $variants = $variants->map(fn ($v) => array_merge(
                 $v,
-                collect($v['attributes'])->mapWithKeys(fn ($a) => [strtolower($a['attribute']) => $a['value']])->toArray()
+                collect($v['attributes'])->mapWithKeys(fn ($a) => [strtolower($a['attribute']) => $a['value']])->toArray(),
+                collect($v['attributes'])->mapWithKeys(fn ($a) => [strtolower($a['attribute']) . '_swatch' => $a['swatch_hex']])->toArray()
             ));
 
             $data['variants'] = $variants;
