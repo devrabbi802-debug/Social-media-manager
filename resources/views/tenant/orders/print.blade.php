@@ -108,6 +108,9 @@
                 <td>{{ $i + 1 }}</td>
                 <td>
                     <span class="font-bold">{{ $item->name }}</span>
+                    @if($item->variant)
+                        <br><span style="font-size: 11px; color: #6b7280;">{{ $item->variant->display ?? $item->variant->name }}</span>
+                    @endif
                     @if($item->sku)<br><span style="font-size: 11px; color: #9ca3af;">SKU: {{ $item->sku }}</span>@endif
                 </td>
                 <td class="text-center">{{ $item->quantity }}</td>
