@@ -7,11 +7,13 @@ use App\Models\AttributeTemplate;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 class AttributeTemplateController extends Controller
 {
     public function index(Request $request)
     {
+        Log::info('AttributeTemplateController@index HIT');
         $query = AttributeTemplate::with('category');
 
         if ($request->filled('category_id')) {

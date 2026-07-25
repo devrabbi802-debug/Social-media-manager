@@ -501,7 +501,7 @@
                                :class="isOptionSelected('{{ $opt->name }}') ? 'bg-purple-50 border border-purple-200' : ''">
                             <input type="checkbox"
                                    :checked="isOptionSelected('{{ $opt->name }}')"
-                                   @change="toggleOption('{{ $opt->name }}', @js($opt->options ?? []))"
+                                    @change="toggleOption('{{ $opt->name }}', @js($opt->options ?? []))"
                                    class="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500">
                             <span class="text-sm font-medium text-gray-700">{{ $opt->name }}</span>
                         </label>

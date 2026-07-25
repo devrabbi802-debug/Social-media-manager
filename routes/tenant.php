@@ -16,7 +16,7 @@ use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\Dashboard\ProductController;
 use App\Http\Controllers\Dashboard\CategoryController;
 use App\Http\Controllers\Dashboard\BrandController;
-use App\Http\Controllers\Dashboard\AttributeTemplateController;
+use App\Http\Controllers\Dashboard\AttributeController;
 use App\Http\Controllers\Dashboard\WarehouseController;
 use App\Http\Controllers\Dashboard\InventoryController;
 use App\Http\Controllers\Dashboard\ImageMatchController;
@@ -164,12 +164,12 @@ Route::middleware([
                 Route::delete('/brands/{brand}', [BrandController::class, 'destroy'])->name('brands.destroy');
 
                 // Attribute Templates
-                Route::get('/attributes', [AttributeTemplateController::class, 'index'])->name('attributes.index');
-                Route::get('/attributes/create', [AttributeTemplateController::class, 'create'])->name('attributes.create');
-                Route::post('/attributes', [AttributeTemplateController::class, 'store'])->name('attributes.store');
-                Route::get('/attributes/{attribute}/edit', [AttributeTemplateController::class, 'edit'])->name('attributes.edit');
-                Route::put('/attributes/{attribute}', [AttributeTemplateController::class, 'update'])->name('attributes.update');
-                Route::delete('/attributes/{attribute}', [AttributeTemplateController::class, 'destroy'])->name('attributes.destroy');
+                Route::get('/attributes', [AttributeController::class, 'index'])->name('attributes.index');
+                Route::get('/attributes/create', [AttributeController::class, 'create'])->name('attributes.create');
+                Route::post('/attributes', [AttributeController::class, 'store'])->name('attributes.store');
+                Route::get('/attributes/{attribute}/edit', [AttributeController::class, 'edit'])->name('attributes.edit');
+                Route::put('/attributes/{attribute}', [AttributeController::class, 'update'])->name('attributes.update');
+                Route::delete('/attributes/{attribute}', [AttributeController::class, 'destroy'])->name('attributes.destroy');
 
                 // Warehouses
                 Route::get('/warehouses', [WarehouseController::class, 'index'])->name('warehouses.index');
@@ -255,6 +255,7 @@ Route::middleware([
                 Route::post('/upload-logo', [StorefrontSettingsController::class, 'uploadLogo'])->name('upload-logo');
                 Route::post('/upload-favicon', [StorefrontSettingsController::class, 'uploadFavicon'])->name('upload-favicon');
             });
+
         });
     });
 

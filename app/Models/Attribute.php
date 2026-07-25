@@ -137,4 +137,15 @@ class Attribute extends Model
     {
         return $this->data_type === 'boolean';
     }
+
+    public function getOptionsAttribute(): array
+    {
+        if (array_key_exists('options', $this->attributes) && is_array($this->attributes['options'])) {
+            return $this->attributes['options'];
+        }
+
+        return $this->relationLoaded('attributeValues')
+            ? $this->attributeValues->pluck('value')->toArray()
+            : $this->attributeValues()->pluck('value')->toArray();
+    }
 }

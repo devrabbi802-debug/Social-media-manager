@@ -8,11 +8,16 @@ use App\Models\AttributeValue;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 class AttributeController extends Controller
 {
     public function index(Request $request)
     {
+        Log::info('AttributeController@index HIT', [
+            'model_class' => get_class(new Attribute),
+            'model_table' => (new Attribute)->getTable(),
+        ]);
         $query = Attribute::with('category');
 
         if ($request->filled('category_id')) {
