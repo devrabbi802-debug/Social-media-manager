@@ -36,10 +36,10 @@ class ProductVariant extends Model
         return $this->hasMany(StockMovement::class, 'variant_id');
     }
 
-    // Relational attribute values (new system)
+    // Relational attribute values
     public function attributeValues(): HasMany
     {
-        return $this->hasMany(VariantAttributeValue::class, 'variant_id');
+        return $this->hasMany(ProductAttrValue::class, 'variant_id');
     }
 
     // Variant images
@@ -53,22 +53,20 @@ class ProductVariant extends Model
         return $this->price ?? $this->product->base_price;
     }
 
-    // Display name: relational data theke asbe, fallback JSON
     public function getDisplayAttribute(): string
     {
-        // Relational data优先
         if ($this->relationLoaded('attributeValues') && $this->attributeValues->count()) {
             $parts = [];
             foreach ($this->attributeValues as $av) {
-                $parts[] = $av->attributeTemplate->name . ': ' . $av->value;
+                $parts[] = ($av->attribute?->name ?? '?').': '.$av->value;
             }
+
             return $this->name ?? implode(' / ', $parts);
         }
 
-        // Fallback: JSON attributes
         $parts = [];
         foreach ($this->attributes as $key => $value) {
-            $parts[] = ucfirst($key) . ': ' . $value;
+            $parts[] = ucfirst($key).': '.$value;
         }
 
         return $this->name ?? implode(' / ', $parts);

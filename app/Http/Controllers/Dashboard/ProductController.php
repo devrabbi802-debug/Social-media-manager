@@ -3,18 +3,20 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
-use App\Models\AttributeTemplate;
-use App\Models\Brand;
-use App\Models\BusinessCategory;
-use App\Models\Category;
-use App\Models\Product;
-use App\Models\ProductAttributeValue;
-use App\Models\ProductImage;
-use App\Models\ProductVariant;
-use App\Models\BusinessSetting;
 use App\Jobs\AnalyzeProductImageJob;
 use App\Jobs\AnalyzeVariantImageJob;
+use App\Models\Attribute;
+use App\Models\Brand;
+use App\Models\BusinessCategory;
+use App\Models\BusinessSetting;
+use App\Models\Category;
+use App\Models\Product;
+use App\Models\ProductAttrValue;
+use App\Models\ProductImage;
+use App\Models\ProductVariant;
+use App\Models\VariantImage;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 
 class ProductController extends Controller
@@ -77,10 +79,11 @@ class ProductController extends Controller
         }
 
         // Global variant options (Color, Size, Material, etc.)
-        $variantOptions = AttributeTemplate::where('is_variant_option', true)
+        $variantOptions = Attribute::where('is_variant', true)
             ->where('is_global', true)
+            ->with('attributeValues')
             ->orderBy('name')
-            ->get(['id', 'name', 'options']);
+            ->get();
 
         return view('tenant.products.create', compact(
             'categories', 'brands', 'extraFields', 'businessCategory',
@@ -95,7 +98,7 @@ class ProductController extends Controller
         $businessCategory = $businessSetting ? BusinessCategory::on('mysql')->find($businessSetting->category_id) : null;
         $isDigital = in_array($businessCategory?->slug, ['digital-product', 'digital-product-service']);
         $hasVariants = $request->filled('variants');
-        // Find matching tenant Category for attribute_templates FK
+        // Find matching tenant Category for attributes FK
         $tenantCategory = $businessCategory ? Category::where('slug', $businessCategory->slug)->first() : null;
 
         // --- Base validation rules ---
@@ -119,15 +122,15 @@ class ProductController extends Controller
         ];
 
         // Unit: required unless Digital (Decision 4)
-        if (!$isDigital) {
+        if (! $isDigital) {
             $rules['unit'] = 'required|string|max:50';
         } else {
             $rules['unit'] = 'nullable|string|max:50';
         }
 
         // Stock: mutually exclusive rules (Decision 2 & 8.2)
-        if (!$hasVariants) {
-            if (!$isDigital) {
+        if (! $hasVariants) {
+            if (! $isDigital) {
                 $rules['stock_quantity'] = 'required|integer|min:0';
             } else {
                 $rules['stock_quantity'] = 'nullable|integer|min:0';
@@ -154,7 +157,7 @@ class ProductController extends Controller
 
         // --- Extra fields dynamic validation (Decision 8.5) ---
         $extraFieldsData = $request->input('extra', []);
-        if ($businessCategory && !empty($extraFieldsData)) {
+        if ($businessCategory && ! empty($extraFieldsData)) {
             $extraRules = [];
             foreach ($businessCategory->extra_fields ?? [] as $field) {
                 $fieldName = $field['name'];
@@ -176,8 +179,8 @@ class ProductController extends Controller
                         $rule .= '|boolean';
                         break;
                     case 'select':
-                        if (!empty($field['options'])) {
-                            $rule .= '|in:' . implode(',', $field['options']);
+                        if (! empty($field['options'])) {
+                            $rule .= '|in:'.implode(',', $field['options']);
                         }
                         break;
                 }
@@ -218,8 +221,8 @@ class ProductController extends Controller
 
         $product = Product::create($productData);
 
-        // --- Save extra fields to product_attribute_values ---
-        if ($businessCategory && !empty($extraFieldsData)) {
+        // --- Save extra fields to product_attr_values ---
+        if ($businessCategory && ! empty($extraFieldsData)) {
             foreach ($businessCategory->extra_fields ?? [] as $field) {
                 $fieldName = $field['name'];
                 $value = $extraFieldsData[$fieldName] ?? null;
@@ -234,15 +237,15 @@ class ProductController extends Controller
                     }
                 }
 
-                // Find matching AttributeTemplate (use tenant Category id)
+                // Find matching Attribute (use tenant Category id)
                 $template = $tenantCategory
-                    ? AttributeTemplate::where('category_id', $tenantCategory->id)
+                    ? Attribute::where('category_id', $tenantCategory->id)
                         ->where('slug', Str::slug($fieldName))
                         ->where('is_global', false)
                         ->first()
                     : null;
 
-                if (!$template) {
+                if (! $template) {
                     // Template not found — skip silently (sync job will fix)
                     continue;
                 }
@@ -250,9 +253,9 @@ class ProductController extends Controller
                 // Cast value to string for TEXT column
                 $stringValue = is_bool($value) ? ($value ? '1' : '0') : (string) $value;
 
-                ProductAttributeValue::create([
+                ProductAttrValue::create([
                     'product_id' => $product->id,
-                    'attribute_template_id' => $template->id,
+                    'attribute_id' => $template->id,
                     'value' => $stringValue,
                 ]);
             }
@@ -262,7 +265,9 @@ class ProductController extends Controller
         if ($hasVariants) {
             $totalVariantStock = 0;
             foreach ($request->variants as $variantData) {
-                if (empty($variantData['sku'])) continue;
+                if (empty($variantData['sku'])) {
+                    continue;
+                }
 
                 $variantStock = (int) ($variantData['stock_quantity'] ?? 0);
                 $totalVariantStock += $variantStock;
@@ -278,20 +283,21 @@ class ProductController extends Controller
                     'is_active' => true,
                 ]);
 
-                // Save to relational table (variant_attribute_values)
-                if (!empty($variantData['attributes'])) {
+                // Save to relational table (product_attr_values)
+                if (! empty($variantData['attributes'])) {
                     foreach ($variantData['attributes'] as $attrName => $attrValue) {
-                        $attrTemplate = AttributeTemplate::where('name', $attrName)
+                        $attrTemplate = Attribute::where('name', $attrName)
                             ->where(function ($q) use ($product) {
                                 $q->where('category_id', $product->category_id)
-                                  ->orWhere('is_global', true);
+                                    ->orWhere('is_global', true);
                             })
                             ->first();
 
                         if ($attrTemplate) {
-                            \App\Models\VariantAttributeValue::create([
+                            ProductAttrValue::create([
+                                'product_id' => $product->id,
                                 'variant_id' => $variant->id,
-                                'attribute_template_id' => $attrTemplate->id,
+                                'attribute_id' => $attrTemplate->id,
                                 'value' => $attrValue,
                             ]);
                         }
@@ -299,11 +305,11 @@ class ProductController extends Controller
                 }
 
                 // Handle variant images from matrix
-                if (!empty($variantData['images'])) {
+                if (! empty($variantData['images'])) {
                     foreach ($variantData['images'] as $index => $imageFile) {
-                        if ($imageFile instanceof \Illuminate\Http\UploadedFile) {
+                        if ($imageFile instanceof UploadedFile) {
                             $imagePath = $imageFile->store('variants', 'public');
-                            $variantImage = \App\Models\VariantImage::create([
+                            $variantImage = VariantImage::create([
                                 'variant_id' => $variant->id,
                                 'image_path' => $imagePath,
                                 'sort_order' => $index,
@@ -340,8 +346,8 @@ class ProductController extends Controller
     public function show(Product $product)
     {
         $product->load([
-            'category', 'brand', 'attributeValues.attributeTemplate',
-            'variants.images', 'images', 'inventoryAlert', 'stockMovements.warehouse'
+            'category', 'brand', 'attributeValues.attribute',
+            'variants.images', 'images', 'inventoryAlert', 'stockMovements.warehouse',
         ]);
 
         // Load business category for extra fields display
@@ -413,8 +419,8 @@ class ProductController extends Controller
     public function edit(Product $product)
     {
         $product->load([
-            'attributeValues.attributeTemplate', 'images',
-            'variants.attributeValues.attributeTemplate', 'variants.images'
+            'attributeValues.attribute', 'images',
+            'variants.attributeValues.attribute', 'variants.images',
         ]);
 
         $categories = Category::where('is_active', true)
@@ -433,9 +439,10 @@ class ProductController extends Controller
 
         // Map existing extra field values (key by field name to match $field['name'] in view)
         $existingExtraValues = [];
-        foreach ($product->attributeValues as $av) {
-            if ($av->attributeTemplate && !$av->attributeTemplate->is_global && !$av->attributeTemplate->is_variant_option) {
-                $existingExtraValues[$av->attributeTemplate->slug] = $av->typed_value;
+        foreach ($product->productAttrValues as $av) {
+            $attr = $av->attribute;
+            if ($attr && ! $attr->is_global && ! $attr->is_variant) {
+                $existingExtraValues[$attr->slug] = $av->typed_value;
             }
         }
         // Also build slug→name map from business category extra_fields so view can look up by $field['name']
@@ -455,23 +462,24 @@ class ProductController extends Controller
             return is_array($variant->attributes) ? array_keys($variant->attributes) : [];
         })->unique()->values()->all();
 
-        $attributeTemplates = AttributeTemplate::forCategory($product->category_id)
+        $attributeTemplates = Attribute::forCategory($product->category_id)
             ->where(function ($q) use ($productOptionNames) {
                 $q->where(function ($q2) use ($productOptionNames) {
-                    $q2->where('is_variant_option', true)
-                       ->whereIn('name', $productOptionNames);
+                    $q2->where('is_variant', true)
+                        ->whereIn('name', $productOptionNames);
                 });
-                $q->orWhere('is_variant_option', false);
+                $q->orWhere('is_variant', false);
             })
             ->orderBy('is_global', 'desc')
             ->orderBy('sort_order')
             ->get();
 
         // Global variant options for adding new variants
-        $variantOptions = AttributeTemplate::where('is_variant_option', true)
+        $variantOptions = Attribute::where('is_variant', true)
             ->where('is_global', true)
+            ->with('attributeValues')
             ->orderBy('name')
-            ->get(['id', 'name', 'options']);
+            ->get();
 
         return view('tenant.products.edit', compact(
             'product', 'categories', 'brands', 'attributeTemplates',
@@ -495,11 +503,11 @@ class ProductController extends Controller
             'category_id' => 'required|exists:categories,id',
             'brand_id' => 'nullable|exists:brands,id',
             'name' => 'required|string|max:255',
-            'sku' => 'required|string|max:255|unique:products,sku,' . $product->id,
+            'sku' => 'required|string|max:255|unique:products,sku,'.$product->id,
             'description' => 'nullable|string',
             'base_price' => 'required|numeric|min:0',
             'discount_price' => 'nullable|numeric|min:0|lte:base_price',
-            'barcode' => 'nullable|string|max:255|unique:products,barcode,' . $product->id,
+            'barcode' => 'nullable|string|max:255|unique:products,barcode,'.$product->id,
             'status' => 'required|in:active,inactive,out_of_stock',
             'is_featured' => 'boolean',
             'weight_kg' => 'nullable|numeric|min:0',
@@ -514,15 +522,15 @@ class ProductController extends Controller
         ];
 
         // Unit: required unless Digital
-        if (!$isDigital) {
+        if (! $isDigital) {
             $rules['unit'] = 'required|string|max:50';
         } else {
             $rules['unit'] = 'nullable|string|max:50';
         }
 
         // Stock: only validate if no variants exist
-        if (!$hasVariants) {
-            if (!$isDigital) {
+        if (! $hasVariants) {
+            if (! $isDigital) {
                 $rules['stock_quantity'] = 'required|integer|min:0';
             } else {
                 $rules['stock_quantity'] = 'nullable|integer|min:0';
@@ -548,7 +556,7 @@ class ProductController extends Controller
 
         // --- Extra fields dynamic validation ---
         $extraFieldsData = $request->input('extra', []);
-        if ($businessCategory && !empty($extraFieldsData)) {
+        if ($businessCategory && ! empty($extraFieldsData)) {
             $extraRules = [];
             foreach ($businessCategory->extra_fields ?? [] as $field) {
                 $fieldName = $field['name'];
@@ -570,8 +578,8 @@ class ProductController extends Controller
                         $rule .= '|boolean';
                         break;
                     case 'select':
-                        if (!empty($field['options'])) {
-                            $rule .= '|in:' . implode(',', $field['options']);
+                        if (! empty($field['options'])) {
+                            $rule .= '|in:'.implode(',', $field['options']);
                         }
                         break;
                 }
@@ -614,15 +622,15 @@ class ProductController extends Controller
         // --- Save extra fields (full replacement) ---
         if ($businessCategory) {
             // Delete existing extra field values for this product
-            $existingTemplateIds = $product->attributeValues()
-                ->whereHas('attributeTemplate', function ($q) {
-                    $q->where('is_global', false)->where('is_variant_option', false);
+            $existingTemplateIds = $product->productAttrValues()
+                ->whereHas('attribute', function ($q) {
+                    $q->where('is_global', false)->where('is_variant', false);
                 })
-                ->pluck('attribute_template_id')
+                ->pluck('attribute_id')
                 ->toArray();
 
-            $product->attributeValues()
-                ->whereIn('attribute_template_id', $existingTemplateIds)
+            $product->productAttrValues()
+                ->whereIn('attribute_id', $existingTemplateIds)
                 ->delete();
 
             // Recreate from form data
@@ -639,19 +647,21 @@ class ProductController extends Controller
                 }
 
                 $template = $tenantCategory
-                    ? AttributeTemplate::where('category_id', $tenantCategory->id)
+                    ? Attribute::where('category_id', $tenantCategory->id)
                         ->where('slug', Str::slug($fieldName))
                         ->where('is_global', false)
                         ->first()
                     : null;
 
-                if (!$template) continue;
+                if (! $template) {
+                    continue;
+                }
 
                 $stringValue = is_bool($value) ? ($value ? '1' : '0') : (string) $value;
 
-                ProductAttributeValue::create([
+                ProductAttrValue::create([
                     'product_id' => $product->id,
-                    'attribute_template_id' => $template->id,
+                    'attribute_id' => $template->id,
                     'value' => $stringValue,
                 ]);
             }
@@ -660,18 +670,19 @@ class ProductController extends Controller
         // Save product-level attributes
         if ($request->has('attribute')) {
             foreach ($request->attribute as $attrId => $value) {
-                if (!empty(trim($value))) {
+                if (! empty(trim($value))) {
                     // Check if already exists
-                    $existing = ProductAttributeValue::where('product_id', $product->id)
-                        ->where('attribute_template_id', $attrId)
+                    $existing = ProductAttrValue::where('product_id', $product->id)
+                        ->where('attribute_id', $attrId)
+                        ->whereNull('variant_id')
                         ->first();
 
                     if ($existing) {
                         $existing->update(['value' => $value]);
                     } else {
-                        ProductAttributeValue::create([
+                        ProductAttrValue::create([
                             'product_id' => $product->id,
-                            'attribute_template_id' => $attrId,
+                            'attribute_id' => $attrId,
                             'value' => $value,
                         ]);
                     }
@@ -723,15 +734,15 @@ class ProductController extends Controller
 
         // Handle variant images upload
         $variantImageFiles = $request->file('variant_images', []);
-        if (!empty($variantImageFiles)) {
+        if (! empty($variantImageFiles)) {
             foreach ($variantImageFiles as $variantId => $files) {
                 $variant = $product->variants()->find($variantId);
-                if ($variant && !empty($files)) {
+                if ($variant && ! empty($files)) {
                     $existingCount = $variant->images()->count();
                     foreach ($files as $index => $imageFile) {
-                        if ($imageFile instanceof \Illuminate\Http\UploadedFile) {
+                        if ($imageFile instanceof UploadedFile) {
                             $imagePath = $imageFile->store('variants', 'public');
-                            $variantImage = \App\Models\VariantImage::create([
+                            $variantImage = VariantImage::create([
                                 'variant_id' => $variant->id,
                                 'image_path' => $imagePath,
                                 'sort_order' => $existingCount + $index,
@@ -776,7 +787,7 @@ class ProductController extends Controller
     public function getAttributes(Request $request)
     {
         $categoryId = $request->category_id;
-        $attributes = AttributeTemplate::forCategory($categoryId)
+        $attributes = Attribute::forCategory($categoryId)
             ->orderBy('is_global', 'desc')
             ->orderBy('sort_order')
             ->get();
@@ -787,17 +798,18 @@ class ProductController extends Controller
     public function getVariantOptions(Request $request)
     {
         $categoryId = $request->category_id;
-        if (!$categoryId) {
+        if (! $categoryId) {
             return response()->json([]);
         }
 
-        $options = AttributeTemplate::where('is_variant_option', true)
+        $options = Attribute::where('is_variant', true)
             ->where(function ($q) use ($categoryId) {
                 $q->where('category_id', $categoryId)
-                  ->orWhere('is_global', true);
+                    ->orWhere('is_global', true);
             })
+            ->with('attributeValues')
             ->orderBy('name')
-            ->get(['id', 'name', 'options']);
+            ->get();
 
         return response()->json($options);
     }
@@ -805,12 +817,12 @@ class ProductController extends Controller
     public function getExtraFields(Request $request)
     {
         $categoryId = $request->category_id;
-        if (!$categoryId) {
+        if (! $categoryId) {
             return response()->json(['extraFields' => [], 'businessCategory' => null, 'isDigital' => false]);
         }
 
         $tenantCategory = Category::find($categoryId);
-        if (!$tenantCategory) {
+        if (! $tenantCategory) {
             return response()->json(['extraFields' => [], 'businessCategory' => null, 'isDigital' => false]);
         }
 
@@ -843,11 +855,32 @@ class ProductController extends Controller
             'is_active' => true,
         ]));
 
+        // Save variant attributes to relational table
+        if (! empty($validated['attributes'])) {
+            foreach ($validated['attributes'] as $attrName => $attrValue) {
+                $attr = Attribute::where('name', $attrName)
+                    ->where(function ($q) use ($product) {
+                        $q->where('category_id', $product->category_id)
+                            ->orWhere('is_global', true);
+                    })
+                    ->first();
+
+                if ($attr) {
+                    ProductAttrValue::create([
+                        'product_id' => $product->id,
+                        'variant_id' => $variant->id,
+                        'attribute_id' => $attr->id,
+                        'value' => $attrValue,
+                    ]);
+                }
+            }
+        }
+
         // Handle variant images
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $index => $imageFile) {
                 $imagePath = $imageFile->store('variants', 'public');
-                $variantImage = \App\Models\VariantImage::create([
+                $variantImage = VariantImage::create([
                     'variant_id' => $variant->id,
                     'image_path' => $imagePath,
                     'sort_order' => $index,
@@ -874,7 +907,7 @@ class ProductController extends Controller
     public function updateVariant(Request $request, Product $product, ProductVariant $variant)
     {
         $validated = $request->validate([
-            'sku' => 'required|string|max:255|unique:product_variants,sku,' . $variant->id,
+            'sku' => 'required|string|max:255|unique:product_variants,sku,'.$variant->id,
             'name' => 'nullable|string|max:255',
             'price' => 'nullable|numeric|min:0',
             'stock_quantity' => 'required|integer|min:0',
@@ -887,7 +920,7 @@ class ProductController extends Controller
         ]);
 
         // Delete selected images
-        if (!empty($validated['delete_variant_images'])) {
+        if (! empty($validated['delete_variant_images'])) {
             foreach ($validated['delete_variant_images'] as $imageIds) {
                 if (is_array($imageIds)) {
                     $imagesToDelete = $variant->images()->whereIn('id', $imageIds)->get();
@@ -902,12 +935,35 @@ class ProductController extends Controller
 
         $variant->update($validated);
 
+        // Sync relational attribute values if provided
+        if (! empty($validated['attributes'])) {
+            $variant->attributeValues()->delete();
+
+            foreach ($validated['attributes'] as $attrName => $attrValue) {
+                $attr = Attribute::where('name', $attrName)
+                    ->where(function ($q) use ($product) {
+                        $q->where('category_id', $product->category_id)
+                            ->orWhere('is_global', true);
+                    })
+                    ->first();
+
+                if ($attr) {
+                    ProductAttrValue::create([
+                        'product_id' => $product->id,
+                        'variant_id' => $variant->id,
+                        'attribute_id' => $attr->id,
+                        'value' => $attrValue,
+                    ]);
+                }
+            }
+        }
+
         // Handle new variant images
         if ($request->hasFile('images')) {
             $existingCount = $variant->images()->count();
             foreach ($request->file('images') as $index => $imageFile) {
                 $imagePath = $imageFile->store('variants', 'public');
-                $variantImage = \App\Models\VariantImage::create([
+                $variantImage = VariantImage::create([
                     'variant_id' => $variant->id,
                     'image_path' => $imagePath,
                     'sort_order' => $existingCount + $index,

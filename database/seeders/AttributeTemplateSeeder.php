@@ -2,9 +2,11 @@
 
 namespace Database\Seeders;
 
-use App\Models\AttributeTemplate;
+use App\Models\Attribute;
+use App\Models\AttributeValue;
 use App\Models\BusinessCategory;
 use App\Models\Category;
+use App\Models\CategoryAttribute;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
@@ -30,19 +32,28 @@ class AttributeTemplateSeeder extends Seeder
         ];
 
         foreach ($variantOptions as $opt) {
-            AttributeTemplate::firstOrCreate(
+            $attribute = Attribute::firstOrCreate(
                 ['slug' => Str::slug($opt['name']), 'is_global' => true],
                 [
-                    'category_id'       => null,
-                    'is_variant_option' => true,
-                    'name'              => $opt['name'],
-                    'type'              => 'select',
-                    'options'           => $opt['options'],
-                    'is_required'       => false,
-                    'is_active'         => true,
-                    'sort_order'        => 0,
+                    'category_id' => null,
+                    'is_variant' => true,
+                    'is_filterable' => true,
+                    'name' => $opt['name'],
+                    'data_type' => 'select',
+                    'is_active' => true,
+                    'sort_order' => 0,
                 ]
             );
+
+            // Create attribute values (options)
+            foreach ($opt['options'] as $idx => $value) {
+                AttributeValue::firstOrCreate(
+                    ['attribute_id' => $attribute->id, 'value' => $value],
+                    [
+                        'sort_order' => $idx,
+                    ]
+                );
+            }
         }
     }
 
@@ -56,31 +67,41 @@ class AttributeTemplateSeeder extends Seeder
             $tenantCategory = Category::firstOrCreate(
                 ['slug' => $bc->slug],
                 [
-                    'name'        => $bc->name,
-                    'description' => $bc->name . ' category products',
-                    'is_active'   => true,
-                    'sort_order'  => $bc->sort_order,
+                    'name' => $bc->name,
+                    'description' => $bc->name.' category products',
+                    'is_active' => true,
+                    'sort_order' => $bc->sort_order,
                 ]
             );
 
             $extraFields = $bc->extra_fields ?? [];
             foreach ($extraFields as $index => $field) {
-                AttributeTemplate::firstOrCreate(
+                $attr = Attribute::firstOrCreate(
                     [
-                        'category_id'       => $tenantCategory->id,
-                        'slug'              => Str::slug($field['name']),
-                        'is_global'         => false,
+                        'category_id' => $tenantCategory->id,
+                        'slug' => Str::slug($field['name']),
+                        'is_global' => false,
                     ],
                     [
-                        'name'              => $field['label'] ?? $field['name'],
-                        'type'              => $field['type'],
-                        'is_required'       => $field['required'] ?? false,
-                        'is_variant_option' => false,
-                        'options'           => $field['options'] ?? null,
-                        'placeholder'       => $field['placeholder'] ?? null,
-                        'default'           => $field['default'] ?? null,
-                        'is_active'         => true,
-                        'sort_order'        => $index,
+                        'name' => $field['label'] ?? $field['name'],
+                        'data_type' => $field['type'],
+                        'is_variant' => false,
+                        'is_filterable' => false,
+                        'placeholder' => $field['placeholder'] ?? null,
+                        'default' => $field['default'] ?? null,
+                        'is_active' => true,
+                        'sort_order' => $index,
+                    ]
+                );
+
+                CategoryAttribute::firstOrCreate(
+                    [
+                        'category_id' => $tenantCategory->id,
+                        'attribute_id' => $attr->id,
+                    ],
+                    [
+                        'required' => $field['required'] ?? false,
+                        'sort_order' => $index,
                     ]
                 );
             }

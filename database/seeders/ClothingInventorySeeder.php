@@ -2,37 +2,38 @@
 
 namespace Database\Seeders;
 
+use App\Models\Attribute;
+use App\Models\AttributeValue;
+use App\Models\Brand;
+use App\Models\Category;
+use App\Models\InventoryAlert;
+use App\Models\Product;
+use App\Models\ProductAttrValue;
+use App\Models\ProductVariant;
+use App\Models\StockMovement;
+use App\Models\Warehouse;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
-use App\Models\Category;
-use App\Models\Brand;
-use App\Models\AttributeTemplate;
-use App\Models\Product;
-use App\Models\ProductVariant;
-use App\Models\ProductAttributeValue;
-use App\Models\VariantAttributeValue;
-use App\Models\Warehouse;
-use App\Models\StockMovement;
-use App\Models\InventoryAlert;
 
 class ClothingInventorySeeder extends Seeder
 {
     public function run(): void
     {
-        $this->command->info("🗑️  Purono data mukhya kore notun data add hocche...");
+        $this->command->info('🗑️  Purono data mukhya kore notun data add hocche...');
 
         // ===== PURONO DATA REMOVE =====
         StockMovement::query()->delete();
         InventoryAlert::query()->delete();
         ProductVariant::query()->delete();
-        ProductAttributeValue::query()->delete();
+        ProductAttrValue::query()->delete();
         Product::query()->delete();
-        AttributeTemplate::query()->delete();
+        Attribute::query()->delete();
+        AttributeValue::query()->delete();
         Category::query()->delete();
         Brand::query()->delete();
         Warehouse::query()->delete();
 
-        $this->command->info("✅ Purono data mukhya hoyeche!");
+        $this->command->info('✅ Purono data mukhya hoyeche!');
 
         $now = now();
 
@@ -68,7 +69,7 @@ class ClothingInventorySeeder extends Seeder
         $accCap = Category::create(['name' => 'Caps & Hats', 'slug' => 'acc-caps', 'parent_id' => $acc->id, 'sort_order' => 2]);
         $accScarf = Category::create(['name' => 'Scarves', 'slug' => 'acc-scarves', 'parent_id' => $acc->id, 'sort_order' => 3]);
 
-        $this->command->info("✅ Categories + Brands toiri!");
+        $this->command->info('✅ Categories + Brands toiri!');
 
         // ===== WAREHOUSES =====
         $wh1 = Warehouse::create(['name' => 'Main Warehouse - Dhaka', 'address' => 'Gulshan, Dhaka 1212', 'phone' => '+8801711000001']);
@@ -588,11 +589,11 @@ class ClothingInventorySeeder extends Seeder
 
             $product = Product::create($pData);
 
-            // Save options as AttributeTemplate (Shopify-style)
+            // Save options as Attribute (Shopify-style)
             // updateOrCreate because same category e "Color"/"Size" already thakte pare
             foreach ($options as $opt) {
                 $values = is_array($opt['values']) ? $opt['values'] : array_map('trim', explode(',', $opt['values']));
-                AttributeTemplate::updateOrCreate(
+                $attribute = Attribute::updateOrCreate(
                     [
                         'category_id' => $product->category_id,
                         'slug' => Str::slug($opt['name']),
@@ -600,12 +601,19 @@ class ClothingInventorySeeder extends Seeder
                     ],
                     [
                         'name' => $opt['name'],
-                        'type' => 'select',
-                        'options' => $values,
-                        'is_required' => true,
-                        'is_variant_option' => true,
+                        'data_type' => 'select',
+                        'is_variant' => true,
+                        'is_filterable' => true,
                     ]
                 );
+
+                // Create attribute values
+                foreach ($values as $vidx => $v) {
+                    AttributeValue::firstOrCreate(
+                        ['attribute_id' => $attribute->id, 'value' => $v],
+                        ['sort_order' => $vidx]
+                    );
+                }
             }
 
             // Create variants
@@ -622,20 +630,21 @@ class ClothingInventorySeeder extends Seeder
                     'is_active' => true,
                 ]);
 
-                // Save to relational table (variant_attribute_values)
-                if (!empty($vData['attributes'])) {
+                // Save to relational table (product_attr_values)
+                if (! empty($vData['attributes'])) {
                     foreach ($vData['attributes'] as $attrName => $attrValue) {
-                        $attrTemplate = AttributeTemplate::where('name', $attrName)
+                        $attrTemplate = Attribute::where('name', $attrName)
                             ->where(function ($q) use ($product) {
                                 $q->where('category_id', $product->category_id)
-                                  ->orWhere('is_global', true);
+                                    ->orWhere('is_global', true);
                             })
                             ->first();
 
                         if ($attrTemplate) {
-                            VariantAttributeValue::create([
+                            ProductAttrValue::create([
+                                'product_id' => $product->id,
                                 'variant_id' => $variant->id,
-                                'attribute_template_id' => $attrTemplate->id,
+                                'attribute_id' => $attrTemplate->id,
                                 'value' => $attrValue,
                             ]);
                         }
@@ -645,7 +654,7 @@ class ClothingInventorySeeder extends Seeder
                 $totalStock += $vData['stock_quantity'];
             }
 
-            if (!empty($variants)) {
+            if (! empty($variants)) {
                 $product->update(['stock_quantity' => $totalStock]);
             }
 
@@ -664,23 +673,23 @@ class ClothingInventorySeeder extends Seeder
                     'warehouse_id' => $wh1->id,
                     'type' => 'in',
                     'quantity' => $totalStock,
-                    'reference' => 'INV-INIT-' . strtoupper($product->sku),
+                    'reference' => 'INV-INIT-'.strtoupper($product->sku),
                     'notes' => 'Initial inventory stock',
                     'created_by' => null,
                 ]);
             }
         }
 
-        $this->command->info("");
-        $this->command->info("🎉 Clothing Inventory seeded successfully!");
-        $this->command->info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        $this->command->info("📦 Products: " . Product::count());
-        $this->command->info("🔄 Variants: " . ProductVariant::count());
-        $this->command->info("📂 Categories: " . Category::count());
-        $this->command->info("🏷️  Brands: " . Brand::count());
-        $this->command->info("🏭 Warehouses: " . Warehouse::count());
-        $this->command->info("⚙️  Options (AttributeTemplates): " . AttributeTemplate::where('is_variant_option', true)->count());
-        $this->command->info("🔗 Variant Attributes: " . \App\Models\VariantAttributeValue::count());
-        $this->command->info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        $this->command->info('');
+        $this->command->info('🎉 Clothing Inventory seeded successfully!');
+        $this->command->info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        $this->command->info('📦 Products: '.Product::count());
+        $this->command->info('🔄 Variants: '.ProductVariant::count());
+        $this->command->info('📂 Categories: '.Category::count());
+        $this->command->info('🏷️  Brands: '.Brand::count());
+        $this->command->info('🏭 Warehouses: '.Warehouse::count());
+        $this->command->info('⚙️  Variant Attributes: '.Attribute::where('is_variant', true)->count());
+        $this->command->info('🔗 Product Attr Values: '.ProductAttrValue::count());
+        $this->command->info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     }
 }

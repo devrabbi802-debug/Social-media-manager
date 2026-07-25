@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AttributeTemplate;
+use App\Models\Attribute;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
-use App\Models\ProductVariant;
+use App\Models\ProductAttrValue;
 use App\Models\StorefrontSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -20,7 +20,7 @@ class StorefrontApiController extends Controller
     {
         $storefront = StorefrontSettings::first();
 
-        if (!$storefront) {
+        if (! $storefront) {
             return response()->json([
                 'store_name' => config('app.name'),
                 'theme' => null,
@@ -76,7 +76,7 @@ class StorefrontApiController extends Controller
         $banners = collect();
         if ($storefront && $storefront->sections_data) {
             $raw = $storefront->sections_data['banners'] ?? [];
-            $banners = collect($raw)->filter(fn($b) => $b['is_active'] ?? true)
+            $banners = collect($raw)->filter(fn ($b) => $b['is_active'] ?? true)
                 ->sortBy('sort_order')
                 ->values();
         }
@@ -89,7 +89,7 @@ class StorefrontApiController extends Controller
             ->with($productWith)
             ->limit(8)
             ->get()
-            ->map(fn($product) => $this->formatProduct($product, true));
+            ->map(fn ($product) => $this->formatProduct($product, true));
 
         // New arrivals (latest 10)
         $newArrivals = Product::active()
@@ -97,20 +97,20 @@ class StorefrontApiController extends Controller
             ->orderBy('created_at', 'desc')
             ->limit(10)
             ->get()
-            ->map(fn($product) => $this->formatProduct($product, true));
+            ->map(fn ($product) => $this->formatProduct($product, true));
 
         // Category products (from editor settings with per-category config)
         $editorCategoryProducts = $storefront?->sections_data['category_products'] ?? null;
         $categoryProducts = collect();
 
-        if ($editorCategoryProducts && !empty($editorCategoryProducts['categories'])) {
+        if ($editorCategoryProducts && ! empty($editorCategoryProducts['categories'])) {
             foreach ($editorCategoryProducts['categories'] as $catConfig) {
                 $products = Product::active()
-                    ->whereHas('category', fn($q) => $q->where('id', $catConfig['id']))
+                    ->whereHas('category', fn ($q) => $q->where('id', $catConfig['id']))
                     ->with($productWith)
                     ->limit($catConfig['product_count'] ?? 4)
                     ->get()
-                    ->map(fn($product) => $this->formatProduct($product, true));
+                    ->map(fn ($product) => $this->formatProduct($product, true));
 
                 $categoryProducts->push([
                     'id' => $catConfig['id'],
@@ -128,11 +128,11 @@ class StorefrontApiController extends Controller
             $fallbackName = $firstCategory?->name ?? '';
             if ($fallbackSlug) {
                 $products = Product::active()
-                    ->whereHas('category', fn($q) => $q->where('slug', $fallbackSlug))
+                    ->whereHas('category', fn ($q) => $q->where('slug', $fallbackSlug))
                     ->with($productWith)
                     ->limit(10)
                     ->get()
-                    ->map(fn($product) => $this->formatProduct($product, true));
+                    ->map(fn ($product) => $this->formatProduct($product, true));
 
                 $categoryProducts->push([
                     'id' => $firstCategory?->id,
@@ -147,7 +147,7 @@ class StorefrontApiController extends Controller
 
         // Categories (from editor settings if set, otherwise DB)
         $editorCategories = $storefront?->sections_data['categories'] ?? [];
-        if (!empty($editorCategories)) {
+        if (! empty($editorCategories)) {
             $categories = $editorCategories;
         } else {
             $categories = Category::where('is_active', true)
@@ -155,7 +155,7 @@ class StorefrontApiController extends Controller
                 ->orderBy('sort_order')
                 ->limit(6)
                 ->get()
-                ->map(fn($cat) => [
+                ->map(fn ($cat) => [
                     'id' => $cat->id,
                     'name' => $cat->name,
                     'slug' => $cat->slug,
@@ -168,7 +168,7 @@ class StorefrontApiController extends Controller
         $brands = Brand::where('is_active', true)
             ->orderBy('name')
             ->get()
-            ->map(fn($brand) => [
+            ->map(fn ($brand) => [
                 'id' => $brand->id,
                 'name' => $brand->name,
                 'slug' => $brand->slug,
@@ -177,7 +177,7 @@ class StorefrontApiController extends Controller
 
         // All categories (from editor settings if set, otherwise DB)
         $editorAllCategories = $storefront?->sections_data['all_categories'] ?? [];
-        if (!empty($editorAllCategories)) {
+        if (! empty($editorAllCategories)) {
             $allCategories = $editorAllCategories;
         } else {
             $allCategories = $categories;
@@ -209,8 +209,8 @@ class StorefrontApiController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhereHas('category', fn($cq) => $cq->where('name', 'like', "%{$search}%"))
-                  ->orWhereHas('brand', fn($bq) => $bq->where('name', 'like', "%{$search}%"));
+                    ->orWhereHas('category', fn ($cq) => $cq->where('name', 'like', "%{$search}%"))
+                    ->orWhereHas('brand', fn ($bq) => $bq->where('name', 'like', "%{$search}%"));
             });
         }
 
@@ -218,14 +218,14 @@ class StorefrontApiController extends Controller
         if ($request->filled('category')) {
             $categorySlugs = explode(',', $request->category);
             $categoryIds = Category::whereIn('slug', $categorySlugs)
-                ->orWhereHas('parent', fn($q) => $q->whereIn('slug', $categorySlugs))
+                ->orWhereHas('parent', fn ($q) => $q->whereIn('slug', $categorySlugs))
                 ->pluck('id');
             $query->whereIn('category_id', $categoryIds);
         }
 
         if ($request->filled('brand')) {
             $brands = explode(',', $request->brand);
-            $query->whereHas('brand', fn($q) => $q->whereIn('slug', $brands));
+            $query->whereHas('brand', fn ($q) => $q->whereIn('slug', $brands));
         }
 
         if ($request->filled('min_price')) {
@@ -237,14 +237,14 @@ class StorefrontApiController extends Controller
         }
 
         // Variant attribute filters (e.g. ?color=red&size=m)
-        $attributeTemplates = AttributeTemplate::where('is_variant_option', true)
+        $attributeTemplates = Attribute::where('is_variant', true)
             ->where('is_active', true)->pluck('id', 'slug');
         foreach ($attributeTemplates as $slug => $templateId) {
             if ($request->filled($slug)) {
                 $values = explode(',', $request->$slug);
                 $query->whereHas('variants.attributeValues', function ($q) use ($templateId, $values) {
-                    $q->where('attribute_template_id', $templateId)
-                      ->whereIn('value', $values);
+                    $q->where('attribute_id', $templateId)
+                        ->whereIn('value', $values);
                 });
             }
         }
@@ -267,7 +267,7 @@ class StorefrontApiController extends Controller
         $products = $query->paginate($perPage);
 
         return response()->json([
-            'data' => $products->getCollection()->map(fn($product) => $this->formatProduct($product)),
+            'data' => $products->getCollection()->map(fn ($product) => $this->formatProduct($product)),
             'meta' => [
                 'current_page' => $products->currentPage(),
                 'last_page' => $products->lastPage(),
@@ -284,7 +284,7 @@ class StorefrontApiController extends Controller
     {
         $product = Product::active()
             ->where('slug', $slug)
-            ->with(['category', 'brand', 'images', 'variants.images', 'attributeValues.attributeTemplate'])
+            ->with(['category', 'brand', 'images', 'variants.images', 'attributeValues.attribute'])
             ->firstOrFail();
 
         return response()->json([
@@ -299,17 +299,17 @@ class StorefrontApiController extends Controller
     {
         $categories = Category::where('is_active', true)
             ->whereNull('parent_id')
-            ->with(['children' => fn($q) => $q->where('is_active', true)->orderBy('sort_order')])
-            ->withCount(['products' => fn($q) => $q->active()])
+            ->with(['children' => fn ($q) => $q->where('is_active', true)->orderBy('sort_order')])
+            ->withCount(['products' => fn ($q) => $q->active()])
             ->orderBy('sort_order')
             ->get()
-            ->map(fn($cat) => [
+            ->map(fn ($cat) => [
                 'id' => $cat->id,
                 'name' => $cat->name,
                 'slug' => $cat->slug,
                 'image' => $cat->image ? Storage::disk('public')->url($cat->image) : null,
                 'products_count' => (int) $cat->products_count,
-                'children' => $cat->children->map(fn($child) => [
+                'children' => $cat->children->map(fn ($child) => [
                     'id' => $child->id,
                     'name' => $child->name,
                     'slug' => $child->slug,
@@ -327,7 +327,7 @@ class StorefrontApiController extends Controller
     public function brands()
     {
         $brands = Brand::where('is_active', true)
-            ->withCount(['products' => fn($q) => $q->active()])
+            ->withCount(['products' => fn ($q) => $q->active()])
             ->orderBy('name')
             ->get();
 
@@ -347,7 +347,7 @@ class StorefrontApiController extends Controller
             ->with(['category', 'brand', 'images', 'variants.images'])
             ->limit(8)
             ->get()
-            ->map(fn($p) => $this->formatProduct($p, true))
+            ->map(fn ($p) => $this->formatProduct($p, true))
             ->values();
 
         // If not enough in same category, fallback to latest products
@@ -359,7 +359,7 @@ class StorefrontApiController extends Controller
                 ->inRandomOrder()
                 ->limit(8 - $related->count())
                 ->get()
-                ->map(fn($p) => $this->formatProduct($p, true));
+                ->map(fn ($p) => $this->formatProduct($p, true));
 
             $related = $related->concat($fallback)->values();
         }
@@ -377,7 +377,7 @@ class StorefrontApiController extends Controller
             ->with(['category', 'brand', 'images'])
             ->limit(8)
             ->get()
-            ->map(fn($product) => $this->formatProduct($product));
+            ->map(fn ($product) => $this->formatProduct($product));
 
         return response()->json($products);
     }
@@ -402,14 +402,16 @@ class StorefrontApiController extends Controller
      */
     public function attributes()
     {
-        $templates = AttributeTemplate::where('is_variant_option', true)
+        $templates = Attribute::where('is_variant', true)
+            ->where('is_filterable', true)
             ->where('is_active', true)
             ->orderBy('sort_order')
             ->get();
 
         return response()->json($templates->map(function ($template) {
-            $values = VariantAttributeValue::where('attribute_template_id', $template->id)
-                ->whereHas('variant.product', fn($q) => $q->active())
+            $values = ProductAttrValue::where('attribute_id', $template->id)
+                ->whereNotNull('variant_id')
+                ->whereHas('variant.product', fn ($q) => $q->active())
                 ->select('value')
                 ->distinct()
                 ->pluck('value')
@@ -420,7 +422,7 @@ class StorefrontApiController extends Controller
                 'slug' => $template->slug,
                 'values' => $values,
             ];
-        })->filter(fn($a) => $a['values']->isNotEmpty())->values());
+        })->filter(fn ($a) => $a['values']->isNotEmpty())->values());
     }
 
     /**
@@ -451,34 +453,34 @@ class StorefrontApiController extends Controller
                 'slug' => $product->brand->slug,
             ] : null,
             'image' => $product->images->first()?->image_url ?? null,
-            'images' => $product->images->map(fn($img) => $img->image_url),
+            'images' => $product->images->map(fn ($img) => $img->image_url),
         ];
 
         if ($detailed) {
-            $variants = $product->variants->map(fn($variant) => [
+            $variants = $product->variants->map(fn ($variant) => [
                 'id' => $variant->id,
                 'name' => $variant->name,
                 'sku' => $variant->sku,
                 'price' => $variant->price,
                 'stock_quantity' => $variant->stock_quantity,
                 'stock' => $variant->stock_quantity,
-                'attributes' => $variant->attributeValues->map(fn($attr) => [
-                    'attribute' => $attr->attributeTemplate->name ?? $attr->attribute_template_id,
+                'attributes' => $variant->attributeValues->map(fn ($attr) => [
+                    'attribute' => $attr->attribute?->name ?? $attr->attribute_id,
                     'value' => $attr->value,
-                    'is_color' => $attr->attributeTemplate?->is_color ?? false,
+                    'is_color' => $attr->attributeValue?->is_color ?? $attr->attribute?->isColor() ?? false,
                 ]),
                 'image' => $variant->images->first()?->image_url ?? null,
             ]);
 
-            $variants = $variants->map(fn($v) => array_merge(
+            $variants = $variants->map(fn ($v) => array_merge(
                 $v,
-                collect($v['attributes'])->mapWithKeys(fn($a) => [strtolower($a['attribute']) => $a['value']])->toArray()
+                collect($v['attributes'])->mapWithKeys(fn ($a) => [strtolower($a['attribute']) => $a['value']])->toArray()
             ));
 
             $data['variants'] = $variants;
 
-            $data['attributes'] = $product->attributeValues->map(fn($attr) => [
-                'attribute' => $attr->attributeTemplate->name ?? $attr->attribute_template_id,
+            $data['attributes'] = $product->attributeValues->map(fn ($attr) => [
+                'attribute' => $attr->attribute?->name ?? $attr->attribute_id,
                 'value' => $attr->value,
             ]);
         }

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Models\Attribute;
 use App\Models\Category;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -42,6 +44,7 @@ class CategoryController extends Controller
                 $total += (int) $child->products_count;
             }
             $cat->products_count = $total;
+
             return $cat;
         });
 
@@ -135,9 +138,10 @@ class CategoryController extends Controller
             return back()->with('error', "এই ক্যাটাগরির {$childrenCount} টি সাব-ক্যাটাগরি আছে, তাই ডিলিট করা যাবে না!");
         }
 
-        $attrCount = \App\Models\AttributeTemplate::where('category_id', $category->id)->count();
-        if ($attrCount > 0) {
-            return back()->with('error', "এই ক্যাটাগরির সাথে {$attrCount} টি অ্যাট্রিবিউট টেমপ্লেট সংযুক্ত আছে, আগে সেগুলো ডিলিট করুন!");
+        $attrCount = Attribute::where('category_id', $category->id)->count();
+        $pivotCount = $category->categoryAttributes()->count();
+        if ($attrCount > 0 || $pivotCount > 0) {
+            return back()->with('error', 'এই ক্যাটাগরির সাথে অ্যাট্রিবিউট সংযুক্ত আছে, আগে সেগুলো ডিলিট করুন!');
         }
 
         try {
@@ -152,12 +156,12 @@ class CategoryController extends Controller
                     throw new \RuntimeException('No rows affected — category may have already been deleted.');
                 }
             });
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException $e) {
             return back()->with('error', 'ডাটাবেস ত্রুটির কারণে ক্যাটাগরি ডিলিট করা যায়নি।');
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         } catch (\Exception $e) {
-            return back()->with('error', 'অপ্রত্যাশিত ত্রুটি: ' . $e->getMessage());
+            return back()->with('error', 'অপ্রত্যাশিত ত্রুটি: '.$e->getMessage());
         }
 
         return redirect()->route('inventory.categories.index')

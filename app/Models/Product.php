@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
@@ -47,7 +48,7 @@ class Product extends Model
         });
 
         static::updating(function (Product $product) {
-            if ($product->isDirty('name') && !$product->isDirty('slug')) {
+            if ($product->isDirty('name') && ! $product->isDirty('slug')) {
                 $product->slug = Str::slug($product->name);
             }
         });
@@ -71,14 +72,27 @@ class Product extends Model
         return $this->belongsTo(Brand::class);
     }
 
+    /** ALL attribute values including those linked to variants */
+    public function productAttrValues(): HasMany
+    {
+        return $this->hasMany(ProductAttrValue::class);
+    }
+
+    /** Only product-level attribute values (variant_id IS NULL) — excludes variant-linked ones */
     public function attributeValues(): HasMany
     {
-        return $this->hasMany(ProductAttributeValue::class);
+        return $this->hasMany(ProductAttrValue::class)->whereNull('variant_id');
     }
 
     public function variants(): HasMany
     {
         return $this->hasMany(ProductVariant::class);
+    }
+
+    public function attributeGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(AttributeGroup::class, 'attribute_group_product')
+            ->withTimestamps();
     }
 
     public function images(): HasMany
@@ -157,14 +171,14 @@ class Product extends Model
 
     public function scopeSearch($query, ?string $search)
     {
-        if (!$search) {
+        if (! $search) {
             return $query;
         }
 
         return $query->where(function ($q) use ($search) {
             $q->where('name', 'like', "%{$search}%")
-              ->orWhere('sku', 'like', "%{$search}%")
-              ->orWhere('barcode', 'like', "%{$search}%");
+                ->orWhere('sku', 'like', "%{$search}%")
+                ->orWhere('barcode', 'like', "%{$search}%");
         });
     }
 }

@@ -2,26 +2,27 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Brand;
+use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductImage;
-use App\Models\Category;
-use App\Models\Brand;
 use Illuminate\Console\Command;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Stancl\Tenancy\Facades\Tenancy;
 
 class SeedProducts extends Command
 {
     protected $signature = 'tenants:seed-products';
+
     protected $description = 'Seed products for noyan tenant from /home/noyan/Downloads/Product';
 
     private array $categoryMap = [
         'Mans Shirt' => ['parent_slug' => 'men', 'slug' => 'men-shirts', 'name' => 'Shirts'],
-        'T-Shirt'    => ['parent_slug' => 'men', 'slug' => 'men-tshirts', 'name' => 'T-Shirts'],
+        'T-Shirt' => ['parent_slug' => 'men', 'slug' => 'men-tshirts', 'name' => 'T-Shirts'],
         'Polo Shirt' => ['parent_slug' => 'men', 'slug' => 'men-polo', 'name' => 'Polo Shirts'],
-        'Formal Pant'=> ['parent_slug' => 'men', 'slug' => 'men-pants', 'name' => 'Pants'],
-        'Panjabi'    => ['parent_slug' => 'men', 'slug' => 'men-panjabi', 'name' => 'Panjabi'],
+        'Formal Pant' => ['parent_slug' => 'men', 'slug' => 'men-pants', 'name' => 'Pants'],
+        'Panjabi' => ['parent_slug' => 'men', 'slug' => 'men-panjabi', 'name' => 'Panjabi'],
     ];
 
     private array $productNames = [
@@ -62,25 +63,26 @@ class SeedProducts extends Command
 
     private array $prices = [
         'Mans Shirt' => ['base' => 1200, 'discount' => 999],
-        'T-Shirt'    => ['base' => 800, 'discount' => 650],
+        'T-Shirt' => ['base' => 800, 'discount' => 650],
         'Polo Shirt' => ['base' => 1000, 'discount' => 850],
-        'Formal Pant'=> ['base' => 1500, 'discount' => 1299],
-        'Panjabi'    => ['base' => 1800, 'discount' => 1500],
+        'Formal Pant' => ['base' => 1500, 'discount' => 1299],
+        'Panjabi' => ['base' => 1800, 'discount' => 1500],
     ];
 
     private array $filePrefixMap = [
         'Mans Shirt' => 'shirt',
-        'T-Shirt'    => 'tshirt',
+        'T-Shirt' => 'tshirt',
         'Polo Shirt' => 'polo',
-        'Formal Pant'=> 'pant',
-        'Panjabi'    => 'panjabi',
+        'Formal Pant' => 'pant',
+        'Panjabi' => 'panjabi',
     ];
 
     public function handle(): int
     {
         $tenant = app(\Stancl\Tenancy\Tenancy::class)->find('noyan');
-        if (!$tenant) {
+        if (! $tenant) {
             $this->error('Tenant "noyan" not found.');
+
             return 1;
         }
         Tenancy::initialize($tenant);
@@ -90,8 +92,9 @@ class SeedProducts extends Command
         $this->deleteExistingProducts();
 
         $brand = Brand::first();
-        if (!$brand) {
+        if (! $brand) {
             $this->error('No brand found. Please seed brands first.');
+
             return 1;
         }
         $this->info("Using brand: {$brand->name}");
@@ -102,22 +105,24 @@ class SeedProducts extends Command
 
         foreach ($this->categoryMap as $folder => $catInfo) {
             $folderPath = "{$basePath}/{$folder}";
-            if (!is_dir($folderPath)) {
+            if (! is_dir($folderPath)) {
                 $this->warn("Folder not found: {$folderPath}, skipping.");
+
                 continue;
             }
 
             $images = collect(scandir($folderPath))
-                ->filter(fn($f) => in_array(strtolower(pathinfo($f, PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'webp']))
+                ->filter(fn ($f) => in_array(strtolower(pathinfo($f, PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'webp']))
                 ->values();
 
             if ($images->isEmpty()) {
                 $this->warn("No images found in {$folder}, skipping.");
+
                 continue;
             }
 
             $category = Category::where('slug', $catInfo['slug'])->first();
-            if (!$category) {
+            if (! $category) {
                 $parent = Category::where('slug', $catInfo['parent_slug'])->first();
                 $category = Category::create([
                     'name' => $catInfo['name'],
@@ -133,9 +138,9 @@ class SeedProducts extends Command
             $this->info("Processing {$folder} ({$images->count()} images) → {$category->name}");
 
             foreach ($images as $index => $imageFile) {
-                $name = $names[$index] ?? "{$folder} " . ($index + 1);
+                $name = $names[$index] ?? "{$folder} ".($index + 1);
                 $slug = Str::slug($name);
-                $sku = strtoupper(substr($slug, 0, 3)) . '-' . str_pad($index + 1, 3, '0', STR_PAD_LEFT);
+                $sku = strtoupper(substr($slug, 0, 3)).'-'.str_pad($index + 1, 3, '0', STR_PAD_LEFT);
                 $diskPath = "products/{$this->filePrefixMap[$folder]}_{$index}.png";
                 $fullDestPath = Storage::disk('public')->path($diskPath);
 
@@ -143,8 +148,8 @@ class SeedProducts extends Command
                     'category_id' => $category->id,
                     'brand_id' => $brand->id,
                     'name' => $name,
-                    'slug' => $slug . '-' . Str::random(4),
-                    'sku' => $sku . '-' . Str::random(3),
+                    'slug' => $slug.'-'.Str::random(4),
+                    'sku' => $sku.'-'.Str::random(3),
                     'description' => "High quality {$name} from our collection.",
                     'base_price' => $price['base'],
                     'discount_price' => $price['discount'],
@@ -172,7 +177,8 @@ class SeedProducts extends Command
 
         Tenancy::end();
 
-        $this->info("Done! Created {$productCount} products across " . count($this->categoryMap) . " categories.");
+        $this->info("Done! Created {$productCount} products across ".count($this->categoryMap).' categories.');
+
         return 0;
     }
 
@@ -183,6 +189,7 @@ class SeedProducts extends Command
 
         if ($count === 0) {
             $this->info('No existing products to delete.');
+
             return;
         }
 
@@ -192,12 +199,12 @@ class SeedProducts extends Command
 
         \DB::table('stock_movements')->whereIn('product_id', $productIds)->delete();
         \DB::table('inventory_alerts')->whereIn('product_id', $productIds)->delete();
-        \DB::table('product_attribute_values')->whereIn('product_id', $productIds)->delete();
+        \DB::table('product_attr_values')->whereIn('product_id', $productIds)->delete();
 
         $variantIds = \DB::table('product_variants')->whereIn('product_id', $productIds)->pluck('id')->toArray();
-        if (!empty($variantIds)) {
+        if (! empty($variantIds)) {
             \DB::table('variant_images')->whereIn('variant_id', $variantIds)->delete();
-            \DB::table('variant_attribute_values')->whereIn('variant_id', $variantIds)->delete();
+            \DB::table('product_attr_values')->whereIn('variant_id', $variantIds)->delete();
             \DB::table('product_variants')->whereIn('id', $variantIds)->delete();
         }
 
