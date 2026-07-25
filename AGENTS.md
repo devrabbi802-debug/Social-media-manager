@@ -11,7 +11,7 @@ php artisan tenants:seed      # seed tenant DBs
 ./vendor/bin/pint             # format PHP
 ```
 
-`config:clear` required before `artisan test` (composer test handles it). Root `.npmrc` sets `ignore-scripts=true`. `composer setup` only copies `.env.example`→`.env` if `.env` missing.
+`config:clear` required before `artisan test` (composer test handles it). Root `.npmrc` sets `ignore-scripts=true` — affects storefront npm install too. `composer setup` only copies `.env.example`→`.env` if `.env` missing.
 
 **Storefront has own npm**: `cd resources/storefront && npm install && npm run build` (output → `public/storefront/`, own Vite 5 + React 18). Not covered by `composer setup`.
 
@@ -23,6 +23,8 @@ php artisan tenants:seed      # seed tenant DBs
 | Admin UI | Blade + Alpine.js | Tailwind v4 (`@tailwindcss/vite`), root Vite 8 |
 | Storefront SPA | `resources/storefront/` | React 18, React Router 6, Vite 5, Tailwind v3 (own PostCSS), Axios |
 | CLIP Server | `clip-server/` | Python FastAPI, OpenAI CLIP (offline) |
+
+**APP_NAME**: `Get ERP Store` (set in `.env`).
 
 ## Routes (Load Order)
 
@@ -126,6 +128,9 @@ Minimal — 2 Laravel examples (`tests/Feature/ExampleTest.php`, `tests/Unit/Exa
 
 - `.env` uses MySQL+Redis; `.env.example` defaults to PostgreSQL + database-backed queue/cache/session
 - `.env` has duplicate `QUEUE_CONNECTION=redis` — last one wins
+- `.env` `CACHE_STORE=redis` vs `.env.example` `CACHE_STORE=database`
+- `CLIP_SERVER_URL` in `.env` = `http://clip-server:8089` (Docker hostname); `.env.example` uses `localhost:8089` (local dev)
+- `ADMIN_PANEL_PREFIX` in `.env` = `supermaster` (deviates from default `ax7k9m` in `config/app.php`)
 - Root `package.json` Vite = Tailwind v4 (`@tailwindcss/vite`); storefront Vite = Tailwind v3 (PostCSS + `tailwindcss` + `autoprefixer`)
 - `start.sh` orchestrates local dev (Docker + CLIP + dnsmasq + Apache proxy + Ngrok + storefront build)
 - `setup-domain.sh` configures `smm.test` wildcard via dnsmasq + Apache reverse proxy to port 8000
