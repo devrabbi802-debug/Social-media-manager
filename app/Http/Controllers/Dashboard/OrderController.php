@@ -70,7 +70,7 @@ class OrderController extends Controller
 
     public function show(Request $request, Order $order)
     {
-        $order->load(['items.product', 'items.variant', 'customer', 'shippingAddress']);
+        $order->load(['items.product.primaryImage', 'items.variant', 'customer', 'shippingAddress']);
         return view('tenant.orders.show', compact('order'));
     }
 

@@ -107,11 +107,18 @@
             <tr>
                 <td>{{ $i + 1 }}</td>
                 <td>
-                    <span class="font-bold">{{ $item->name }}</span>
-                    @if($item->variant)
-                        <br><span style="font-size: 11px; color: #6b7280;">{{ $item->variant->display ?? $item->variant->name }}</span>
-                    @endif
-                    @if($item->sku)<br><span style="font-size: 11px; color: #9ca3af;">SKU: {{ $item->sku }}</span>@endif
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        @if($item->product && $item->product->primaryImage)
+                            <img src="{{ asset('storage/' . $item->product->primaryImage->image_path) }}" alt="" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; flex-shrink: 0;">
+                        @endif
+                        <div>
+                            <span class="font-bold">{{ $item->name }}</span>
+                            @if($item->variant)
+                                <br><span style="font-size: 11px; color: #6b7280;">{{ $item->variant->display ?? $item->variant->name }}</span>
+                            @endif
+                            @if($item->sku)<br><span style="font-size: 11px; color: #9ca3af;">SKU: {{ $item->sku }}</span>@endif
+                        </div>
+                    </div>
                 </td>
                 <td class="text-center">{{ $item->quantity }}</td>
                 <td class="text-right">৳{{ number_format($item->unit_price, 2) }}</td>
