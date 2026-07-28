@@ -37,7 +37,7 @@
                         @endphp
                         @if($totalCount > 0)
                             <span class="text-xs px-2 py-1 rounded-full {{ $embeddedCount === $totalCount ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700' }}">
-                                {{ $embeddedCount }}/{{ $totalCount }} embedded
+                                {{ $embeddedCount }}/{{ $totalCount }} চেনা হয়েছে
                             </span>
                         @endif
                     </div>
@@ -47,11 +47,11 @@
                                 <div class="relative group">
                                     <img src="{{ asset('storage/' . $image->image_path) }}" class="w-full h-24 object-cover rounded-lg">
                                     @if(!empty($image->embedding))
-                                        <span class="absolute top-1 right-1 bg-green-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow" title="Embedded">
+                                        <span class="absolute top-1 right-1 bg-green-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow" title="AI চেনা হয়েছে">
                                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
                                         </span>
                                     @else
-                                        <span class="absolute top-1 right-1 bg-gray-400 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow" title="Not embedded">
+                                        <span class="absolute top-1 right-1 bg-gray-400 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow" title="AI চেনা হয়নি">
                                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
                                         </span>
                                     @endif
@@ -163,11 +163,11 @@
                                                     <div class="relative">
                                                         <img src="{{ asset('storage/' . $img->image_path) }}" class="w-10 h-10 object-cover rounded-lg" alt="{{ $img->alt_text }}">
                                                         @if(!empty($img->embedding))
-                                                            <span class="absolute -top-1 -right-1 bg-green-500 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center shadow" title="Embedded">
+                                                            <span class="absolute -top-1 -right-1 bg-green-500 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center shadow" title="AI চেনা হয়েছে">
                                                                 <svg class="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
                                                             </span>
                                                         @else
-                                                            <span class="absolute -top-1 -right-1 bg-gray-400 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center shadow" title="Not embedded">
+                                                            <span class="absolute -top-1 -right-1 bg-gray-400 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center shadow" title="AI চেনা হয়নি">
                                                                 <svg class="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
                                                             </span>
                                                         @endif
@@ -277,17 +277,17 @@
                     $missingTotal = $totalImages - $embeddedTotal;
                 @endphp
                 <div class="bg-white rounded-2xl p-6 shadow-sm">
-                    <h2 class="text-lg font-bold text-gray-900 mb-3">AI Recognition</h2>
+                    <h2 class="text-lg font-bold text-gray-900 mb-3">AI ছবি চেনা</h2>
                     @if($totalImages > 0)
                         <div class="bg-gray-50 rounded-xl p-3 mb-4 space-y-2">
                             <div class="flex items-center justify-between text-sm">
-                                <span class="text-gray-600">Product images</span>
+                                <span class="text-gray-600">প্রোডাক্ট ছবি</span>
                                 <span class="font-medium {{ $product->images->filter(fn($img) => !empty($img->embedding))->count() === $product->images->count() ? 'text-green-600' : 'text-yellow-600' }}">
                                     {{ $product->images->filter(fn($img) => !empty($img->embedding))->count() }}/{{ $product->images->count() }}
                                 </span>
                             </div>
                             <div class="flex items-center justify-between text-sm">
-                                <span class="text-gray-600">Variant images</span>
+                                <span class="text-gray-600">ভ্যারিয়েন্ট ছবি</span>
                                 @php $variantImgs = $product->variants->flatMap->images; @endphp
                                 <span class="font-medium {{ $variantImgs->filter(fn($img) => !empty($img->embedding))->count() === $variantImgs->count() ? 'text-green-600' : 'text-yellow-600' }}">
                                     {{ $variantImgs->filter(fn($img) => !empty($img->embedding))->count() }}/{{ $variantImgs->count() }}
@@ -295,25 +295,25 @@
                             </div>
                             @if($missingTotal > 0)
                                 <div class="border-t pt-2 mt-2">
-                                    <p class="text-xs text-orange-600">{{ $missingTotal }} image{{ $missingTotal > 1 ? 's' : '' }} not yet embedded</p>
+                                    <p class="text-xs text-orange-600">{{ $missingTotal }}টি ছবি চেনা হয়নি</p>
                                 </div>
                             @else
                                 <div class="border-t pt-2 mt-2">
-                                    <p class="text-xs text-green-600">All images embedded</p>
+                                    <p class="text-xs text-green-600">সব ছবি চেনা হয়েছে</p>
                                 </div>
                             @endif
                         </div>
                     @endif
                     <form action="{{ route('inventory.products.generate-embeddings', $product) }}" method="POST"
-                          onsubmit="return confirm('{{ __('products.ai_recognize_all_confirm') }}')">
+                          onsubmit="return confirm('সব ছবিকে AI দিয়ে চেনানো হবে?')">
                         @csrf
                         <button type="submit" class="w-full {{ $missingTotal > 0 ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 cursor-not-allowed' }} text-white px-4 py-2 rounded-xl font-medium transition text-sm" {{ $missingTotal > 0 ? '' : 'disabled' }}>
                             @if($missingTotal > 0)
                                 <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                                {{ $missingTotal }} image{{ $missingTotal > 1 ? 's' : '' }} embed {{ $missingTotal > 1 ? 'koro' : 'koro' }}
+                                {{ $missingTotal }}টি ছবি চেনাও
                             @else
                                 <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                All embedded
+                                সব ছবি চেনা হয়েছে
                             @endif
                         </button>
                     </form>
