@@ -17,6 +17,7 @@ class ProductVariant extends Model
         'attributes',
         'barcode',
         'is_active',
+        'text_embedding',
     ];
 
     protected $casts = [
@@ -24,6 +25,7 @@ class ProductVariant extends Model
         'price' => 'decimal:2',
         'stock_quantity' => 'integer',
         'is_active' => 'boolean',
+        'text_embedding' => 'array',
     ];
 
     public function product(): BelongsTo

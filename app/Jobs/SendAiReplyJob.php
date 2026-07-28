@@ -338,11 +338,22 @@ class SendAiReplyJob implements ShouldQueue
 
         $history = $this->getConversationHistory();
 
+        // Text product search: find relevant products for customer's query
+        $productContext = $this->searchProductsByText($this->messageText);
+        $messageToSend = $this->messageText;
+
+        if ($productContext) {
+            $messageToSend = "{$this->messageText}\n\nকাস্টমারের প্রশ্নের সাথে সম্পর্কিত প্রোডাক্ট:\n{$productContext}";
+            Log::info('SendAiReplyJob: text product search found results', [
+                'query' => mb_substr($this->messageText, 0, 50),
+            ]);
+        }
+
         // Fallback chain: Groq → Cerebras → Gemini
         if ($aiKeys->isNotEmpty()) {
             $aiService = new AiChatService($systemPrompt);
             $reply = $aiService->chatWithHistory(
-                $this->messageText,
+                $messageToSend,
                 $aiKeys,
                 $history,
                 'cerebras',
@@ -353,16 +364,16 @@ class SendAiReplyJob implements ShouldQueue
         } elseif ($cerebrasKeys->isNotEmpty()) {
             Log::info('SendAiReplyJob: no Groq keys, using Cerebras directly', ['user_id' => $facebookSetting->user_id]);
             $aiService = new AiChatService($systemPrompt);
-            $reply = $aiService->chatWithCerebrasFallback($this->messageText, $cerebrasKeys, $history);
+            $reply = $aiService->chatWithCerebrasFallback($messageToSend, $cerebrasKeys, $history);
             // If Cerebras fails, try Gemini
             if ($reply === null && $geminiKeys->isNotEmpty()) {
                 Log::info('SendAiReplyJob: Cerebras failed, falling back to Gemini');
-                $reply = $aiService->chatWithGeminiFallback($this->messageText, $geminiKeys, $history);
+                $reply = $aiService->chatWithGeminiFallback($messageToSend, $geminiKeys, $history);
             }
         } else {
             Log::info('SendAiReplyJob: no Groq/Cerebras keys, using Gemini directly', ['user_id' => $facebookSetting->user_id]);
             $aiService = new AiChatService($systemPrompt);
-            $reply = $aiService->chatWithGeminiFallback($this->messageText, $geminiKeys, $history);
+            $reply = $aiService->chatWithGeminiFallback($messageToSend, $geminiKeys, $history);
         }
 
         return $reply ? ['reply' => $reply] : null;
@@ -655,6 +666,48 @@ class SendAiReplyJob implements ShouldQueue
 - কথোপকথনের স্বাভাবিক ধারা বজায় রাখুন।";
 
         return $context;
+    }
+
+    private function searchProductsByText(string $query): ?string
+    {
+        try {
+            $textSearchService = new \App\Services\TextSearchService();
+            $results = $textSearchService->searchText($query, topK: 5, threshold: 0.3);
+
+            if (! $results || empty($results['matches'])) {
+                return null;
+            }
+
+            $context = "কাস্টমারের প্রশ্ন: {$query}\n\nসম্পর্কিত প্রোডাক্টসমূহ:\n";
+
+            foreach ($results['matches'] as $match) {
+                $score = round($match['score'] * 100);
+                $name = $match['product_name'];
+                $metadata = $match['metadata'] ?? [];
+
+                $line = "- {$name} (ম্যাচ: {$score}%)";
+
+                if (isset($metadata['product_price'])) {
+                    $line .= " — দাম: ৳".number_format($metadata['product_price'], 2);
+                }
+                if (isset($metadata['stock'])) {
+                    $line .= ", স্টক: {$metadata['stock']}";
+                }
+
+                $context .= $line."\n";
+            }
+
+            $context .= "\nউপরের প্রোডাক্টগুলোর তথ্য ব্যবহার করে কাস্টমারকে সংক্ষেপে উত্তর দিন।";
+
+            return $context;
+        } catch (\Exception $e) {
+            Log::error('SendAiReplyJob: text product search failed', [
+                'query' => mb_substr($query, 0, 50),
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     private function getFallbackReply(): ?array

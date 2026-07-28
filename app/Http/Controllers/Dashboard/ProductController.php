@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Dashboard;
 use App\Http\Controllers\Controller;
 use App\Jobs\AnalyzeProductImageJob;
 use App\Jobs\AnalyzeVariantImageJob;
+use App\Jobs\GenerateTextEmbeddingJob;
+use App\Jobs\GenerateVariantTextEmbeddingJob;
 use App\Models\Attribute;
 use App\Models\Brand;
 use App\Models\BusinessCategory;
@@ -339,6 +341,14 @@ class ProductController extends Controller
             }
         }
 
+        // Generate text embeddings for product
+        GenerateTextEmbeddingJob::dispatch($product);
+
+        // Generate text embeddings for variants
+        foreach ($product->variants as $variant) {
+            GenerateVariantTextEmbeddingJob::dispatch($variant);
+        }
+
         return redirect()->route('inventory.products.edit', $product)
             ->with('success', 'প্রোডাক্ট সফলভাবে তৈরি হয়েছে!');
     }
@@ -410,6 +420,36 @@ class ProductController extends Controller
         $message = "{$processed}টি ভ্যারিয়েন্ট ছবি AI দিয়ে চেনানোর জন্য পাঠানো হয়েছে।";
         if ($errors > 0) {
             $message .= " {$errors}টি ছবিতে সমস্যা হয়েছে।";
+        }
+
+        return redirect()->route('inventory.products.show', $product)
+            ->with('success', $message);
+    }
+
+    public function generateTextEmbeddings(Product $product)
+    {
+        $processed = 0;
+        $errors = 0;
+
+        try {
+            GenerateTextEmbeddingJob::dispatch($product);
+            $processed++;
+        } catch (\Exception $e) {
+            $errors++;
+        }
+
+        foreach ($product->variants as $variant) {
+            try {
+                GenerateVariantTextEmbeddingJob::dispatch($variant);
+                $processed++;
+            } catch (\Exception $e) {
+                $errors++;
+            }
+        }
+
+        $message = "{$processed}টি প্রোডাক্ট/ভ্যারিয়েন্টের টেক্সট এম্বেডিং তৈরির জন্য পাঠানো হয়েছে।";
+        if ($errors > 0) {
+            $message .= " {$errors}টিতে সমস্যা হয়েছে।";
         }
 
         return redirect()->route('inventory.products.show', $product)
@@ -753,6 +793,12 @@ class ProductController extends Controller
                     }
                 }
             }
+        }
+
+        // Regenerate text embeddings for product and variants
+        GenerateTextEmbeddingJob::dispatch($product);
+        foreach ($product->variants as $variant) {
+            GenerateVariantTextEmbeddingJob::dispatch($variant);
         }
 
         return redirect()->route('inventory.products.index')

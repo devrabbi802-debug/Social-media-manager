@@ -120,12 +120,14 @@ services:
       - "8089:8089"
     volumes:
       - clip-models:/root/.cache/clip
+      - clip-huggingface:/root/.cache/huggingface
     networks:
       - laravel-net
 
 volumes:
   mysql-data:
   clip-models:
+  clip-huggingface:
 
 networks:
   laravel-net:

@@ -1,10 +1,12 @@
 """
-CLIP Image Embedding Server
+CLIP Image Embedding Server + Text Semantic Search
 Local, Offline, Free - No API Keys Required!
 
 Endpoints:
 - POST /embed: Generate embedding for a single image
 - POST /match: Match customer image against catalog embeddings
+- POST /text-embed: Generate text embedding for product/customer message
+- POST /text-search: Search products by text query (semantic search)
 - GET /health: Health check
 """
 
@@ -45,6 +47,13 @@ logger.info(f"Loading CLIP model on {DEVICE}...")
 MODEL, PREPROCESS = clip.load("ViT-B/32", device=DEVICE)
 EMBEDDING_DIM = 512
 logger.info(f"CLIP model loaded successfully. Embedding dimension: {EMBEDDING_DIM}")
+
+# Load text embedding model (multilingual, supports Bangla + 50 languages)
+logger.info("Loading text embedding model (paraphrase-multilingual-MiniLM-L12-v2)...")
+from sentence_transformers import SentenceTransformer
+TEXT_MODEL = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+TEXT_EMBEDDING_DIM = 384
+logger.info(f"Text embedding model loaded. Dimension: {TEXT_EMBEDDING_DIM}")
 
 
 class EmbedRequest(BaseModel):
@@ -128,9 +137,11 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "model": "ViT-B/32",
+        "image_model": "ViT-B/32",
+        "text_model": "paraphrase-multilingual-MiniLM-L12-v2",
         "device": DEVICE,
-        "embedding_dimension": EMBEDDING_DIM,
+        "image_embedding_dimension": EMBEDDING_DIM,
+        "text_embedding_dimension": TEXT_EMBEDDING_DIM,
     }
 
 
@@ -280,6 +291,124 @@ async def batch_embed(requests: list[EmbedRequest]):
             results.append({"error": str(e)})
     
     return {"results": results, "count": len(results)}
+
+
+# ============================================================
+# TEXT SEARCH MODELS
+# ============================================================
+
+class TextEmbedRequest(BaseModel):
+    """Request for text embedding generation."""
+    text: str
+
+
+class TextEmbedResponse(BaseModel):
+    """Response containing text embedding."""
+    embedding: list[float]
+    dimension: int
+    model: str
+
+
+class TextSearchRequest(BaseModel):
+    """Request for text-based product search."""
+    query: str
+    catalog_embeddings: list[dict]  # [{"id": 1, "embedding": [...], "product_name": "...", ...}]
+    top_k: int = 5
+    threshold: float = 0.3
+
+
+class TextSearchResult(BaseModel):
+    """Single text search result."""
+    id: str
+    product_name: str
+    score: float
+    metadata: Optional[dict] = None
+
+
+class TextSearchResponse(BaseModel):
+    """Response containing text search results."""
+    matches: list[TextSearchResult]
+    best_match: Optional[TextSearchResult]
+    query: str
+    total_catalog_items: int
+
+
+# ============================================================
+# TEXT SEARCH ENDPOINTS
+# ============================================================
+
+@app.post("/text-embed", response_model=TextEmbedResponse)
+async def embed_text(request: TextEmbedRequest):
+    """
+    Generate text embedding using multilingual model.
+    Supports Bangla + 50 other languages.
+    """
+    if not request.text or not request.text.strip():
+        raise HTTPException(status_code=400, detail="Text cannot be empty")
+
+    try:
+        embedding = TEXT_MODEL.encode([request.text.strip()], normalize_embeddings=True)
+        return TextEmbedResponse(
+            embedding=embedding[0].tolist(),
+            dimension=TEXT_EMBEDDING_DIM,
+            model="paraphrase-multilingual-MiniLM-L12-v2",
+        )
+    except Exception as e:
+        logger.error(f"Text embedding failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Text embedding failed: {str(e)}")
+
+
+@app.post("/text-search", response_model=TextSearchResponse)
+async def text_search(request: TextSearchRequest):
+    """
+    Search products by text query using semantic similarity.
+    Works with Bangla + English mixed queries.
+    """
+    if not request.query or not request.query.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
+
+    if not request.catalog_embeddings:
+        raise HTTPException(status_code=400, detail="catalog_embeddings cannot be empty")
+
+    try:
+        # Generate query embedding
+        query_embedding = TEXT_MODEL.encode([request.query.strip()], normalize_embeddings=True)[0]
+
+        # Calculate similarities
+        results = []
+        for item in request.catalog_embeddings:
+            catalog_embedding = np.array(item["embedding"])
+            score = float(np.dot(query_embedding, catalog_embedding) / (
+                np.linalg.norm(query_embedding) * np.linalg.norm(catalog_embedding)
+            ))
+
+            results.append(TextSearchResult(
+                id=item["id"],
+                product_name=item.get("product_name", ""),
+                score=score,
+                metadata=item.get("metadata"),
+            ))
+
+        # Sort by score descending
+        results.sort(key=lambda x: x.score, reverse=True)
+
+        # Filter by threshold and get top-k
+        filtered = [r for r in results if r.score >= request.threshold]
+        top_matches = filtered[:request.top_k]
+
+        best_match = top_matches[0] if top_matches else None
+
+        return TextSearchResponse(
+            matches=top_matches,
+            best_match=best_match,
+            query=request.query,
+            total_catalog_items=len(request.catalog_embeddings),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Text search failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Text search failed: {str(e)}")
 
 
 if __name__ == "__main__":

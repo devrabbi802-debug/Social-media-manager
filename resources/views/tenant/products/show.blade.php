@@ -318,6 +318,64 @@
                         </button>
                     </form>
                 </div>
+
+                {{-- AI Text Embedding --}}
+                @php
+                    $hasTextEmbedding = !empty($product->text_embedding);
+                    $variantTextMissing = $product->variants->filter(fn($v) => empty($v->text_embedding))->count();
+                    $variantTextTotal = $product->variants->count();
+                    $allTextDone = $hasTextEmbedding && $variantTextMissing === 0;
+                @endphp
+                <div class="bg-white rounded-2xl p-6 shadow-sm">
+                    <h2 class="text-lg font-bold text-gray-900 mb-3">AI টেক্সট সার্চ</h2>
+                    <div class="bg-gray-50 rounded-xl p-3 mb-4 space-y-2">
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-gray-600">প্রোডাক্ট টেক্সট</span>
+                            @if($hasTextEmbedding)
+                                <span class="inline-flex items-center text-green-600 font-medium text-xs">
+                                    <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                                    চেনা হয়েছে
+                                </span>
+                            @else
+                                <span class="inline-flex items-center text-yellow-600 font-medium text-xs">
+                                    <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
+                                    চেনা হয়নি
+                                </span>
+                            @endif
+                        </div>
+                        @if($variantTextTotal > 0)
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-gray-600">ভ্যারিয়েন্ট টেক্সট</span>
+                            @php $variantTextEmbedded = $variantTextTotal - $variantTextMissing; @endphp
+                            <span class="font-medium {{ $variantTextMissing === 0 ? 'text-green-600' : 'text-yellow-600' }}">
+                                {{ $variantTextEmbedded }}/{{ $variantTextTotal }}
+                            </span>
+                        </div>
+                        @endif
+                        @if(!$allTextDone)
+                            <div class="border-t pt-2 mt-2">
+                                <p class="text-xs text-orange-600">টেক্সট এম্বেডিং না থাকলে AI প্রোডাক্ট খুঁজে পাবে না</p>
+                            </div>
+                        @else
+                            <div class="border-t pt-2 mt-2">
+                                <p class="text-xs text-green-600">সব টেক্সট এম্বেডিং তৈরি হয়েছে</p>
+                            </div>
+                        @endif
+                    </div>
+                    <form action="{{ route('inventory.products.generate-text-embeddings', $product) }}" method="POST"
+                          onsubmit="return confirm('এই প্রোডাক্টের সব টেক্সট এম্বেডিং তৈরি হবে?')">
+                        @csrf
+                        <button type="submit" class="w-full {{ !$allTextDone ? 'bg-cyan-600 hover:bg-cyan-700' : 'bg-gray-400 cursor-not-allowed' }} text-white px-4 py-2 rounded-xl font-medium transition text-sm" {{ !$allTextDone ? '' : 'disabled' }}>
+                            @if(!$allTextDone)
+                                <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                টেক্সট এম্বেডিং তৈরি করো
+                            @else
+                                <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                সব টেক্সট এম্বেডিং তৈরি হয়েছে
+                            @endif
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>

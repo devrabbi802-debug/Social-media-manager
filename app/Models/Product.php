@@ -29,6 +29,7 @@ class Product extends Model
         'meta_title',
         'meta_description',
         'sort_order',
+        'text_embedding',
     ];
 
     protected $casts = [
@@ -37,6 +38,7 @@ class Product extends Model
         'weight_kg' => 'decimal:2',
         'stock_quantity' => 'integer',
         'is_featured' => 'boolean',
+        'text_embedding' => 'array',
     ];
 
     protected static function booted(): void
