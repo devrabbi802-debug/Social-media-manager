@@ -120,7 +120,18 @@
                                 <td class="px-6 py-4">
                                     <div class="flex items-center">
                                         @if($product->primaryImage)
-                                            <img src="{{ asset('storage/' . $product->primaryImage->image_path) }}" class="w-10 h-10 rounded-lg object-cover mr-3" alt="">
+                                            <div class="relative mr-3">
+                                                <img src="{{ asset('storage/' . $product->primaryImage->image_path) }}" class="w-10 h-10 rounded-lg object-cover" alt="">
+                                                @if(!empty($product->primaryImage->embedding))
+                                                    <span class="absolute -top-1 -right-1 bg-green-500 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center shadow" title="AI চেনা হয়েছে">
+                                                        <svg class="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                                                    </span>
+                                                @else
+                                                    <span class="absolute -top-1 -right-1 bg-gray-400 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center shadow" title="AI চেনা হয়নি">
+                                                        <svg class="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
+                                                    </span>
+                                                @endif
+                                            </div>
                                         @else
                                             <div class="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
                                                 <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
