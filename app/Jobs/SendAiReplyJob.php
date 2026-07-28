@@ -225,6 +225,7 @@ class SendAiReplyJob implements ShouldQueue
 
             $reply = $result['reply'];
             $imageAnalysis = $result['image_analysis'] ?? null;
+            $textProductMatches = $result['text_product_matches'] ?? null;
 
             $this->sendFacebookMessage($reply);
 
@@ -237,6 +238,10 @@ class SendAiReplyJob implements ShouldQueue
 
                     if ($imageAnalysis) {
                         $extra['image_analysis'] = $imageAnalysis;
+                    }
+
+                    if ($textProductMatches) {
+                        $extra['text_product_matches'] = $textProductMatches;
                     }
 
                     if ($hasImages) {
@@ -339,14 +344,79 @@ class SendAiReplyJob implements ShouldQueue
         $history = $this->getConversationHistory();
 
         // Text product search: find relevant products for customer's query
-        $productContext = $this->searchProductsByText($this->messageText);
+        $searchResult = $this->searchProductsByText($this->messageText);
         $messageToSend = $this->messageText;
+        $textProductMatches = null;
 
-        if ($productContext) {
-            $messageToSend = "{$this->messageText}\n\nকাস্টমারের প্রশ্নের সাথে সম্পর্কিত প্রোডাক্ট:\n{$productContext}";
-            Log::info('SendAiReplyJob: text product search found results', [
-                'query' => mb_substr($this->messageText, 0, 50),
-            ]);
+        if ($searchResult) {
+            $textProductMatches = $searchResult['matches'];
+            $bestScore = $textProductMatches[0]['score'] ?? 0;
+
+            if ($bestScore >= 0.50) {
+                // Good match — use text search context
+                $messageToSend = "{$this->messageText}\n\nকাস্টমারের প্রশ্নের সাথে সম্পর্কিত প্রোডাক্ট:\n{$searchResult['context']}";
+                Log::info('SendAiReplyJob: text product search found good results', [
+                    'query' => mb_substr($this->messageText, 0, 50),
+                    'best_score' => round($bestScore * 100).'%',
+                ]);
+            } else {
+                // Low match — fall through to history-based product context
+                Log::info('SendAiReplyJob: text search score too low, trying history', [
+                    'query' => mb_substr($this->messageText, 0, 50),
+                    'best_score' => round($bestScore * 100).'%',
+                ]);
+                $textProductMatches = null;
+            }
+        }
+
+        // Fallback 1: if no good text search match, try direct DB search for product keywords
+        if (! $textProductMatches) {
+            $dbProduct = $this->searchProductByKeyword($this->messageText);
+
+            if ($dbProduct) {
+                $context = "কাস্টমারের প্রশ্ন: {$this->messageText}\n\nসম্পর্কিত প্রোডাক্ট:\n";
+                $context .= "- {$dbProduct['name']}";
+                if ($dbProduct['price']) {
+                    $context .= " — দাম: ৳".number_format($dbProduct['price'], 2);
+                }
+                if ($dbProduct['stock'] !== null) {
+                    $context .= ", স্টক: {$dbProduct['stock']}টি";
+                }
+                if ($dbProduct['description']) {
+                    $context .= ", বিবরণ: {$dbProduct['description']}";
+                }
+                $context .= "\n\nউপরের প্রোডাক্টটি নিয়ে কাস্টমার জিজ্ঞাসা করছে। এই তথ্য ব্যবহার করে উত্তর দিন।";
+
+                $messageToSend = $context;
+                Log::info('SendAiReplyJob: found product via DB keyword search', [
+                    'product' => $dbProduct['name'],
+                ]);
+            }
+        }
+
+        // Fallback 2: if no DB match either, use last discussed product from history
+        if (! $textProductMatches && ! isset($dbProduct)) {
+            $lastProduct = $this->getLastDiscussedProduct();
+
+            if ($lastProduct && $lastProduct['name']) {
+                $context = "কাস্টমারের প্রশ্ন: {$this->messageText}\n\nগত কথোপকথনে আলোচিত প্রোডাক্ট:\n";
+                $context .= "- {$lastProduct['name']}";
+                if ($lastProduct['price']) {
+                    $context .= " — দাম: ৳".number_format($lastProduct['price'], 2);
+                }
+                if ($lastProduct['stock'] !== null) {
+                    $context .= ", স্টক: {$lastProduct['stock']}টি";
+                }
+                if ($lastProduct['description']) {
+                    $context .= ", বিবরণ: {$lastProduct['description']}";
+                }
+                $context .= "\n\nউপরের প্রোডাক্টটি নিয়ে কাস্টমার জিজ্ঞাসা করছে বলে মনে হচ্ছে। এই তথ্য ব্যবহার করে উত্তর দিন।";
+
+                $messageToSend = $context;
+                Log::info('SendAiReplyJob: using last discussed product from history', [
+                    'product' => $lastProduct['name'],
+                ]);
+            }
         }
 
         // Fallback chain: Groq → Cerebras → Gemini
@@ -376,7 +446,7 @@ class SendAiReplyJob implements ShouldQueue
             $reply = $aiService->chatWithGeminiFallback($messageToSend, $geminiKeys, $history);
         }
 
-        return $reply ? ['reply' => $reply] : null;
+        return $reply ? ['reply' => $reply, 'text_product_matches' => $textProductMatches] : null;
     }
 
     private function handleImageMessage(FacebookSetting $facebookSetting, string $systemPrompt): ?array
@@ -668,7 +738,7 @@ class SendAiReplyJob implements ShouldQueue
         return $context;
     }
 
-    private function searchProductsByText(string $query): ?string
+    private function searchProductsByText(string $query): ?array
     {
         try {
             $textSearchService = new \App\Services\TextSearchService();
@@ -690,8 +760,16 @@ class SendAiReplyJob implements ShouldQueue
                 if (isset($metadata['product_price'])) {
                     $line .= " — দাম: ৳".number_format($metadata['product_price'], 2);
                 }
-                if (isset($metadata['stock'])) {
-                    $line .= ", স্টক: {$metadata['stock']}";
+                if (isset($metadata['stock_quantity']) && $metadata['stock_quantity'] !== null) {
+                    $line .= ", স্টক: {$metadata['stock_quantity']}টি";
+                }
+                if (isset($metadata['description']) && $metadata['description']) {
+                    $line .= ", বিবরণ: {$metadata['description']}";
+                }
+                if (isset($metadata['variant_attributes']) && !empty($metadata['variant_attributes'])) {
+                    $attrs = $metadata['variant_attributes'];
+                    $attrStr = collect($attrs)->map(fn($v, $k) => "{$k}: {$v}")->implode(', ');
+                    $line .= ", বৈশিষ্ট্য: {$attrStr}";
                 }
 
                 $context .= $line."\n";
@@ -699,7 +777,10 @@ class SendAiReplyJob implements ShouldQueue
 
             $context .= "\nউপরের প্রোডাক্টগুলোর তথ্য ব্যবহার করে কাস্টমারকে সংক্ষেপে উত্তর দিন।";
 
-            return $context;
+            return [
+                'context' => $context,
+                'matches' => $results['matches'],
+            ];
         } catch (\Exception $e) {
             Log::error('SendAiReplyJob: text product search failed', [
                 'query' => mb_substr($query, 0, 50),
@@ -737,41 +818,205 @@ class SendAiReplyJob implements ShouldQueue
         $history = [];
 
         foreach ($messages as $msg) {
-            if ($msg->direction === 'outgoing' && $msg->image_analysis && ! empty($msg->image_analysis['matched_products'])) {
-                $productLines = [];
-                foreach ($msg->image_analysis['matched_products'] as $product) {
-                    $details = $product['full_details'] ?? [];
-                    $name = $details['name'] ?? 'N/A';
-                    $sku = $details['sku'] ?? 'N/A';
-                    $price = $details['price'] ?? 0;
-                    $line = "- {$name} (SKU: {$sku}, মূল্য: ৳".number_format($price, 2).')';
-                    if (isset($details['stock'])) {
-                        $stockText = $details['stock'] > 0 ? "{$details['stock']}টি স্টকে" : 'স্টক শেষ';
-                        $line .= " [স্টক: {$stockText}]";
+            if ($msg->direction === 'outgoing') {
+                $productInfoParts = [];
+
+                // Image analysis product context
+                if ($msg->image_analysis && ! empty($msg->image_analysis['matched_products'])) {
+                    foreach ($msg->image_analysis['matched_products'] as $product) {
+                        $details = $product['full_details'] ?? [];
+                        $name = $details['name'] ?? 'N/A';
+                        $sku = $details['sku'] ?? 'N/A';
+                        $price = $details['price'] ?? 0;
+                        $line = "- {$name} (SKU: {$sku}, মূল্য: ৳".number_format($price, 2).')';
+                        if (isset($details['stock'])) {
+                            $stockText = $details['stock'] > 0 ? "{$details['stock']}টি স্টকে" : 'স্টক শেষ';
+                            $line .= " [স্টক: {$stockText}]";
+                        }
+                        if (isset($details['category'])) {
+                            $line .= " [ক্যাটাগরি: {$details['category']}]";
+                        }
+                        if (isset($details['brand'])) {
+                            $line .= " [ব্র্যান্ড: {$details['brand']}]";
+                        }
+                        $productInfoParts[] = $line;
                     }
-                    if (isset($details['category'])) {
-                        $line .= " [ক্যাটাগরি: {$details['category']}]";
-                    }
-                    if (isset($details['brand'])) {
-                        $line .= " [ব্র্যান্ড: {$details['brand']}]";
-                    }
-                    $productLines[] = $line;
                 }
 
-                $productInfo = implode("\n", $productLines);
-                $history[] = [
-                    'role' => 'assistant',
-                    'content' => "আমি আগে এই প্রোডাক্টগুলো সম্পর্কে জানিয়েছি:\n{$productInfo}\n\nআমার উত্তর: {$msg->content}",
-                ];
+                // Text search product context
+                if (! empty($msg->image_analysis['text_product_matches'])) {
+                    foreach ($msg->image_analysis['text_product_matches'] as $match) {
+                        $metadata = $match['metadata'] ?? [];
+                        $name = $metadata['product_name'] ?? $match['product_name'] ?? 'N/A';
+                        $price = $metadata['product_price'] ?? 0;
+                        $stock = $metadata['stock_quantity'] ?? null;
+                        $line = "- {$name} (মূল্য: ৳".number_format($price, 2).')';
+                        if ($stock !== null) {
+                            $line .= " [স্টক: {$stock}টি]";
+                        }
+                        if (isset($metadata['variant_attributes']) && !empty($metadata['variant_attributes'])) {
+                            $attrs = collect($metadata['variant_attributes'])->map(fn($v, $k) => "{$k}: {$v}")->implode(', ');
+                            $line .= " [বৈশিষ্ট্য: {$attrs}]";
+                        }
+                        $productInfoParts[] = $line;
+                    }
+                }
+
+                if (! empty($productInfoParts)) {
+                    $productInfo = implode("\n", $productInfoParts);
+                    $history[] = [
+                        'role' => 'assistant',
+                        'content' => "আমি আগে এই প্রোডাক্টগুলো সম্পর্কে জানিয়েছি:\n{$productInfo}\n\nআমার উত্তর: {$msg->content}",
+                    ];
+                } else {
+                    $history[] = [
+                        'role' => 'assistant',
+                        'content' => $msg->content,
+                    ];
+                }
             } else {
                 $history[] = [
-                    'role' => $msg->direction === 'outgoing' ? 'assistant' : 'user',
+                    'role' => 'user',
                     'content' => $msg->content,
                 ];
             }
         }
 
         return $history;
+    }
+
+    /**
+     * Extract the most recently discussed product from conversation history.
+     * Used when text search doesn't find a good match (follow-up questions like "stock koto?").
+     */
+    private function searchProductByKeyword(string $messageText): ?array
+    {
+        // Common Bangla/English filler words to ignore
+        $fillers = ['ki', 'koto', 'ase', 'tomader', 'amar', 'toder', 'abar', 'eta', 'oit', 'itar', 'itaire',
+            'kemon', 'kibhabe', 'kothay', 'kon', 'konta', 'hobe', 'lagbe', 'dite', 'paro', 'paben',
+            'price', 'stock', 'color', 'size', 'nam', 'name', 'design', 'material', 'quality',
+            'korse', 'korsen', 'korte', 'korbo', 'korben', 'chi', 'chai', 'chilan', 'chilam',
+            'please', 'plz', 'amake', 'jonno', 'diben', 'pabo', 'hote', 'ase?', 'ki?'];
+
+        // Extract words from message
+        $words = preg_split('/[\s,?.!]+/', mb_strtolower(trim($messageText)));
+        $keywords = array_filter(array_diff($words, $fillers), fn($w) => mb_strlen($w) >= 3);
+
+        if (empty($keywords)) {
+            return null;
+        }
+
+        // Search products table: name LIKE keyword, with Bangla suffix stripping
+        $conn = DB::connection('tenant');
+
+        // Build search terms: original keyword + stripped versions
+        $suffixes = ['ir', 'er', 'tar', 'te', 'e', 'r', 'gulo', 'gula', 'ta', 'ti', 'tar', 'der', 'dertype'];
+
+        foreach ($keywords as $keyword) {
+            if (mb_strlen($keyword) < 2) {
+                continue;
+            }
+
+            // Build variants: original + stripped
+            $variants = [$keyword];
+            foreach ($suffixes as $suffix) {
+                if (mb_strlen($keyword) > mb_strlen($suffix) + 2 && str_ends_with($keyword, $suffix)) {
+                    $variants[] = mb_substr($keyword, 0, -mb_strlen($suffix));
+                }
+            }
+
+            foreach ($variants as $variant) {
+                $product = $conn->table('products')
+                    ->where('status', 'active')
+                    ->where(function ($q) use ($variant) {
+                        $q->where('name', 'like', '%'.$variant.'%')
+                            ->orWhere('sku', 'like', '%'.$variant.'%');
+                    })
+                    ->orderByRaw('CASE WHEN name LIKE ? THEN 0 ELSE 1 END', ['%'.$variant.'%'])
+                    ->first();
+
+                if ($product) {
+                    return [
+                        'name' => $product->name,
+                        'price' => $product->discount_price ?? $product->base_price,
+                        'stock' => $product->stock_quantity,
+                        'description' => $product->description ?? '',
+                        'sku' => $product->sku ?? '',
+                    ];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Extract the most recently discussed product from conversation history.
+     * Used when text search doesn't find a good match (follow-up questions like "stock koto?").
+     */
+    private function getLastDiscussedProduct(): ?array
+    {
+        $conversation = Conversation::where('sender_id', $this->senderId)->first();
+
+        if (! $conversation) {
+            return null;
+        }
+
+        // Look at last 10 messages for product context
+        $messages = Message::where('conversation_id', $conversation->id)
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get();
+
+        foreach ($messages as $msg) {
+            if ($msg->direction !== 'outgoing' || empty($msg->image_analysis)) {
+                continue;
+            }
+
+            // Check text_product_matches first (newer)
+            if (! empty($msg->image_analysis['text_product_matches'])) {
+                $bestMatch = null;
+                $bestScore = 0;
+
+                foreach ($msg->image_analysis['text_product_matches'] as $match) {
+                    if (($match['score'] ?? 0) > $bestScore) {
+                        $bestScore = $match['score'];
+                        $bestMatch = $match;
+                    }
+                }
+
+                if ($bestMatch) {
+                    $metadata = $bestMatch['metadata'] ?? [];
+
+                    return [
+                        'name' => $metadata['product_name'] ?? $bestMatch['product_name'] ?? null,
+                        'price' => $metadata['product_price'] ?? null,
+                        'stock' => $metadata['stock_quantity'] ?? null,
+                        'description' => $metadata['description'] ?? '',
+                        'sku' => $metadata['product_sku'] ?? '',
+                        'type' => 'text_search',
+                    ];
+                }
+            }
+
+            // Check image_analysis matched_products (older)
+            if (! empty($msg->image_analysis['matched_products'])) {
+                foreach ($msg->image_analysis['matched_products'] as $product) {
+                    $details = $product['full_details'] ?? [];
+
+                    return [
+                        'name' => $details['name'] ?? null,
+                        'price' => $details['price'] ?? null,
+                        'stock' => $details['stock'] ?? null,
+                        'description' => $details['description'] ?? '',
+                        'sku' => $details['sku'] ?? '',
+                        'type' => 'image_analysis',
+                    ];
+                }
+            }
+        }
+
+        return null;
     }
 
     private function buildSystemPrompt(Tenant $tenant, ?int $userId = null): string

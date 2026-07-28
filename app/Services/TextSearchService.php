@@ -108,7 +108,7 @@ class TextSearchService
         // Product text embeddings
         $products = $conn->table('products')
             ->whereNotNull('text_embedding')
-            ->get(['id', 'name', 'sku', 'slug', 'base_price', 'discount_price', 'text_embedding', 'category_id']);
+            ->get(['id', 'name', 'sku', 'slug', 'base_price', 'discount_price', 'stock_quantity', 'description', 'status', 'text_embedding', 'category_id']);
 
         foreach ($products as $product) {
             $price = $product->discount_price ?? $product->base_price;
@@ -121,6 +121,9 @@ class TextSearchService
                     'product_sku' => $product->sku ?? '',
                     'product_slug' => $product->slug ?? '',
                     'product_price' => $price,
+                    'stock_quantity' => $product->stock_quantity ?? null,
+                    'description' => $product->description ?? '',
+                    'status' => $product->status ?? 'active',
                     'type' => 'product',
                 ],
                 'embedding' => is_string($product->text_embedding) ? json_decode($product->text_embedding, true) : $product->text_embedding,
@@ -158,6 +161,7 @@ class TextSearchService
                     'product_name' => $name,
                     'product_sku' => $variant->sku ?? '',
                     'product_price' => $price,
+                    'stock_quantity' => $variant->stock_quantity ?? null,
                     'variant_attributes' => $attrs,
                     'type' => 'variant',
                 ],
