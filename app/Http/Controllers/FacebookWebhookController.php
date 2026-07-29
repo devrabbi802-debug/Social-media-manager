@@ -184,15 +184,22 @@ class FacebookWebhookController extends Controller
             $messageId = $data['message']['id'] ?? $data['messageId'] ?? null;
             $replyToMid = $messageData['reply_to']['mid'] ?? $data['replyToMid'] ?? null;
 
-            // Zernio strips reply_to, so check cache (stored by Facebook direct webhook)
-            if (! $replyToMid) {
-                $replyToMid = Cache::get("reply_to_mid:{$senderId}");
+            // Get facebookSetting early for page_id (needed for reply_to_mid cache key)
+            $facebookSetting = FacebookSetting::where('connection_type', 'zernio')
+                ->where('zernio_account_id', $accountId)
+                ->first();
+
+            // Zernio strips reply_to, so check cache (stored by Facebook direct webhook using page_id-based key)
+            if (! $replyToMid && $facebookSetting) {
+                $cacheKey = "reply_to_mid:{$facebookSetting->page_id}:{$senderId}";
+                $replyToMid = Cache::get($cacheKey);
                 if ($replyToMid) {
                     Log::info('Zernio: picked up reply_to_mid from cache', [
+                        'page_id' => $facebookSetting->page_id,
                         'sender_id' => $senderId,
                         'reply_to_mid' => $replyToMid,
                     ]);
-                    Cache::forget("reply_to_mid:{$senderId}");
+                    Cache::forget($cacheKey);
                 }
             }
 
@@ -251,10 +258,6 @@ class FacebookWebhookController extends Controller
             }
 
             // Check if AI auto-reply is enabled
-            $facebookSetting = FacebookSetting::where('connection_type', 'zernio')
-                ->where('zernio_account_id', $accountId)
-                ->first();
-
             if (! $facebookSetting) {
                 Log::warning('Zernio: No Facebook setting found', ['account_id' => $accountId]);
 
@@ -292,6 +295,21 @@ class FacebookWebhookController extends Controller
                     ->value('content');
                 if ($recentText) {
                     $finalText = $recentText;
+                }
+
+                // Also combine image+image: fetch recent images from different messages
+                $recentImages = Message::where('conversation_id', $conversation->id)
+                    ->where('direction', 'incoming')
+                    ->where('type', 'image')
+                    ->where('created_at', '>=', now()->subSeconds(5))
+                    ->pluck('image_path')
+                    ->toArray();
+                if (! empty($recentImages)) {
+                    $finalImageUrls = array_merge($recentImages, $finalImageUrls);
+                    Log::info('Zernio: Combined image with recent images', [
+                        'sender_id' => $senderId,
+                        'image_count' => count($finalImageUrls),
+                    ]);
                 }
             } elseif ($messageText) {
                 // Text only — check for recent images
@@ -410,12 +428,20 @@ class FacebookWebhookController extends Controller
         $mid = $message['mid'] ?? null;
 
         if ($mid) {
-            $exists = Message::where('facebook_mid', $mid)->exists();
-            if ($exists) {
+            // Only skip if same mid AND same message type (text+image share same mid — don't skip images)
+            $existingType = Message::where('facebook_mid', $mid)->value('type');
+            $hasAttachments = ! empty($message['attachments']);
+            $isDuplicate = $existingType !== null && (
+                ($existingType === 'text' && ! $hasAttachments)
+                || ($existingType === 'image' && $hasAttachments)
+                || ($existingType !== 'text' && $existingType !== 'image')
+            );
+            if ($isDuplicate) {
                 Log::info('Duplicate webhook ignored', [
                     'tenant_id' => $tenant->id,
                     'sender_id' => $senderId,
                     'mid' => $mid,
+                    'existing_type' => $existingType,
                 ]);
 
                 return;
@@ -574,6 +600,23 @@ class FacebookWebhookController extends Controller
                         'text' => $recentText,
                     ]);
                 }
+
+                // Also combine image+image: fetch recent images from different mids
+                $recentImages = Message::where('conversation_id', $conversation->id)
+                    ->where('direction', 'incoming')
+                    ->where('type', 'image')
+                    ->where('created_at', '>=', now()->subSeconds(5))
+                    ->where('facebook_mid', '!=', $mid)
+                    ->pluck('image_path')
+                    ->toArray();
+
+                if (! empty($recentImages)) {
+                    $finalImageUrls = array_merge($recentImages, $finalImageUrls);
+                    Log::info('Combined image with recent images', [
+                        'sender_id' => $senderId,
+                        'image_count' => count($finalImageUrls),
+                    ]);
+                }
             } elseif ($text) {
                 $recentImages = Message::where('conversation_id', $conversation->id)
                     ->where('direction', 'incoming')
@@ -595,9 +638,12 @@ class FacebookWebhookController extends Controller
             Cache::put($dispatchKey, true, now()->addSeconds(8));
 
             // Store reply_to_mid for Zernio job to pick up (since Zernio strips reply_to)
-            if ($replyToMid) {
-                Cache::put("reply_to_mid:{$senderId}", $replyToMid, now()->addSeconds(30));
+            // Use page_id-based key so both Facebook direct and Zernio can share it
+            if ($replyToMid && $recipientId) {
+                $cacheKey = "reply_to_mid:{$recipientId}:{$senderId}";
+                Cache::put($cacheKey, $replyToMid, now()->addSeconds(30));
                 Log::info('Stored reply_to_mid in cache for Zernio pickup', [
+                    'page_id' => $recipientId,
                     'sender_id' => $senderId,
                     'reply_to_mid' => $replyToMid,
                 ]);
