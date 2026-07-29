@@ -16,6 +16,7 @@ class Message extends Model
         'audio_path',
         'image_analysis',
         'facebook_mid',
+        'reply_to_mid',
     ];
 
     protected function casts(): array

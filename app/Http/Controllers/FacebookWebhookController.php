@@ -148,7 +148,7 @@ class FacebookWebhookController extends Controller
             return;
         }
 
-        $tenant->run(function () use ($tenant, $data, $accountId, $messageText, $senderId, $senderName, $conversationId, $attachments) {
+        $tenant->run(function () use ($tenant, $data, $accountId, $messageText, $senderId, $senderName, $conversationId, $attachments, $messageData) {
             // Extract image and audio URLs from attachments
             $imageUrls = [];
             $audioUrl = null;
@@ -182,6 +182,29 @@ class FacebookWebhookController extends Controller
 
             // Save incoming message(s)
             $messageId = $data['message']['id'] ?? $data['messageId'] ?? null;
+            $replyToMid = $messageData['reply_to']['mid'] ?? $data['replyToMid'] ?? null;
+
+            // Zernio strips reply_to, so check cache (stored by Facebook direct webhook)
+            if (! $replyToMid) {
+                $replyToMid = Cache::get("reply_to_mid:{$senderId}");
+                if ($replyToMid) {
+                    Log::info('Zernio: picked up reply_to_mid from cache', [
+                        'sender_id' => $senderId,
+                        'reply_to_mid' => $replyToMid,
+                    ]);
+                    Cache::forget("reply_to_mid:{$senderId}");
+                }
+            }
+
+            Log::info('Zernio: incoming message details', [
+                'account_id' => $accountId,
+                'sender_id' => $senderId,
+                'text' => $messageText,
+                'message_id' => $messageId,
+                'reply_to_mid' => $replyToMid,
+                'message_data_keys' => is_array($messageData) ? array_keys($messageData) : 'not_array',
+            ]);
+
             if (! empty($imageUrls)) {
                 foreach ($imageUrls as $imageUrl) {
                     try {
@@ -192,6 +215,7 @@ class FacebookWebhookController extends Controller
                             'content' => 'ইমেজ পাঠিয়েছে',
                             'image_path' => $imageUrl,
                             'facebook_mid' => $messageId,
+                            'reply_to_mid' => $replyToMid,
                         ]);
                     } catch (\Throwable $e) {
                         Log::error('Zernio: Failed to save incoming image', ['error' => $e->getMessage()]);
@@ -206,6 +230,7 @@ class FacebookWebhookController extends Controller
                         'content' => 'ভয়েস মেসেজ পাঠিয়েছে',
                         'audio_path' => $audioUrl,
                         'facebook_mid' => $messageId,
+                        'reply_to_mid' => $replyToMid,
                     ]);
                 } catch (\Throwable $e) {
                     Log::error('Zernio: Failed to save incoming audio', ['error' => $e->getMessage()]);
@@ -218,6 +243,7 @@ class FacebookWebhookController extends Controller
                         'type' => 'text',
                         'content' => $messageText,
                         'facebook_mid' => $messageId,
+                        'reply_to_mid' => $replyToMid,
                     ]);
                 } catch (\Throwable $e) {
                     Log::error('Zernio: Failed to save incoming message', ['error' => $e->getMessage()]);
@@ -293,6 +319,7 @@ class FacebookWebhookController extends Controller
                 zernioAccountId: $facebookSetting->zernio_account_id,
                 zernioApiKey: $facebookSetting->zernio_api_key,
                 zernioConversationId: $conversationId,
+                replyToMid: $replyToMid,
             )->delay(now()->addSeconds(0));
 
             Log::info('Zernio: AI reply job dispatched', [
@@ -397,6 +424,7 @@ class FacebookWebhookController extends Controller
 
         $text = $message['text'] ?? null;
         $attachments = $message['attachments'] ?? [];
+        $replyToMid = $message['reply_to']['mid'] ?? null;
         $imageUrls = [];
         $audioUrl = null;
 
@@ -426,6 +454,8 @@ class FacebookWebhookController extends Controller
             'image_count' => count($imageUrls),
             'has_audio' => $audioUrl !== null,
             'mid' => $mid,
+            'reply_to_mid' => $replyToMid,
+            'raw_message_keys' => array_keys($message),
         ]);
 
         $conversation = Conversation::updateOrCreate(
@@ -453,6 +483,7 @@ class FacebookWebhookController extends Controller
                         'content' => 'ইমেজ পাঠিয়েছে',
                         'image_path' => $imageUrl,
                         'facebook_mid' => $mid,
+                        'reply_to_mid' => $replyToMid,
                     ]);
                 } catch (\Throwable $e) {
                     Log::error('Failed to save incoming image message', [
@@ -470,6 +501,7 @@ class FacebookWebhookController extends Controller
                     'content' => 'ভয়েস মেসেজ পাঠিয়েছে',
                     'audio_path' => $audioUrl,
                     'facebook_mid' => $mid,
+                    'reply_to_mid' => $replyToMid,
                 ]);
             } catch (\Throwable $e) {
                 Log::error('Failed to save incoming audio message', [
@@ -485,6 +517,7 @@ class FacebookWebhookController extends Controller
                     'type' => 'text',
                     'content' => $text,
                     'facebook_mid' => $mid,
+                    'reply_to_mid' => $replyToMid,
                 ]);
             } catch (\Throwable $e) {
                 Log::error('Failed to save incoming message', [
@@ -561,13 +594,23 @@ class FacebookWebhookController extends Controller
 
             Cache::put($dispatchKey, true, now()->addSeconds(8));
 
+            // Store reply_to_mid for Zernio job to pick up (since Zernio strips reply_to)
+            if ($replyToMid) {
+                Cache::put("reply_to_mid:{$senderId}", $replyToMid, now()->addSeconds(30));
+                Log::info('Stored reply_to_mid in cache for Zernio pickup', [
+                    'sender_id' => $senderId,
+                    'reply_to_mid' => $replyToMid,
+                ]);
+            }
+
             SendAiReplyJob::dispatch(
                 tenantId: $tenant->id,
                 senderId: $senderId,
                 messageText: $finalText ?? '',
-                pageAccessToken: $facebookSetting->page_access_token,
+                pageAccessToken: $facebookSetting->page_access_token ?? '',
                 imageUrls: $finalImageUrls,
                 audioUrl: $audioUrl,
+                replyToMid: $replyToMid,
             )->delay(now()->addSeconds($delay));
 
             Log::info('AI reply job dispatched', [
