@@ -19,7 +19,7 @@ php artisan tenants:seed      # seed tenant DBs
 
 | Layer | Location | Stack |
 |---|---|---|
-| Backend | `app/`, `routes/` | PHP 8.4, Laravel 13, stancl/tenancy v3, Horizon (Redis), MySQL |
+| Backend | `app/`, `routes/` | PHP 8.3+, Laravel 13, stancl/tenancy v3, Horizon (Redis), MySQL |
 | Admin UI | Blade + Alpine.js | Tailwind v4 (`@tailwindcss/vite`), root Vite 8 |
 | Storefront SPA | `resources/storefront/` | React 18, React Router 6, Vite 5, Tailwind v3 (own PostCSS), Axios |
 | CLIP Server | `clip-server/` | Python FastAPI, OpenAI CLIP (offline) |
@@ -95,7 +95,7 @@ docker exec laravel-app php artisan <command>
 
 - **Driver**: Redis (production), `sync` (testing — `phpunit.xml`)
 - **Named queues** (priority order): `facebook` > `high` > `default` > `low`
-- **Jobs**: `SendAiReplyJob`, `AnalyzeProductImageJob`, `AnalyzeVariantImageJob`, `ProcessImageBatch`, `SyncCategoryAttributeTemplates`
+- **Jobs**: `SendAiReplyJob`, `AnalyzeProductImageJob`, `AnalyzeVariantImageJob`, `ProcessImageBatch`, `SyncCategoryAttributeTemplates`, `GenerateTextEmbeddingJob`, `GenerateVariantTextEmbeddingJob`
 - `SyncCategoryAttributeTemplates` syncs `BusinessCategory.extra_fields` JSON → `attribute_templates` in ALL tenant DBs (runs on BusinessCategory created/updated)
 - Horizon dashboard at `/horizon` (local) or configured `HORIZON_PATH`
 
@@ -105,6 +105,7 @@ docker exec laravel-app php artisan <command>
 |---|---|
 | `AiChatService` | AI reply generation (Groq/Cerebras/Gemini, per-tenant config) |
 | `ClipService` | CLIP image matching (posts to `clip-server:8089`) |
+| `TextSearchService` | Text embedding generation (posts to `clip-server:8089/text-embed`) |
 | `ZernioService` | Zernio social media API v1 |
 | `AudioTranscriptionService` | Audio→text for voice messages |
 
