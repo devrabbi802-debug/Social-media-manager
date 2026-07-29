@@ -13,7 +13,9 @@ use App\Models\ProductVariant;
 use App\Models\Tenant;
 use App\Services\AiChatService;
 use App\Services\AudioTranscriptionService;
+use App\Services\ChatOrderService;
 use App\Services\ClipService;
+use App\Services\ProductContextService;
 use App\Services\TextSearchService;
 use App\Services\ZernioService;
 use Illuminate\Bus\Queueable;
@@ -157,7 +159,7 @@ class SendAiReplyJob implements ShouldQueue
                     } else {
                         $hasRecentReply = Message::where('conversation_id', $conversation->id)
                             ->where('direction', 'outgoing')
-                            ->where('created_at', '>=', now()->subSeconds(5))
+                            ->where('created_at', '>=', now()->subSeconds(15))
                             ->exists();
 
                         if ($hasRecentReply) {
@@ -176,6 +178,20 @@ class SendAiReplyJob implements ShouldQueue
                 $conversation = Conversation::where('sender_id', $this->senderId)->first();
 
                 if ($conversation) {
+                    // Skip if a reply was already sent for this batch
+                    $hasRecentReply = Message::where('conversation_id', $conversation->id)
+                        ->where('direction', 'outgoing')
+                        ->where('created_at', '>=', now()->subSeconds(15))
+                        ->exists();
+
+                    if ($hasRecentReply) {
+                        Log::info('SendAiReplyJob: SKIPPED image job - reply already sent', [
+                            'sender_id' => $this->senderId,
+                        ]);
+
+                        return;
+                    }
+
                     $allImages = Message::where('conversation_id', $conversation->id)
                         ->where('direction', 'incoming')
                         ->where('type', 'image')
@@ -254,6 +270,34 @@ class SendAiReplyJob implements ShouldQueue
             $imageAnalysis = $result['image_analysis'] ?? null;
             $textProductMatches = $result['text_product_matches'] ?? null;
 
+            // ─── Chat Order Detection ───────────────────────────
+            $chatOrderService = new ChatOrderService;
+            $orderData = $chatOrderService->extractOrderData($reply);
+            $orderCreated = false;
+
+            if ($orderData) {
+                $cleanReply = $chatOrderService->removeOrderDataBlock($reply);
+                $order = $chatOrderService->createChatOrder($orderData, $facebookSetting->user_id);
+
+                if ($order) {
+                    $orderCreated = true;
+                    $confirmationMsg = "\n\n✅ আপনার অর্ডার কনফার্ম হয়েছে!\n📋 অর্ডার নম্বর: {$order->order_number}\n💰 মোট: ৳".number_format($order->total, 2)."\n📦 স্ট্যাটাস: {$order->status}";
+                    $reply = $cleanReply.$confirmationMsg;
+
+                    Log::info('SendAiReplyJob: Chat order created', [
+                        'order_id' => $order->id,
+                        'order_number' => $order->order_number,
+                        'sender_id' => $this->senderId,
+                    ]);
+                } else {
+                    // Order creation failed — send original reply without JSON block
+                    $reply = $cleanReply;
+                    Log::warning('SendAiReplyJob: Chat order creation failed', [
+                        'sender_id' => $this->senderId,
+                    ]);
+                }
+            }
+
             $outgoingFacebookMid = $this->sendFacebookMessage($reply);
 
             try {
@@ -275,6 +319,11 @@ class SendAiReplyJob implements ShouldQueue
 
                     if ($hasImages) {
                         $extra['original_image_urls'] = $this->imageUrls;
+                    }
+
+                    if ($orderCreated && isset($order)) {
+                        $extra['chat_order_id'] = $order->id;
+                        $extra['chat_order_number'] = $order->order_number;
                     }
 
                     Message::create([
@@ -372,8 +421,10 @@ class SendAiReplyJob implements ShouldQueue
         }
 
         $history = $this->getConversationHistory();
+        $textProductMatches = null;
 
         // HIGHEST PRIORITY: If this is a reply to a specific message (swipe left), use that message's product context
+        // Customer specifically asked about THIS product — must override current_product_data
         // If replyToMid not passed via job param (e.g. Zernio strips it), recover from DB
         // Search ALL conversations — FB direct saves with reply_to_mid in FB conversation, Zernio in separate conversation
         if (empty($this->replyToMid)) {
@@ -488,6 +539,8 @@ class SendAiReplyJob implements ShouldQueue
                 $currentStock = null;
                 $currentDescription = null;
                 $currentSku = null;
+                $currentAttributes = null;
+                $allVariants = null;
 
                 if ($variantId) {
                     $variant = ProductVariant::with('product')->find($variantId);
@@ -496,14 +549,41 @@ class SendAiReplyJob implements ShouldQueue
                         $currentStock = $variant->stock_quantity;
                         $currentDescription = $variant->product->description ?? null;
                         $currentSku = $variant->sku ?? null;
+                        $currentAttributes = $variant->attributes;
+
+                        // Load all sibling variants
+                        $siblingVariants = $variant->product->variants
+                            ->where('is_active', true)
+                            ->where('id', '!=', $variant->id);
+                        $allVariants = $siblingVariants->map(fn ($v) => [
+                            'attributes' => $v->attributes,
+                            'price' => $v->price ?? $variant->product->discount_price ?? $variant->product->base_price,
+                            'stock' => $v->stock_quantity,
+                        ])->values()->toArray();
+                        // Include current variant too
+                        array_unshift($allVariants, [
+                            'attributes' => $variant->attributes,
+                            'price' => $variant->price ?? $variant->product->discount_price ?? $variant->product->base_price,
+                            'stock' => $variant->stock_quantity,
+                        ]);
                     }
                 } elseif ($productId) {
-                    $product = Product::find($productId);
+                    $product = Product::with('variants')->find($productId);
                     if ($product) {
                         $currentPrice = $product->discount_price ?? $product->base_price;
                         $currentStock = $product->stock_quantity;
                         $currentDescription = $product->description ?? null;
                         $currentSku = $product->sku ?? null;
+
+                        // Load all variants
+                        $activeVariants = $product->variants->where('is_active', true);
+                        if ($activeVariants->count() > 0) {
+                            $allVariants = $activeVariants->map(fn ($v) => [
+                                'attributes' => $v->attributes,
+                                'price' => $v->price ?? $product->discount_price ?? $product->base_price,
+                                'stock' => $v->stock_quantity,
+                            ])->values()->toArray();
+                        }
                     }
                 }
 
@@ -522,6 +602,19 @@ class SendAiReplyJob implements ShouldQueue
                 if ($currentDescription) {
                     $context .= ", বিবরণ: {$currentDescription}";
                 }
+                if ($currentAttributes && ! empty($currentAttributes)) {
+                    $attrStr = collect($currentAttributes)->map(fn ($v, $k) => "{$k}: {$v}")->implode(', ');
+                    $context .= ", বৈশিষ্ট্য: {$attrStr}";
+                }
+                // Show all available variants
+                if ($allVariants && ! empty($allVariants)) {
+                    $context .= "\n\nউপলব্ধ বিকল্পসমূহ:\n";
+                    foreach ($allVariants as $v) {
+                        $vAttrs = collect($v['attributes'] ?? [])->map(fn ($val, $k) => "{$k}: {$val}")->implode(', ');
+                        $vStock = ($v['stock'] ?? 0) > 0 ? "{$v['stock']}টি স্টকে" : 'স্টক শেষ';
+                        $context .= "• {$vAttrs} — ৳".number_format($v['price'] ?? 0, 2)." [{$vStock}]\n";
+                    }
+                }
                 $context .= "\n\nউপরের প্রোডাক্টটি নিয়ে কাস্টমার প্রশ্ন করছে। এই তথ্য ব্যবহার করে উত্তর দিন।";
 
                 $messageToSend = "{$this->messageText}\n\n{$context}";
@@ -533,6 +626,12 @@ class SendAiReplyJob implements ShouldQueue
                     'current_price' => $currentPrice,
                 ]);
 
+                // Save to conversation's current product context
+                if ($conversation && $productId) {
+                    $productContextService = new ProductContextService;
+                    $productContextService->saveCurrentProduct($conversation, $productId, $variantId);
+                }
+
                 // Skip all other search — jump to AI call
                 goto ai_call;
             }
@@ -541,6 +640,93 @@ class SendAiReplyJob implements ShouldQueue
                 'reply_to_mid' => $this->replyToMid,
                 'has_image_analysis' => $repliedMessage ? (bool) $repliedMessage->image_analysis : false,
             ]);
+        }
+
+        // SECOND PRIORITY: Check if conversation has a current product context
+        // Only used when customer's question seems like a follow-up about the SAME product
+        // (e.g. "price koto?", "stock ache?", "delivery koto din?") — NOT when asking about a new product
+        if ($conversation) {
+            $productContextService = new ProductContextService;
+            $currentProduct = $productContextService->getCurrentProductContext($conversation);
+
+            if ($currentProduct) {
+                // Check if customer's message is likely about THIS product
+                $msgLower = mb_strtolower($this->messageText);
+                $isFollowUp = false;
+
+                // 1. If message contains current product's name → follow-up
+                if (! empty($currentProduct['name'])) {
+                    $productName = mb_strtolower($currentProduct['name']);
+                    // Check if any word in product name appears in message
+                    $nameWords = array_filter(explode(' ', $productName), fn ($w) => mb_strlen($w) >= 3);
+                    foreach ($nameWords as $word) {
+                        if (str_contains($msgLower, $word)) {
+                            $isFollowUp = true;
+                            break;
+                        }
+                    }
+                }
+
+                // 2. Follow-up question patterns (short, no new product keyword)
+                if (! $isFollowUp) {
+                    $followUpPatterns = [
+                        '/\b(price|dam|dama|daam|taka|kit|koto)\b/i',
+                        '/\b(stock|ache|nai|shesh|kothay)\b/i',
+                        '/\b(delivery|deliver|ship|pathano|diner)\b/i',
+                        '/\b(order|ordered|kinte|nibo)\b/i',
+                        '/\b(available|paben|diben|thake)\b/i',
+                        '/\b(confirm|confir)\b/i',
+                        '/\b(ok|thik|ji|ha|nah|nio|nii)\b/i',
+                    ];
+
+                    $isFollowUp = mb_strlen($this->messageText) < 20;
+                    if (! $isFollowUp) {
+                        foreach ($followUpPatterns as $pattern) {
+                            if (preg_match($pattern, $msgLower)) {
+                                $isFollowUp = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // 3. If message asks about a DIFFERENT product (contains product-related words) → NOT follow-up
+                if ($isFollowUp && mb_strlen($this->messageText) > 5) {
+                    // Check if message seems to be about a completely different product
+                    $productWords = ['pant', 'shirt', 't-shirt', 'tshirt', 'shoe', 'bag', 'watch',
+                        'hat', 'cap', 'jacket', 'coat', 'dress', 'skirt', 'shorts', 'hoodie',
+                        'saree', 'salwar', 'kameez', 'punjabi', 'panjabi', 'vest', 'inner',
+                        'belt', 'wallet', 'sunglasses', 'glasses', 'ring', 'necklace'];
+                    foreach ($productWords as $pw) {
+                        if (str_contains($msgLower, $pw) && ! str_contains($msgLower, mb_strtolower($currentProduct['name'] ?? ''))) {
+                            $isFollowUp = false;
+                            Log::info('SendAiReplyJob: detected new product inquiry despite short message', [
+                                'message' => $this->messageText,
+                                'detected_product_word' => $pw,
+                            ]);
+                            break;
+                        }
+                    }
+                }
+
+                if ($isFollowUp) {
+                    $contextString = $productContextService->buildContextString($conversation, $this->messageText);
+                    if ($contextString) {
+                        $messageToSend = "{$this->messageText}\n\n{$contextString}";
+                        Log::info('SendAiReplyJob: using conversation current product context (follow-up)', [
+                            'sender_id' => $this->senderId,
+                            'product' => $currentProduct['name'] ?? 'unknown',
+                        ]);
+                        goto ai_call;
+                    }
+                } else {
+                    Log::info('SendAiReplyJob: skipping current product context - new product inquiry', [
+                        'sender_id' => $this->senderId,
+                        'message' => mb_substr($this->messageText, 0, 50),
+                        'current_product' => $currentProduct['name'] ?? 'unknown',
+                    ]);
+                }
+            }
         }
 
         // Text product search: find relevant products for customer's query
@@ -559,6 +745,17 @@ class SendAiReplyJob implements ShouldQueue
                     'query' => mb_substr($this->messageText, 0, 50),
                     'best_score' => round($bestScore * 100).'%',
                 ]);
+
+                // Save first matched product to conversation context
+                if ($conversation && ! empty($textProductMatches[0])) {
+                    $topMatch = $textProductMatches[0];
+                    $metadata = $topMatch['metadata'] ?? [];
+                    $pid = $metadata['product_id'] ?? $topMatch['product_id'] ?? null;
+                    if ($pid) {
+                        $productContextService = new ProductContextService;
+                        $productContextService->saveCurrentProduct($conversation, $pid);
+                    }
+                }
             } else {
                 // Low match — fall through to history-based product context
                 Log::info('SendAiReplyJob: text search score too low, trying history', [
@@ -585,12 +782,27 @@ class SendAiReplyJob implements ShouldQueue
                 if ($dbProduct['description']) {
                     $context .= ", বিবরণ: {$dbProduct['description']}";
                 }
+                // Show all available variants
+                if (! empty($dbProduct['all_variants'])) {
+                    $context .= "\n\nউপলব্ধ বিকল্পসমূহ:\n";
+                    foreach ($dbProduct['all_variants'] as $v) {
+                        $vAttrs = collect($v['attributes'] ?? [])->map(fn ($val, $k) => "{$k}: {$val}")->implode(', ');
+                        $vStock = ($v['stock'] ?? 0) > 0 ? "{$v['stock']}টি স্টকে" : 'স্টক শেষ';
+                        $context .= "• {$vAttrs} — ৳".number_format($v['price'] ?? 0, 2)." [{$vStock}]\n";
+                    }
+                }
                 $context .= "\n\nউপরের প্রোডাক্টটি নিয়ে কাস্টমার জিজ্ঞাসা করছে। এই তথ্য ব্যবহার করে উত্তর দিন।";
 
                 $messageToSend = $context;
                 Log::info('SendAiReplyJob: found product via DB keyword search', [
                     'product' => $dbProduct['name'],
                 ]);
+
+                // Save to conversation context
+                if ($conversation && ! empty($dbProduct['product_id'])) {
+                    $productContextService = new ProductContextService;
+                    $productContextService->saveCurrentProduct($conversation, $dbProduct['product_id']);
+                }
             }
         }
 
@@ -610,12 +822,31 @@ class SendAiReplyJob implements ShouldQueue
                 if ($lastProduct['description']) {
                     $context .= ", বিবরণ: {$lastProduct['description']}";
                 }
+                if (! empty($lastProduct['variant_attributes'])) {
+                    $attrs = collect($lastProduct['variant_attributes'])->map(fn ($v, $k) => "{$k}: {$v}")->implode(', ');
+                    $context .= ", বৈশিষ্ট্য: {$attrs}";
+                }
+                // Show all available variants
+                if (! empty($lastProduct['all_variants'])) {
+                    $context .= "\n\nউপলব্ধ বিকল্পসমূহ:\n";
+                    foreach ($lastProduct['all_variants'] as $v) {
+                        $vAttrs = collect($v['attributes'] ?? [])->map(fn ($val, $k) => "{$k}: {$val}")->implode(', ');
+                        $vStock = ($v['stock'] ?? 0) > 0 ? "{$v['stock']}টি স্টকে" : 'স্টক শেষ';
+                        $context .= "• {$vAttrs} — ৳".number_format($v['price'] ?? 0, 2)." [{$vStock}]\n";
+                    }
+                }
                 $context .= "\n\nউপরের প্রোডাক্টটি নিয়ে কাস্টমার জিজ্ঞাসা করছে বলে মনে হচ্ছে। এই তথ্য ব্যবহার করে উত্তর দিন।";
 
                 $messageToSend = $context;
                 Log::info('SendAiReplyJob: using last discussed product from history', [
                     'product' => $lastProduct['name'],
                 ]);
+
+                // Save to conversation context
+                if ($conversation && ! empty($lastProduct['product_id'])) {
+                    $productContextService = new ProductContextService;
+                    $productContextService->saveCurrentProduct($conversation, $lastProduct['product_id']);
+                }
             }
         }
 
@@ -811,6 +1042,17 @@ class SendAiReplyJob implements ShouldQueue
             return $this->getFallbackReply();
         }
 
+        // Save first matched product to conversation context
+        if ($conversation && ! empty($matchedProducts[0])) {
+            $firstMatch = $matchedProducts[0];
+            $productContextService = new ProductContextService;
+            $productContextService->saveCurrentProduct(
+                $conversation,
+                $firstMatch['product_id'],
+                $firstMatch['variant_id'] ?? null
+            );
+        }
+
         // Step 2: Create grouped product context
         $productContext = $this->buildProductContext($matchedProducts);
 
@@ -872,7 +1114,7 @@ class SendAiReplyJob implements ShouldQueue
         ];
 
         if ($catalogItem['type'] === 'product' && isset($catalogItem['product_id'])) {
-            $product = Product::with(['category', 'brand'])->find($catalogItem['product_id']);
+            $product = Product::with(['category', 'brand', 'variants'])->find($catalogItem['product_id']);
             if ($product) {
                 $details['description'] = $product->description;
                 $details['category'] = $product->category->name ?? null;
@@ -882,6 +1124,21 @@ class SendAiReplyJob implements ShouldQueue
                 $details['base_price'] = $product->base_price;
                 $details['discount_price'] = $product->discount_price;
                 $details['price'] = $product->discount_price ?? $product->base_price;
+
+                // Include all active variants with their attributes and stock
+                if ($product->variants->count() > 0) {
+                    $details['all_variants'] = $product->variants
+                        ->where('is_active', true)
+                        ->map(fn ($v) => [
+                            'name' => $v->name,
+                            'sku' => $v->sku,
+                            'price' => $v->price ?? $product->discount_price ?? $product->base_price,
+                            'stock' => $v->stock_quantity,
+                            'attributes' => $v->attributes,
+                        ])
+                        ->values()
+                        ->toArray();
+                }
             }
         } elseif (isset($catalogItem['variant_id'])) {
             $variant = ProductVariant::with('product')->find($catalogItem['variant_id']);
@@ -897,6 +1154,31 @@ class SendAiReplyJob implements ShouldQueue
                 $details['discount_price'] = $product->discount_price;
                 $details['variant_price'] = $variant->price;
                 $details['price'] = $variant->price ?? $product->discount_price ?? $product->base_price;
+
+                // Include all active sibling variants of the same product
+                $siblingVariants = $product->variants
+                    ->where('is_active', true)
+                    ->where('id', '!=', $variant->id);
+                if ($siblingVariants->count() > 0) {
+                    $details['all_variants'] = $siblingVariants
+                        ->map(fn ($v) => [
+                            'name' => $v->name,
+                            'sku' => $v->sku,
+                            'price' => $v->price ?? $product->discount_price ?? $product->base_price,
+                            'stock' => $v->stock_quantity,
+                            'attributes' => $v->attributes,
+                        ])
+                        ->values()
+                        ->toArray();
+                    // Also include current variant at the beginning
+                    array_unshift($details['all_variants'], [
+                        'name' => $variant->name,
+                        'sku' => $variant->sku,
+                        'price' => $variant->price ?? $product->discount_price ?? $product->base_price,
+                        'stock' => $variant->stock_quantity,
+                        'attributes' => $variant->attributes,
+                    ]);
+                }
             }
         }
 
@@ -933,6 +1215,16 @@ class SendAiReplyJob implements ShouldQueue
             }
             if (isset($details['discount_price']) && $details['discount_price'] && $details['discount_price'] < $details['base_price']) {
                 $context .= '- মূল্যছাড় মূল্য: ৳'.number_format($details['discount_price'], 2)."\n";
+            }
+
+            // Show all available variants of this product
+            if (isset($details['all_variants']) && ! empty($details['all_variants'])) {
+                $context .= "- উপলব্ধ বিকল্পসমূহ:\n";
+                foreach ($details['all_variants'] as $variant) {
+                    $vAttrs = collect($variant['attributes'] ?? [])->map(fn ($v, $k) => "{$k}: {$v}")->implode(', ');
+                    $vStock = ($variant['stock'] ?? 0) > 0 ? "{$variant['stock']}টি স্টকে" : 'স্টক শেষ';
+                    $context .= "  • {$vAttrs} — ৳".number_format($variant['price'] ?? 0, 2)." [{$vStock}]\n";
+                }
             }
 
             $context .= "- ম্যাচ স্কোর: {$product['match_score']}%\n";
@@ -1062,6 +1354,20 @@ class SendAiReplyJob implements ShouldQueue
                         if (isset($details['brand'])) {
                             $line .= " [ব্র্যান্ড: {$details['brand']}]";
                         }
+                        if (isset($details['attributes']) && ! empty($details['attributes'])) {
+                            $attrs = collect($details['attributes'])->map(fn ($v, $k) => "{$k}: {$v}")->implode(', ');
+                            $line .= " [বৈশিষ্ট্য: {$attrs}]";
+                        }
+                        // Show all available variants in history
+                        if (isset($details['all_variants']) && ! empty($details['all_variants'])) {
+                            $variantList = collect($details['all_variants'])->map(function ($v) {
+                                $vAttrs = collect($v['attributes'] ?? [])->map(fn ($val, $k) => "{$k}: {$val}")->implode(', ');
+                                $vStock = ($v['stock'] ?? 0) > 0 ? "{$v['stock']}টি" : 'শেষ';
+
+                                return "    • {$vAttrs} — ৳".number_format($v['price'] ?? 0, 2)." [{$vStock}]";
+                            })->implode("\n");
+                            $line .= " [উপলব্ধ বিকল্প:\n{$variantList}]";
+                        }
                         $productInfoParts[] = $line;
                     }
                 }
@@ -1122,15 +1428,14 @@ class SendAiReplyJob implements ShouldQueue
             'kemon', 'kibhabe', 'kothay', 'kon', 'konta', 'hobe', 'lagbe', 'dite', 'paro', 'paben',
             'price', 'stock', 'color', 'size', 'nam', 'name', 'design', 'material', 'quality',
             'korse', 'korsen', 'korte', 'korbo', 'korben', 'chi', 'chai', 'chilan', 'chilam',
-            'please', 'plz', 'amake', 'jonno', 'diben', 'pabo', 'hote', 'ase?', 'ki?'];
+            'please', 'plz', 'amake', 'jonno', 'diben', 'pabo', 'hote', 'ase?', 'ki?',
+            'dita', 'nai', 'ache', 'kina', 'kinte', 'kino', 'naki', 'hobe?', 'lagbo', 'lagbe?',
+            'dite?', 'parbo?', 'pabo?', 'janen?', 'janina', 'bollen', 'bolo', 'bolun',
+            'keno', 'ky', 'kivabe', 'kothata', 'shei', 'oi', 'eta', 'ota', 'ita', 'ota'];
 
         // Extract words from message
         $words = preg_split('/[\s,?.!]+/', mb_strtolower(trim($messageText)));
         $keywords = array_filter(array_diff($words, $fillers), fn ($w) => mb_strlen($w) >= 3);
-
-        if (empty($keywords)) {
-            return null;
-        }
 
         // Search products table: name LIKE keyword, with Bangla suffix stripping
         $conn = DB::connection('tenant');
@@ -1138,7 +1443,10 @@ class SendAiReplyJob implements ShouldQueue
         // Build search terms: original keyword + stripped versions
         $suffixes = ['ir', 'er', 'tar', 'te', 'e', 'r', 'gulo', 'gula', 'ta', 'ti', 'tar', 'der', 'dertype'];
 
-        foreach ($keywords as $keyword) {
+        $searchKeywords = ! empty($keywords) ? $keywords : $words;
+        $searchKeywords = array_filter($searchKeywords, fn ($w) => mb_strlen($w) >= 2);
+
+        foreach ($searchKeywords as $keyword) {
             if (mb_strlen($keyword) < 2) {
                 continue;
             }
@@ -1162,12 +1470,26 @@ class SendAiReplyJob implements ShouldQueue
                     ->first();
 
                 if ($product) {
+                    // Load all variants of this product
+                    $allVariants = $conn->table('product_variants')
+                        ->where('product_id', $product->id)
+                        ->where('is_active', true)
+                        ->get()
+                        ->map(fn ($v) => [
+                            'attributes' => json_decode($v->attributes, true) ?? [],
+                            'price' => $v->price ?? $product->discount_price ?? $product->base_price,
+                            'stock' => $v->stock_quantity,
+                        ])
+                        ->toArray();
+
                     return [
+                        'product_id' => $product->id,
                         'name' => $product->name,
                         'price' => $product->discount_price ?? $product->base_price,
                         'stock' => $product->stock_quantity,
                         'description' => $product->description ?? '',
                         'sku' => $product->sku ?? '',
+                        'all_variants' => $allVariants,
                     ];
                 }
             }
@@ -1218,11 +1540,13 @@ class SendAiReplyJob implements ShouldQueue
                     $metadata = $bestMatch['metadata'] ?? [];
 
                     return [
+                        'product_id' => $metadata['product_id'] ?? $bestMatch['product_id'] ?? null,
                         'name' => $metadata['product_name'] ?? $bestMatch['product_name'] ?? null,
                         'price' => $metadata['product_price'] ?? null,
                         'stock' => $metadata['stock_quantity'] ?? null,
                         'description' => $metadata['description'] ?? '',
                         'sku' => $metadata['product_sku'] ?? '',
+                        'variant_attributes' => $metadata['variant_attributes'] ?? null,
                         'type' => 'text_search',
                     ];
                 }
@@ -1238,13 +1562,50 @@ class SendAiReplyJob implements ShouldQueue
                     $details = $product['full_details'] ?? [];
 
                     return [
+                        'product_id' => $details['product_id'] ?? $product['product_id'] ?? null,
                         'name' => $details['name'] ?? null,
                         'price' => $details['price'] ?? null,
                         'stock' => $details['stock'] ?? null,
                         'description' => $details['description'] ?? '',
                         'sku' => $details['sku'] ?? '',
+                        'variant_attributes' => $details['attributes'] ?? null,
+                        'all_variants' => $details['all_variants'] ?? null,
                         'type' => 'image_analysis',
                     ];
+                }
+            }
+
+            // Fallback: check if message content itself mentions a product (outgoing AI reply)
+            if ($msg->direction === 'outgoing' && ! empty($msg->content)) {
+                // Try to find any product mentioned in the AI reply text
+                $conn = DB::connection('tenant');
+                $products = $conn->table('products')
+                    ->where('status', 'active')
+                    ->get();
+
+                foreach ($products as $product) {
+                    if (mb_stripos($msg->content, $product->name) !== false) {
+                        $allVariants = $conn->table('product_variants')
+                            ->where('product_id', $product->id)
+                            ->where('is_active', true)
+                            ->get()
+                            ->map(fn ($v) => [
+                                'attributes' => json_decode($v->attributes, true) ?? [],
+                                'price' => $v->price ?? $product->discount_price ?? $product->base_price,
+                                'stock' => $v->stock_quantity,
+                            ])
+                            ->toArray();
+
+                        return [
+                            'name' => $product->name,
+                            'price' => $product->discount_price ?? $product->base_price,
+                            'stock' => $product->stock_quantity,
+                            'description' => $product->description ?? '',
+                            'sku' => $product->sku ?? '',
+                            'all_variants' => $allVariants,
+                            'type' => 'keyword_match',
+                        ];
+                    }
                 }
             }
         }

@@ -13,12 +13,14 @@ class Conversation extends Model
         'sender_name',
         'status',
         'last_message_at',
+        'current_product_data',
     ];
 
     protected function casts(): array
     {
         return [
             'last_message_at' => 'datetime',
+            'current_product_data' => 'array',
         ];
     }
 

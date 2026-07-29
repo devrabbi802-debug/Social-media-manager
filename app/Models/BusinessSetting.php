@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class BusinessSetting extends Model
 {
@@ -63,7 +65,7 @@ class BusinessSetting extends Model
 
     public function category(): ?BusinessCategory
     {
-        if (!$this->category_id) {
+        if (! $this->category_id) {
             return null;
         }
 
@@ -72,11 +74,11 @@ class BusinessSetting extends Model
 
     public function getLogoUrl(): ?string
     {
-        if (!$this->logo_path) {
+        if (! $this->logo_path) {
             return null;
         }
 
-        return \Illuminate\Support\Facades\Storage::disk('public')->url($this->logo_path);
+        return Storage::disk('public')->url($this->logo_path);
     }
 
     public function generateSystemPrompt(): string
@@ -84,7 +86,7 @@ class BusinessSetting extends Model
         // business_categories is in landlord DB, not tenant DB
         $categoryName = 'সাধারণ';
         if ($this->category_id) {
-            $cat = \Illuminate\Support\Facades\DB::connection('mysql')
+            $cat = DB::connection('mysql')
                 ->table('business_categories')
                 ->where('id', $this->category_id)
                 ->value('name');
@@ -120,7 +122,7 @@ class BusinessSetting extends Model
         }
 
         $prompt .= "\n\n=== প্রাইসিং নীতি ===";
-        $prompt .= "\n- দরদাম: " . ($this->price_negotiation ? 'হ্যাঁ, কাস্টমারদের সাথে দরদাম করা যাবে' : 'না, ফিক্সড প্রাইস');
+        $prompt .= "\n- দরদাম: ".($this->price_negotiation ? 'হ্যাঁ, কাস্টমারদের সাথে দরদাম করা যাবে' : 'না, ফিক্সড প্রাইস');
         if ($this->price_negotiation && $this->negotiation_limit > 0) {
             $prompt .= "\n- সর্বোচ্চ ছাড়: {$this->negotiation_limit}% পর্যন্ত দিতে পারবে";
             $prompt .= "\n- গুরুত্বপূর্ণ: {$this->negotiation_limit}% এর বেশি ছাড় দেওয়া যাবে না";
@@ -133,12 +135,12 @@ class BusinessSetting extends Model
         }
 
         $prompt .= "\n\n=== ডেলিভারি তথ্য ===";
-        if (!empty($this->delivery_areas) && is_array($this->delivery_areas)) {
+        if (! empty($this->delivery_areas) && is_array($this->delivery_areas)) {
             foreach ($this->delivery_areas as $area) {
                 $name = $area['name'] ?? '';
                 $price = $area['price'] ?? '';
                 if ($name) {
-                    $prompt .= "\n- {$name}" . ($price ? " — ডেলিভারি ফি: {$price}" : '');
+                    $prompt .= "\n- {$name}".($price ? " — ডেলিভারি ফি: {$price}" : '');
                 }
             }
         }
@@ -148,15 +150,15 @@ class BusinessSetting extends Model
         if ($this->delivery_partner) {
             $prompt .= "\n- ডেলিভারি পার্টনার: {$this->delivery_partner}";
         }
-        $prompt .= "\n- ক্যাশ অন ডেলিভারি (COD): " . ($this->cod_available ? 'হ্যাঁ, আছে' : 'না, নেই');
+        $prompt .= "\n- ক্যাশ অন ডেলিভারি (COD): ".($this->cod_available ? 'হ্যাঁ, আছে' : 'না, নেই');
 
         $prompt .= "\n\n=== পেমেন্ট মেথড ===";
-        if (!empty($this->accepted_payment_methods) && is_array($this->accepted_payment_methods)) {
+        if (! empty($this->accepted_payment_methods) && is_array($this->accepted_payment_methods)) {
             foreach ($this->accepted_payment_methods as $method) {
                 $name = $method['name'] ?? '';
                 $details = $method['details'] ?? '';
                 if ($name) {
-                    $prompt .= "\n- {$name}" . ($details ? " — {$details}" : '');
+                    $prompt .= "\n- {$name}".($details ? " — {$details}" : '');
                 }
             }
         }
@@ -175,10 +177,30 @@ class BusinessSetting extends Model
         }
 
         if ($this->order_process_message) {
-            $prompt .= "\n\n=== অর্ডার প্রসেস ===\nযখন কাস্টমার অর্ডার দিতে চাইবে বা অর্ডার সম্পর্কিত কথা বলবে, তখন শুধুমাত্র নিচের মেসেজটি এনে পাঠাবে — এর বাইরে কোনো অতিরিক্ত কথা বলবে না, কোনো পরিবর্তন করবে না, কোনো ব্যাখ্যা দেবে না:\n{$this->order_process_message}";
+            $prompt .= "\n\n=== অর্ডার প্রসেস (অটো অর্ডার) ===
+তুমি এখন অর্ডার কালেক্টর। কাস্টমার অর্ডার দিতে চাইলে ধাপে ধাপে কাজ করো:
+
+ধাপ ১: কাস্টমার অর্ডার দিতে চাইলে বা অর্ডার সম্পর্কিত কথা বললে, নিচের মেসেজটি পাঠাও:
+{$this->order_process_message}
+
+ধাপ ২: কাস্টমার নাম, ফোন, ঠিকানা, প্রোডাক্ট সম্পর্কে তথ্য দিলে, সব তথ্য একসাথে summary করে জিজ্ঞাসা করো — \"এই অর্ডারটি কনফার্ম করব?\"
+
+ধাপ ৩: কাস্টমার \"Yes/Ok/Thik ache/Confirm/জি/হ্যাঁ/থাক/করো\" বা এর সাথে সামঞ্জস্যপূর্ণ যেকোনো ইতিবাচক উত্তর দিলে, শুধুমাত্র নিচের JSON ফরম্যাটে output দাও — এর বাইরে কোনো অতিরিক্ত কথা বলো না, কোনো markdown বা code fence ব্যবহার করো না:
+
+###ORDER_DATA_START###
+{\"customer_name\":\"...\",\"phone\":\"...\",\"address\":\"...\",\"city\":\"...\",\"items\":[{\"product_id\":1,\"name\":\"...\",\"quantity\":1,\"unit_price\":500}]}
+###ORDER_DATA_END###
+
+গুরুত্বপূর্ণ নিয়ম:
+- JSON শুধুমাত্র customer ইতিবাচক উত্তর দেওয়ার পর output দাও
+- Confirm না হলে JSON দিও না
+- customer_name, phone, address ছাড়া JSON দিও না
+- Product ID না জানলে product এর নাম দিয়ে কথোপকথনের ইতিহাস থেকে খুঁজে বের করো
+- JSON marker ছাড়া অন্য কোনো জায়গায় JSON লিখো না
+- JSON output দেওয়ার পর আর কিছু লিখো না";
         }
 
-        if (!empty($extraData)) {
+        if (! empty($extraData)) {
             $prompt .= "\n\n=== ক্যাটাগরি-স্পেসিফিক তথ্য ===";
             foreach ($extraData as $key => $value) {
                 if ($value && $value !== '' && $value !== null) {
@@ -188,7 +210,7 @@ class BusinessSetting extends Model
             }
         }
 
-        if (!empty($this->faq) && is_array($this->faq)) {
+        if (! empty($this->faq) && is_array($this->faq)) {
             $prompt .= "\n\n=== সচরাচর জিজ্ঞাসা (FAQ) ===";
             foreach ($this->faq as $item) {
                 $q = $item['question'] ?? '';
@@ -212,7 +234,9 @@ class BusinessSetting extends Model
 - অতিরিক্ত কথা বলবে না। শুধু প্রয়োজনীয় তথ্য দেবে।
 - যদি কোনো প্রশ্নের উত্তর না জানো, তাহলে বলবে এই বিষয়ে আমাদের পেজে যোগাযোগ করুন।
 - গালিবাজি বা অশোভনীয় আচরণ করলে ভদ্রভাবে জানাবে যে আপনি সাহায্য করতে পারবেন না।
-- অর্ডার প্রসেস মেসেজ থাকলে, অর্ডার সম্পর্কিত কথা হলে শুধু ওই মেসেজটি পাঠাবে — নাম, ঠিকানা, ফোন নিজে জিজ্ঞাসা করবে না।
+- কাস্টমার যদি কোনো নির্দিষ্ট বিকল্প (variant) সম্পর্কে জিজ্ঞাসা করে এবং সেটি উপলব্ধ না থাকে, তাহলে স্পষ্টভাবে বলবে যে সেই বিকল্পটি এখন উপলব্ধ নেই। তারপর যেসব বিকল্প আছে সেগুলো প্রস্তাব করবে।
+- \"উপলব্ধ বিকল্পসমূহ\" লিস্টে যদি কোনো বিকল্পের স্টক ০ বা শেষ থাকে, সেটি স্পষ্টভাবে \"স্টক শেষ\" হিসেবে উল্লেখ করবে।
+- অর্ডার প্রসেস মেসেজ থাকলে, অর্ডার সম্পর্কিত কথা হলে ওই মেসেজটি পাঠাবে। তারপর কাস্টমার থেকে নাম, ঠিকানা, ফোন ধাপে ধাপে সংগ্রহ করবে।
 - ডেলিভারি এরিয়া অনুযায়ী সঠিক ডেলিভারি ফি জানাবে।
 - পেমেন্ট মেথড সম্পর্কে জিজ্ঞাসা করলে সব অপশন জানাবে।
 - অ্যাডভান্স পেমেন্ট লাগলে তা অবশ্যই জানাবে এবং কাস্টমারকে বোঝাবে।";
