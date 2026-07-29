@@ -1029,7 +1029,7 @@ class SendAiReplyJob implements ShouldQueue
 
         $messages = Message::where('conversation_id', $conversation->id)
             ->orderBy('created_at', 'desc')
-            ->limit(20)
+            ->limit(50)
             ->get()
             ->reverse()
             ->values();
