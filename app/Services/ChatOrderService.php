@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\BusinessSetting;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\Order;
@@ -167,8 +168,82 @@ class ChatOrderService
                 return null;
             }
 
+            // ─── Calculate delivery charge ─────────────────────
+            $shippingCost = 0;
+            $deliveryAreaName = '';
+            $businessSetting = BusinessSetting::first();
+
+            if ($businessSetting && ! empty($businessSetting->delivery_areas) && is_array($businessSetting->delivery_areas)) {
+                // Match customer's city or district against delivery_areas
+                $customerCity = mb_strtolower($data['city'] ?? '');
+                $customerDistrict = mb_strtolower($data['district'] ?? '');
+                $customerAddress = mb_strtolower($data['address'] ?? '');
+
+                foreach ($businessSetting->delivery_areas as $area) {
+                    $areaName = mb_strtolower($area['name'] ?? '');
+                    $areaPrice = (float) ($area['price'] ?? 0);
+
+                    if (! $areaName) {
+                        continue;
+                    }
+
+                    // Check if customer's city/district/address matches this area
+                    if (str_contains($customerCity, $areaName)
+                        || str_contains($areaName, $customerCity)
+                        || str_contains($customerDistrict, $areaName)
+                        || str_contains($areaName, $customerDistrict)
+                        || str_contains($customerAddress, $areaName)) {
+                        $shippingCost = $areaPrice;
+                        $deliveryAreaName = $area['name'];
+                        break;
+                    }
+                }
+
+                // If no match found, try to detect Dhaka vs outside Dhaka
+                if ($shippingCost === 0 && $deliveryAreaName === '') {
+                    $dhakaAreas = ['ঢাকা', 'dhaka', 'mirpur', 'dhanmondi', 'uttara', 'banani', 'gulshan',
+                        'motijheel', 'motijhil', 'farmgate', 'farm gate', 'new market', 'newmarket',
+                        'elephant road', 'shahbag', 'shahbagh', 'dhanmondi', ' Mohammadpur',
+                        'mohammadpur', 'lalmatia', 'lalmatia', 'kazipara', 'kazipara',
+                        'technical', 'tikatuli', 'kamrangir char', 'old dhaka', 'puran dhaka'];
+
+                    $isDhaka = false;
+                    foreach ($dhakaAreas as $da) {
+                        if (str_contains($customerCity, $da) || str_contains($customerDistrict, $da)
+                            || str_contains($customerAddress, $da)) {
+                            $isDhaka = true;
+                            break;
+                        }
+                    }
+
+                    // Find default prices from delivery_areas
+                    $dhakaPrice = 0;
+                    $outsidePrice = 0;
+                    foreach ($businessSetting->delivery_areas as $area) {
+                        $name = mb_strtolower($area['name'] ?? '');
+                        $price = (float) ($area['price'] ?? 0);
+                        if (str_contains($name, 'ঢাকা') || str_contains($name, 'dhaka')) {
+                            if (str_contains($name, 'বাইরে') || str_contains($name, 'outside') || str_contains($name, 'out')) {
+                                $outsidePrice = $price;
+                            } else {
+                                $dhakaPrice = $price;
+                            }
+                        }
+                    }
+
+                    if ($isDhaka) {
+                        $shippingCost = $dhakaPrice;
+                        $deliveryAreaName = 'ঢাকা';
+                    } elseif ($outsidePrice > 0) {
+                        $shippingCost = $outsidePrice;
+                        $deliveryAreaName = 'ঢাকার বাইরে';
+                    }
+                }
+            }
+
             // ─── Create order ──────────────────────────────────
             $orderNumber = 'ORD-'.strtoupper(Str::random(8));
+            $total = $subtotal + $shippingCost;
 
             $order = Order::create([
                 'customer_id' => $customer->id,
@@ -177,11 +252,12 @@ class ChatOrderService
                 'order_number' => $orderNumber,
                 'status' => 'pending',
                 'subtotal' => $subtotal,
-                'total' => $subtotal,
+                'shipping_cost' => $shippingCost,
+                'total' => $total,
                 'payment_method' => 'COD',
                 'payment_status' => 'pending',
                 'shipping_address_id' => $address->id,
-                'notes' => 'Facebook Chat er maddhome order',
+                'notes' => 'Facebook Chat er maddhome order'.($deliveryAreaName ? " — Delivery: {$deliveryAreaName}" : ''),
             ]);
 
             foreach ($orderItems as $item) {
@@ -196,7 +272,10 @@ class ChatOrderService
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'customer_id' => $customer->id,
-                'total' => $subtotal,
+                'subtotal' => $subtotal,
+                'shipping_cost' => $shippingCost,
+                'delivery_area' => $deliveryAreaName,
+                'total' => $total,
             ]);
 
             return $order;

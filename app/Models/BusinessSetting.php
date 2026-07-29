@@ -183,21 +183,31 @@ class BusinessSetting extends Model
 ধাপ ১: কাস্টমার অর্ডার দিতে চাইলে বা অর্ডার সম্পর্কিত কথা বললে, নিচের মেসেজটি পাঠাও:
 {$this->order_process_message}
 
-ধাপ ২: কাস্টমার নাম, ফোন, ঠিকানা, প্রোডাক্ট সম্পর্কে তথ্য দিলে, সব তথ্য একসাথে summary করে জিজ্ঞাসা করো — \"এই অর্ডারটি কনফার্ম করব?\"
+ধাপ ২: কাস্টমার নাম, ফোন, ঠিকানা (শহর/জেলা সহ), প্রোডাক্ট সম্পর্কে তথ্য দিলে, সব তথ্য একসাথে summary করে জিজ্ঞাসা করো — \"এই অর্ডারটি কনফার্ম করব?\"। এই সময় delivery area অনুযায়ী delivery charge হিসাব করে total দেখাও।
 
 ধাপ ৩: কাস্টমার \"Yes/Ok/Thik ache/Confirm/জি/হ্যাঁ/থাক/করো\" বা এর সাথে সামঞ্জস্যপূর্ণ যেকোনো ইতিবাচক উত্তর দিলে, শুধুমাত্র নিচের JSON ফরম্যাটে output দাও — এর বাইরে কোনো অতিরিক্ত কথা বলো না, কোনো markdown বা code fence ব্যবহার করো না:
 
 ###ORDER_DATA_START###
-{\"customer_name\":\"...\",\"phone\":\"...\",\"address\":\"...\",\"city\":\"...\",\"items\":[{\"product_id\":1,\"name\":\"...\",\"quantity\":1,\"unit_price\":500}]}
+{\"customer_name\":\"...\",\"phone\":\"...\",\"address\":\"...\",\"city\":\"...\",\"district\":\"...\",\"items\":[{\"product_id\":1,\"name\":\"...\",\"quantity\":1,\"unit_price\":500}]}
 ###ORDER_DATA_END###
 
 গুরুত্বপূর্ণ নিয়ম:
 - JSON শুধুমাত্র customer ইতিবাচক উত্তর দেওয়ার পর output দাও
 - Confirm না হলে JSON দিও না
 - customer_name, phone, address ছাড়া JSON দিও না
+- city এবং district ফিল্ড অবশ্যই থাকতে হবে — কাস্টমারের ঠিকানা থেকে শহর বা জেলা বের করে দাও
+- city/district না পেলে কাস্টমারকে জিজ্ঞাসা করো — \"আপনার শহর বা জেলার নাম কী?\"
 - Product ID না জানলে product এর নাম দিয়ে কথোপকথনের ইতিহাস থেকে খুঁজে বের করো
 - JSON marker ছাড়া অন্য কোনো জায়গায় JSON লিখো না
-- JSON output দেওয়ার পর আর কিছু লিখো না";
+- JSON output দেওয়ার পর আর কিছু লিখো না
+
+Delivery charge হিসাবের নিয়ম:
+- ধাপ ২-তে summary দেখানোর সময় delivery charge সহ total দেখাও। ফর্ম্যাট:
+  \"প্রোডাক্ট: ৳XXX
+   ডেলিভারি (ঢাকা/বাইরে): ৳XXX
+   মোট: ৳XXX\"
+- Delivery area match না হলে কাস্টমারকে জিজ্ঞাসা করো — \"আপনার শহর বা জেলার নাম কী? ঢাকা সিটি নি নাকি বাইরে?\"
+- JSON তে city field অবশ্যই delivery area match এর জন্য দরকার";
         }
 
         if (! empty($extraData)) {
