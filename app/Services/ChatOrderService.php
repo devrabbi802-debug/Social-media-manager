@@ -131,14 +131,14 @@ class ChatOrderService
                 // If product found, use its actual price and details
                 if ($product) {
                     $name = $product->name;
-                    $unitPrice = (float) $product->price;
+                    $unitPrice = (float) ($product->discount_price ?? $product->base_price);
                     $sku = $product->sku ?? '';
                 } else {
                     // Try to find by name from conversation history
                     $product = Product::where('name', 'LIKE', '%'.$name.'%')->first();
                     if ($product) {
                         $name = $product->name;
-                        $unitPrice = (float) $product->price;
+                        $unitPrice = (float) ($product->discount_price ?? $product->base_price);
                         $sku = $product->sku ?? '';
                     }
                 }

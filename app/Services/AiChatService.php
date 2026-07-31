@@ -142,7 +142,7 @@ class AiChatService
         return null;
     }
 
-    private function chatWithCerebras(string $message, string $apiKey, array $history = []): ?string
+    private function chatWithCerebras(string $message, string $apiKey, array $history = [], bool $isRetry = false): ?string
     {
         try {
             $messages = [
@@ -175,13 +175,15 @@ class AiChatService
             }
 
             if ($response->status() === 413) {
+                if ($isRetry) {
+                    Log::error('Cerebras API request too large (413), already retried with truncation');
+                    return null;
+                }
                 Log::error('Cerebras API request too large (413)', [
                     'message_length' => mb_strlen($message),
                 ]);
-
                 $truncatedMessage = mb_substr($message, 0, 4000) . "\n\n[বার্তা সংক্ষিপ্ত করা হয়েছে]";
-
-                return $this->chatWithCerebras($truncatedMessage, $apiKey, $history);
+                return $this->chatWithCerebras($truncatedMessage, $apiKey, $history, true);
             }
 
             if ($response->failed()) {
@@ -328,7 +330,7 @@ class AiChatService
         return $this->chatWithMessages($message, $apiKey, []);
     }
 
-    public function chatWithMessages(string $message, string $apiKey, array $history = []): ?string
+    public function chatWithMessages(string $message, string $apiKey, array $history = [], bool $isRetry = false): ?string
     {
         try {
             $messages = [
@@ -362,13 +364,15 @@ class AiChatService
             }
 
             if ($response->status() === 413) {
+                if ($isRetry) {
+                    Log::error('Groq API request too large (413), already retried with truncation');
+                    return null;
+                }
                 Log::error('Groq API request too large (413)', [
                     'message_length' => mb_strlen($message),
                 ]);
-
                 $truncatedMessage = mb_substr($message, 0, 4000) . "\n\n[বার্তা সংক্ষিপ্ত করা হয়েছে]";
-
-                return $this->chatWithMessages($truncatedMessage, $apiKey, $history);
+                return $this->chatWithMessages($truncatedMessage, $apiKey, $history, true);
             }
 
             if ($response->failed()) {

@@ -136,79 +136,48 @@ class SendAiReplyJob implements ShouldQueue
         }
 
         $tenant->run(function () use ($tenant) {
-            // Check for recent images/replies INSIDE tenant context
-            if (empty($this->imageUrls)) {
-                sleep(3);
+            $conversation = Conversation::where('sender_id', $this->senderId)->first();
 
-                $conversation = Conversation::where('sender_id', $this->senderId)->first();
+            // Dedup: check if a reply was already sent recently (avoids duplicate processing)
+            if ($conversation) {
+                $hasRecentReply = Message::where('conversation_id', $conversation->id)
+                    ->where('direction', 'outgoing')
+                    ->where('created_at', '>=', now()->subSeconds(15))
+                    ->exists();
 
-                if ($conversation) {
-                    $recentImages = Message::where('conversation_id', $conversation->id)
-                        ->where('direction', 'incoming')
-                        ->where('type', 'image')
-                        ->where('created_at', '>=', now()->subSeconds(10))
-                        ->pluck('image_path')
-                        ->toArray();
+                if ($hasRecentReply) {
+                    Log::info('SendAiReplyJob: SKIPPED - reply already sent recently', [
+                        'sender_id' => $this->senderId,
+                    ]);
 
-                    if (! empty($recentImages)) {
-                        Log::info('SendAiReplyJob: text job found recent images after wait', [
-                            'sender_id' => $this->senderId,
-                            'image_count' => count($recentImages),
-                        ]);
-                        $this->imageUrls = $recentImages;
-                    } else {
-                        $hasRecentReply = Message::where('conversation_id', $conversation->id)
-                            ->where('direction', 'outgoing')
-                            ->where('created_at', '>=', now()->subSeconds(15))
-                            ->exists();
-
-                        if ($hasRecentReply) {
-                            Log::info('SendAiReplyJob: SKIPPED text job - reply already sent', [
-                                'sender_id' => $this->senderId,
-                            ]);
-
-                            return;
-                        }
-                    }
+                    return;
                 }
-            } else {
-                // Image job: wait briefly to collect more images from same batch
-                sleep(3);
 
-                $conversation = Conversation::where('sender_id', $this->senderId)->first();
+                // Collect recent images from batch (text+image or multi-image scenarios)
+                $recentImages = Message::where('conversation_id', $conversation->id)
+                    ->where('direction', 'incoming')
+                    ->where('type', 'image')
+                    ->where('created_at', '>=', now()->subSeconds(10))
+                    ->pluck('image_path')
+                    ->unique()
+                    ->values()
+                    ->toArray();
 
-                if ($conversation) {
-                    // Skip if a reply was already sent for this batch
-                    $hasRecentReply = Message::where('conversation_id', $conversation->id)
-                        ->where('direction', 'outgoing')
-                        ->where('created_at', '>=', now()->subSeconds(15))
-                        ->exists();
-
-                    if ($hasRecentReply) {
-                        Log::info('SendAiReplyJob: SKIPPED image job - reply already sent', [
-                            'sender_id' => $this->senderId,
-                        ]);
-
-                        return;
-                    }
-
-                    $allImages = Message::where('conversation_id', $conversation->id)
-                        ->where('direction', 'incoming')
-                        ->where('type', 'image')
-                        ->where('created_at', '>=', now()->subSeconds(10))
-                        ->pluck('image_path')
-                        ->unique()
-                        ->values()
-                        ->toArray();
-
-                    if (count($allImages) > count($this->imageUrls)) {
-                        Log::info('SendAiReplyJob: image job collected additional images', [
-                            'sender_id' => $this->senderId,
-                            'original_count' => count($this->imageUrls),
-                            'total_count' => count($allImages),
-                        ]);
-                        $this->imageUrls = $allImages;
-                    }
+                if (empty($this->imageUrls) && ! empty($recentImages)) {
+                    // Text job: pick up recent images if available
+                    Log::info('SendAiReplyJob: text job found recent images', [
+                        'sender_id' => $this->senderId,
+                        'image_count' => count($recentImages),
+                    ]);
+                    $this->imageUrls = $recentImages;
+                } elseif (! empty($this->imageUrls) && count($recentImages) > count($this->imageUrls)) {
+                    // Image job: collect additional images from same batch
+                    Log::info('SendAiReplyJob: image job collected additional images', [
+                        'sender_id' => $this->senderId,
+                        'original_count' => count($this->imageUrls),
+                        'total_count' => count($recentImages),
+                    ]);
+                    $this->imageUrls = $recentImages;
                 }
             }
 
@@ -245,8 +214,8 @@ class SendAiReplyJob implements ShouldQueue
                     'has_images' => $hasImages,
                 ]);
                 $result = $hasImages
-                    ? $this->handleImageMessage($facebookSetting, $systemPrompt)
-                    : $this->handleTextMessage($facebookSetting, $systemPrompt);
+                    ? $this->handleImageMessage($facebookSetting, $systemPrompt, $conversation)
+                    : $this->handleTextMessage($facebookSetting, $systemPrompt, $conversation);
 
                 // Typing keep-alive: re-send typing_on every 5 sec during long AI processing
                 $elapsed = time() - $typingStartedAt;
@@ -301,7 +270,9 @@ class SendAiReplyJob implements ShouldQueue
             $outgoingFacebookMid = $this->sendFacebookMessage($reply);
 
             try {
-                $conversation = Conversation::where('sender_id', $this->senderId)->first();
+                if (! $conversation) {
+                    $conversation = Conversation::where('sender_id', $this->senderId)->first();
+                }
 
                 if ($conversation) {
                     $messageType = $hasImages ? 'ai_reply' : 'text';
@@ -364,7 +335,7 @@ class SendAiReplyJob implements ShouldQueue
         });
     }
 
-    private function handleTextMessage(FacebookSetting $facebookSetting, string $systemPrompt): ?array
+    private function handleTextMessage(FacebookSetting $facebookSetting, string $systemPrompt, ?Conversation $conversation = null): ?array
     {
         $aiKeys = AiSetting::where('user_id', $facebookSetting->user_id)
             ->active()
@@ -400,7 +371,9 @@ class SendAiReplyJob implements ShouldQueue
         }
 
         // Check if there are recent images (text + image scenario)
-        $conversation = Conversation::where('sender_id', $this->senderId)->first();
+        if (! $conversation) {
+            $conversation = Conversation::where('sender_id', $this->senderId)->first();
+        }
         if ($conversation) {
             $recentImages = Message::where('conversation_id', $conversation->id)
                 ->where('direction', 'incoming')
@@ -416,12 +389,13 @@ class SendAiReplyJob implements ShouldQueue
                 ]);
                 $this->imageUrls = $recentImages;
 
-                return $this->handleImageMessage($facebookSetting, $systemPrompt);
+                return $this->handleImageMessage($facebookSetting, $systemPrompt, $conversation);
             }
         }
 
         $history = $this->getConversationHistory();
         $textProductMatches = null;
+        $messageToSend = $this->messageText;
 
         // HIGHEST PRIORITY: If this is a reply to a specific message (swipe left), use that message's product context
         // Customer specifically asked about THIS product — must override current_product_data
@@ -444,302 +418,52 @@ class SendAiReplyJob implements ShouldQueue
             }
         }
 
+        // PRIORITY 1: Reply-to specific message product context
         if (! empty($this->replyToMid) && $conversation) {
-            $repliedMessage = Message::where('facebook_mid', $this->replyToMid)->first();
-
-            $productInfo = null;
-            $productName = null;
-
-            if ($repliedMessage) {
-                // Facebook sends text+image as ONE message with SAME mid.
-                // Text gets saved first, image might be saved separately with same mid.
-                // If we found a TEXT, check if there's also an IMAGE with same mid.
-                if ($repliedMessage->type === 'text' && ! $repliedMessage->image_path) {
-                    $imageVersion = Message::where('facebook_mid', $this->replyToMid)
-                        ->where('type', 'image')
-                        ->first();
-                    if ($imageVersion) {
-                        Log::info('SendAiReplyJob: found image version of replied text message', [
-                            'text_mid' => $this->replyToMid,
-                            'image_path' => substr($imageVersion->image_path ?? '', 0, 60),
-                        ]);
-                        $repliedMessage = $imageVersion;
-                    }
-                }
-
-                // Determine which image URL the replied message corresponds to
-                $repliedImageUrl = $repliedMessage->image_path ?? null;
-
-                // Case 1: Replied to outgoing AI reply (has image_analysis directly)
-                if ($repliedMessage->image_analysis && $repliedMessage->direction === 'outgoing') {
-                    $analysis = $repliedMessage->image_analysis;
-                    $matchedProducts = $analysis['matched_products']
-                        ?? $analysis['image_analysis']['matched_products']
-                        ?? [];
-
-                    $productInfo = $this->findCorrectMatchedProduct(
-                        $matchedProducts,
-                        $analysis,
-                        $repliedImageUrl
-                    );
-
-                    // Fallback: text product matches
-                    if (! $productInfo) {
-                        $productInfo = $analysis['text_product_matches'][0]
-                            ?? $analysis['image_analysis']['text_product_matches'][0]
-                            ?? null;
-                    }
-                }
-
-                // Case 2: Replied to incoming image message — find the AI reply that was sent AFTER it
-                // Don't filter by conversation — FB direct and Zernio create separate conversations for same customer
-                if (! $productInfo && $repliedMessage->direction === 'incoming') {
-                    $aiReply = Message::where('direction', 'outgoing')
-                        ->where('created_at', '>=', $repliedMessage->created_at)
-                        ->where('created_at', '<=', $repliedMessage->created_at->addSeconds(60))
-                        ->whereNotNull('image_analysis')
-                        ->orderBy('created_at', 'asc')
-                        ->first();
-
-                    if ($aiReply && $aiReply->image_analysis) {
-                        $analysis = $aiReply->image_analysis;
-                        $matchedProducts = $analysis['matched_products']
-                            ?? $analysis['image_analysis']['matched_products']
-                            ?? [];
-
-                        $productInfo = $this->findCorrectMatchedProduct(
-                            $matchedProducts,
-                            $analysis,
-                            $repliedImageUrl
-                        );
-
-                        // Fallback: text product matches
-                        if (! $productInfo) {
-                            $productInfo = $analysis['text_product_matches'][0]
-                                ?? $analysis['image_analysis']['text_product_matches'][0]
-                                ?? null;
-                        }
-                    }
-                }
-
-                if ($productInfo) {
-                    // Get product identifiers from stored data
-                    $productId = $productInfo['product_id'] ?? $productInfo['full_details']['product_id'] ?? null;
-                    $variantId = $productInfo['variant_id'] ?? $productInfo['full_details']['variant_id'] ?? null;
-                    $productName = $productInfo['full_details']['name']
-                        ?? $productInfo['product_name']
-                        ?? $productInfo['name']
-                        ?? null;
-                }
-            }
-
-            if ($productName) {
-                // IMPORTANT: Fetch CURRENT price from DB instead of using stored (potentially stale) price
-                $currentPrice = null;
-                $currentStock = null;
-                $currentDescription = null;
-                $currentSku = null;
-                $currentAttributes = null;
-                $allVariants = null;
-
-                if ($variantId) {
-                    $variant = ProductVariant::with('product')->find($variantId);
-                    if ($variant) {
-                        $currentPrice = $variant->price ?? $variant->product->discount_price ?? $variant->product->base_price;
-                        $currentStock = $variant->stock_quantity;
-                        $currentDescription = $variant->product->description ?? null;
-                        $currentSku = $variant->sku ?? null;
-                        $currentAttributes = $variant->attributes;
-
-                        // Load all sibling variants
-                        $siblingVariants = $variant->product->variants
-                            ->where('is_active', true)
-                            ->where('id', '!=', $variant->id);
-                        $allVariants = $siblingVariants->map(fn ($v) => [
-                            'attributes' => $v->attributes,
-                            'price' => $v->price ?? $variant->product->discount_price ?? $variant->product->base_price,
-                            'stock' => $v->stock_quantity,
-                        ])->values()->toArray();
-                        // Include current variant too
-                        array_unshift($allVariants, [
-                            'attributes' => $variant->attributes,
-                            'price' => $variant->price ?? $variant->product->discount_price ?? $variant->product->base_price,
-                            'stock' => $variant->stock_quantity,
-                        ]);
-                    }
-                } elseif ($productId) {
-                    $product = Product::with('variants')->find($productId);
-                    if ($product) {
-                        $currentPrice = $product->discount_price ?? $product->base_price;
-                        $currentStock = $product->stock_quantity;
-                        $currentDescription = $product->description ?? null;
-                        $currentSku = $product->sku ?? null;
-
-                        // Load all variants
-                        $activeVariants = $product->variants->where('is_active', true);
-                        if ($activeVariants->count() > 0) {
-                            $allVariants = $activeVariants->map(fn ($v) => [
-                                'attributes' => $v->attributes,
-                                'price' => $v->price ?? $product->discount_price ?? $product->base_price,
-                                'stock' => $v->stock_quantity,
-                            ])->values()->toArray();
-                        }
-                    }
-                }
-
-                $context = "কাস্টমার একটি নির্দিষ্ট প্রোডাক্টের উপর reply করে জিজ্ঞাসা করছে।\n\n";
-                $context .= "প্রোডাক্ট: {$productName}";
-                if ($currentPrice) {
-                    $context .= ' — দাম: ৳'.number_format((float) $currentPrice, 2);
-                }
-                if ($currentSku) {
-                    $context .= ", SKU: {$currentSku}";
-                }
-                if ($currentStock !== null) {
-                    $stockText = $currentStock > 0 ? "{$currentStock}টি স্টকে" : 'স্টক শেষ';
-                    $context .= ", স্টক: {$stockText}";
-                }
-                if ($currentDescription) {
-                    $context .= ", বিবরণ: {$currentDescription}";
-                }
-                if ($currentAttributes && ! empty($currentAttributes)) {
-                    $attrStr = collect($currentAttributes)->map(fn ($v, $k) => "{$k}: {$v}")->implode(', ');
-                    $context .= ", বৈশিষ্ট্য: {$attrStr}";
-                }
-                // Show all available variants
-                if ($allVariants && ! empty($allVariants)) {
-                    $context .= "\n\nউপলব্ধ বিকল্পসমূহ:\n";
-                    foreach ($allVariants as $v) {
-                        $vAttrs = collect($v['attributes'] ?? [])->map(fn ($val, $k) => "{$k}: {$val}")->implode(', ');
-                        $vStock = ($v['stock'] ?? 0) > 0 ? "{$v['stock']}টি স্টকে" : 'স্টক শেষ';
-                        $context .= "• {$vAttrs} — ৳".number_format($v['price'] ?? 0, 2)." [{$vStock}]\n";
-                    }
-                }
-                $context .= "\n\nউপরের প্রোডাক্টটি নিয়ে কাস্টমার প্রশ্ন করছে। এই তথ্য ব্যবহার করে উত্তর দিন।";
-
-                $messageToSend = "{$this->messageText}\n\n{$context}";
-                $textProductMatches = $productInfo;
+            $replyContext = $this->resolveReplyToProductContext($conversation);
+            if ($replyContext) {
+                $messageToSend = "{$this->messageText}\n\n{$replyContext['context']}";
+                $textProductMatches = $replyContext['product_info'];
 
                 Log::info('SendAiReplyJob: using replied message product context (live DB prices)', [
                     'reply_to_mid' => $this->replyToMid,
-                    'product' => $productName,
-                    'current_price' => $currentPrice,
+                    'product' => $replyContext['product_name'],
+                    'current_price' => $replyContext['current_price'],
                 ]);
 
                 // Save to conversation's current product context
-                if ($conversation && $productId) {
+                if ($conversation && $replyContext['product_id']) {
                     $productContextService = new ProductContextService;
-                    $productContextService->saveCurrentProduct($conversation, $productId, $variantId);
+                    $productContextService->saveCurrentProduct($conversation, $replyContext['product_id'], $replyContext['variant_id']);
                 }
 
-                // Skip all other search — jump to AI call
-                goto ai_call;
+                return $this->callAi($messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting, $textProductMatches);
             }
 
             Log::info('SendAiReplyJob: reply_to_mid found but no product context in original message', [
                 'reply_to_mid' => $this->replyToMid,
-                'has_image_analysis' => $repliedMessage ? (bool) $repliedMessage->image_analysis : false,
+                'has_image_analysis' => isset($repliedMessage) ? (bool) $repliedMessage->image_analysis : false,
             ]);
         }
 
-        // SECOND PRIORITY: Check if conversation has a current product context
-        // Only used when customer's question seems like a follow-up about the SAME product
-        // (e.g. "price koto?", "stock ache?", "delivery koto din?") — NOT when asking about a new product
+        // PRIORITY 2: Follow-up question about current product context
         if ($conversation) {
-            $productContextService = new ProductContextService;
-            $currentProduct = $productContextService->getCurrentProductContext($conversation);
+            $followUpContext = $this->resolveFollowUpContext($conversation);
+            if ($followUpContext) {
+                $messageToSend = "{$this->messageText}\n\n{$followUpContext}";
 
-            if ($currentProduct) {
-                // Check if customer's message is likely about THIS product
-                $msgLower = mb_strtolower($this->messageText);
-                $isFollowUp = false;
-
-                // 1. If message contains current product's name → follow-up
-                if (! empty($currentProduct['name'])) {
-                    $productName = mb_strtolower($currentProduct['name']);
-                    // Check if any word in product name appears in message
-                    $nameWords = array_filter(explode(' ', $productName), fn ($w) => mb_strlen($w) >= 3);
-                    foreach ($nameWords as $word) {
-                        if (str_contains($msgLower, $word)) {
-                            $isFollowUp = true;
-                            break;
-                        }
-                    }
-                }
-
-                // 2. Follow-up question patterns (short, no new product keyword)
-                if (! $isFollowUp) {
-                    $followUpPatterns = [
-                        '/\b(price|dam|dama|daam|taka|kit|koto)\b/i',
-                        '/\b(stock|ache|nai|shesh|kothay)\b/i',
-                        '/\b(delivery|deliver|ship|pathano|diner)\b/i',
-                        '/\b(order|ordered|kinte|nibo)\b/i',
-                        '/\b(available|paben|diben|thake)\b/i',
-                        '/\b(confirm|confir)\b/i',
-                        '/\b(ok|thik|ji|ha|nah|nio|nii)\b/i',
-                    ];
-
-                    $isFollowUp = mb_strlen($this->messageText) < 20;
-                    if (! $isFollowUp) {
-                        foreach ($followUpPatterns as $pattern) {
-                            if (preg_match($pattern, $msgLower)) {
-                                $isFollowUp = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // 3. If message asks about a DIFFERENT product (contains product-related words) → NOT follow-up
-                if ($isFollowUp && mb_strlen($this->messageText) > 5) {
-                    // Check if message seems to be about a completely different product
-                    $productWords = ['pant', 'shirt', 't-shirt', 'tshirt', 'shoe', 'bag', 'watch',
-                        'hat', 'cap', 'jacket', 'coat', 'dress', 'skirt', 'shorts', 'hoodie',
-                        'saree', 'salwar', 'kameez', 'punjabi', 'panjabi', 'vest', 'inner',
-                        'belt', 'wallet', 'sunglasses', 'glasses', 'ring', 'necklace'];
-                    foreach ($productWords as $pw) {
-                        if (str_contains($msgLower, $pw) && ! str_contains($msgLower, mb_strtolower($currentProduct['name'] ?? ''))) {
-                            $isFollowUp = false;
-                            Log::info('SendAiReplyJob: detected new product inquiry despite short message', [
-                                'message' => $this->messageText,
-                                'detected_product_word' => $pw,
-                            ]);
-                            break;
-                        }
-                    }
-                }
-
-                if ($isFollowUp) {
-                    $contextString = $productContextService->buildContextString($conversation, $this->messageText);
-                    if ($contextString) {
-                        $messageToSend = "{$this->messageText}\n\n{$contextString}";
-                        Log::info('SendAiReplyJob: using conversation current product context (follow-up)', [
-                            'sender_id' => $this->senderId,
-                            'product' => $currentProduct['name'] ?? 'unknown',
-                        ]);
-                        goto ai_call;
-                    }
-                } else {
-                    Log::info('SendAiReplyJob: skipping current product context - new product inquiry', [
-                        'sender_id' => $this->senderId,
-                        'message' => mb_substr($this->messageText, 0, 50),
-                        'current_product' => $currentProduct['name'] ?? 'unknown',
-                    ]);
-                }
+                return $this->callAi($messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting, $textProductMatches);
             }
         }
 
-        // Text product search: find relevant products for customer's query
+        // PRIORITY 3: Text product search
         $searchResult = $this->searchProductsByText($this->messageText);
-        $messageToSend = $this->messageText;
-        $textProductMatches = null;
 
         if ($searchResult) {
             $textProductMatches = $searchResult['matches'];
             $bestScore = $textProductMatches[0]['score'] ?? 0;
 
             if ($bestScore >= 0.50) {
-                // Good match — use text search context
                 $messageToSend = "{$this->messageText}\n\nকাস্টমারের প্রশ্নের সাথে সম্পর্কিত প্রোডাক্ট:\n{$searchResult['context']}";
                 Log::info('SendAiReplyJob: text product search found good results', [
                     'query' => mb_substr($this->messageText, 0, 50),
@@ -756,102 +480,374 @@ class SendAiReplyJob implements ShouldQueue
                         $productContextService->saveCurrentProduct($conversation, $pid);
                     }
                 }
-            } else {
-                // Low match — fall through to history-based product context
-                Log::info('SendAiReplyJob: text search score too low, trying history', [
-                    'query' => mb_substr($this->messageText, 0, 50),
-                    'best_score' => round($bestScore * 100).'%',
-                ]);
-                $textProductMatches = null;
+
+                return $this->callAi($messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting, $textProductMatches);
+            }
+
+            Log::info('SendAiReplyJob: text search score too low, trying history', [
+                'query' => mb_substr($this->messageText, 0, 50),
+                'best_score' => round($bestScore * 100).'%',
+            ]);
+            $textProductMatches = null;
+        }
+
+        // PRIORITY 4: Direct DB keyword search
+        $dbProduct = $this->searchProductByKeyword($this->messageText);
+
+        if ($dbProduct) {
+            $context = "কাস্টমারের প্রশ্ন: {$this->messageText}\n\nসম্পর্কিত প্রোডাক্ট:\n";
+            $context .= "- {$dbProduct['name']}";
+            if ($dbProduct['price']) {
+                $context .= ' — দাম: ৳'.number_format($dbProduct['price'], 2);
+            }
+            if ($dbProduct['stock'] !== null) {
+                $context .= ", স্টক: {$dbProduct['stock']}টি";
+            }
+            if ($dbProduct['description']) {
+                $context .= ", বিবরণ: {$dbProduct['description']}";
+            }
+            if (! empty($dbProduct['all_variants'])) {
+                $context .= "\n\nউপলব্ধ বিকল্পসমূহ:\n";
+                foreach ($dbProduct['all_variants'] as $v) {
+                    $vAttrs = collect($v['attributes'] ?? [])->map(fn ($val, $k) => "{$k}: {$val}")->implode(', ');
+                    $vStock = ($v['stock'] ?? 0) > 0 ? "{$v['stock']}টি স্টকে" : 'স্টক শেষ';
+                    $context .= "• {$vAttrs} — ৳".number_format($v['price'] ?? 0, 2)." [{$vStock}]\n";
+                }
+            }
+            $context .= "\n\nউপরের প্রোডাক্টটি নিয়ে কাস্টমার জিজ্ঞাসা করছে। এই তথ্য ব্যবহার করে উত্তর দিন।";
+
+            $messageToSend = $context;
+            Log::info('SendAiReplyJob: found product via DB keyword search', [
+                'product' => $dbProduct['name'],
+            ]);
+
+            if ($conversation && ! empty($dbProduct['product_id'])) {
+                $productContextService = new ProductContextService;
+                $productContextService->saveCurrentProduct($conversation, $dbProduct['product_id']);
+            }
+
+            return $this->callAi($messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting, $textProductMatches);
+        }
+
+        // PRIORITY 5: Last discussed product from history
+        $lastProduct = $this->getLastDiscussedProduct();
+
+        if ($lastProduct && $lastProduct['name']) {
+            $context = "কাস্টমারের প্রশ্ন: {$this->messageText}\n\nগত কথোপকথনে আলোচিত প্রোডাক্ট:\n";
+            $context .= "- {$lastProduct['name']}";
+            if ($lastProduct['price']) {
+                $context .= ' — দাম: ৳'.number_format($lastProduct['price'], 2);
+            }
+            if ($lastProduct['stock'] !== null) {
+                $context .= ", স্টক: {$lastProduct['stock']}টি";
+            }
+            if ($lastProduct['description']) {
+                $context .= ", বিবরণ: {$lastProduct['description']}";
+            }
+            if (! empty($lastProduct['variant_attributes'])) {
+                $attrs = collect($lastProduct['variant_attributes'])->map(fn ($v, $k) => "{$k}: {$v}")->implode(', ');
+                $context .= ", বৈশিষ্ট্য: {$attrs}";
+            }
+            if (! empty($lastProduct['all_variants'])) {
+                $context .= "\n\nউপলব্ধ বিকল্পসমূহ:\n";
+                foreach ($lastProduct['all_variants'] as $v) {
+                    $vAttrs = collect($v['attributes'] ?? [])->map(fn ($val, $k) => "{$k}: {$val}")->implode(', ');
+                    $vStock = ($v['stock'] ?? 0) > 0 ? "{$v['stock']}টি স্টকে" : 'স্টক শেষ';
+                    $context .= "• {$vAttrs} — ৳".number_format($v['price'] ?? 0, 2)." [{$vStock}]\n";
+                }
+            }
+            $context .= "\n\nউপরের প্রোডাক্টটি নিয়ে কাস্টমার জিজ্ঞাসা করছে বলে মনে হচ্ছে। এই তথ্য ব্যবহার করে উত্তর দিন।";
+
+            $messageToSend = $context;
+            Log::info('SendAiReplyJob: using last discussed product from history', [
+                'product' => $lastProduct['name'],
+            ]);
+
+            if ($conversation && ! empty($lastProduct['product_id'])) {
+                $productContextService = new ProductContextService;
+                $productContextService->saveCurrentProduct($conversation, $lastProduct['product_id']);
             }
         }
 
-        // Fallback 1: if no good text search match, try direct DB search for product keywords
-        if (! $textProductMatches) {
-            $dbProduct = $this->searchProductByKeyword($this->messageText);
+        return $this->callAi($messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting, $textProductMatches);
+    }
 
-            if ($dbProduct) {
-                $context = "কাস্টমারের প্রশ্ন: {$this->messageText}\n\nসম্পর্কিত প্রোডাক্ট:\n";
-                $context .= "- {$dbProduct['name']}";
-                if ($dbProduct['price']) {
-                    $context .= ' — দাম: ৳'.number_format($dbProduct['price'], 2);
+    /**
+     * Resolve product context from a reply-to message (swipe-left reply).
+     * Returns context string + product info, or null if no product found.
+     */
+    private function resolveReplyToProductContext(Conversation $conversation): ?array
+    {
+        $repliedMessage = Message::where('facebook_mid', $this->replyToMid)->first();
+
+        $productInfo = null;
+        $productName = null;
+
+        if ($repliedMessage) {
+            // Facebook sends text+image as ONE message with SAME mid.
+            // If we found a TEXT, check if there's also an IMAGE with same mid.
+            if ($repliedMessage->type === 'text' && ! $repliedMessage->image_path) {
+                $imageVersion = Message::where('facebook_mid', $this->replyToMid)
+                    ->where('type', 'image')
+                    ->first();
+                if ($imageVersion) {
+                    Log::info('SendAiReplyJob: found image version of replied text message', [
+                        'text_mid' => $this->replyToMid,
+                        'image_path' => substr($imageVersion->image_path ?? '', 0, 60),
+                    ]);
+                    $repliedMessage = $imageVersion;
                 }
-                if ($dbProduct['stock'] !== null) {
-                    $context .= ", স্টক: {$dbProduct['stock']}টি";
+            }
+
+            $repliedImageUrl = $repliedMessage->image_path ?? null;
+
+            // Case 1: Replied to outgoing AI reply (has image_analysis directly)
+            if ($repliedMessage->image_analysis && $repliedMessage->direction === 'outgoing') {
+                $analysis = $repliedMessage->image_analysis;
+                $matchedProducts = $analysis['matched_products']
+                    ?? $analysis['image_analysis']['matched_products']
+                    ?? [];
+
+                $productInfo = $this->findCorrectMatchedProduct($matchedProducts, $analysis, $repliedImageUrl);
+
+                if (! $productInfo) {
+                    $productInfo = $analysis['text_product_matches'][0]
+                        ?? $analysis['image_analysis']['text_product_matches'][0]
+                        ?? null;
                 }
-                if ($dbProduct['description']) {
-                    $context .= ", বিবরণ: {$dbProduct['description']}";
-                }
-                // Show all available variants
-                if (! empty($dbProduct['all_variants'])) {
-                    $context .= "\n\nউপলব্ধ বিকল্পসমূহ:\n";
-                    foreach ($dbProduct['all_variants'] as $v) {
-                        $vAttrs = collect($v['attributes'] ?? [])->map(fn ($val, $k) => "{$k}: {$val}")->implode(', ');
-                        $vStock = ($v['stock'] ?? 0) > 0 ? "{$v['stock']}টি স্টকে" : 'স্টক শেষ';
-                        $context .= "• {$vAttrs} — ৳".number_format($v['price'] ?? 0, 2)." [{$vStock}]\n";
+            }
+
+            // Case 2: Replied to incoming image message — find the AI reply that was sent AFTER it
+            if (! $productInfo && $repliedMessage->direction === 'incoming') {
+                $aiReply = Message::where('direction', 'outgoing')
+                    ->where('created_at', '>=', $repliedMessage->created_at)
+                    ->where('created_at', '<=', $repliedMessage->created_at->addSeconds(60))
+                    ->whereNotNull('image_analysis')
+                    ->orderBy('created_at', 'asc')
+                    ->first();
+
+                if ($aiReply && $aiReply->image_analysis) {
+                    $analysis = $aiReply->image_analysis;
+                    $matchedProducts = $analysis['matched_products']
+                        ?? $analysis['image_analysis']['matched_products']
+                        ?? [];
+
+                    $productInfo = $this->findCorrectMatchedProduct($matchedProducts, $analysis, $repliedImageUrl);
+
+                    if (! $productInfo) {
+                        $productInfo = $analysis['text_product_matches'][0]
+                            ?? $analysis['image_analysis']['text_product_matches'][0]
+                            ?? null;
                     }
                 }
-                $context .= "\n\nউপরের প্রোডাক্টটি নিয়ে কাস্টমার জিজ্ঞাসা করছে। এই তথ্য ব্যবহার করে উত্তর দিন।";
+            }
 
-                $messageToSend = $context;
-                Log::info('SendAiReplyJob: found product via DB keyword search', [
-                    'product' => $dbProduct['name'],
+            if ($productInfo) {
+                $productId = $productInfo['product_id'] ?? $productInfo['full_details']['product_id'] ?? null;
+                $variantId = $productInfo['variant_id'] ?? $productInfo['full_details']['variant_id'] ?? null;
+                $productName = $productInfo['full_details']['name']
+                    ?? $productInfo['product_name']
+                    ?? $productInfo['name']
+                    ?? null;
+            }
+        }
+
+        if (! $productName) {
+            return null;
+        }
+
+        // Fetch CURRENT price from DB (stale prices stored in image_analysis are unreliable)
+        $currentPrice = null;
+        $currentStock = null;
+        $currentDescription = null;
+        $currentSku = null;
+        $currentAttributes = null;
+        $allVariants = null;
+
+        if ($variantId) {
+            $variant = ProductVariant::with('product')->find($variantId);
+            if ($variant) {
+                $currentPrice = $variant->price ?? $variant->product->discount_price ?? $variant->product->base_price;
+                $currentStock = $variant->stock_quantity;
+                $currentDescription = $variant->product->description ?? null;
+                $currentSku = $variant->sku ?? null;
+                $currentAttributes = $variant->attributes;
+
+                $siblingVariants = $variant->product->variants
+                    ->where('is_active', true)
+                    ->where('id', '!=', $variant->id);
+                $allVariants = $siblingVariants->map(fn ($v) => [
+                    'attributes' => $v->attributes,
+                    'price' => $v->price ?? $variant->product->discount_price ?? $variant->product->base_price,
+                    'stock' => $v->stock_quantity,
+                ])->values()->toArray();
+                array_unshift($allVariants, [
+                    'attributes' => $variant->attributes,
+                    'price' => $variant->price ?? $variant->product->discount_price ?? $variant->product->base_price,
+                    'stock' => $variant->stock_quantity,
                 ]);
+            }
+        } elseif ($productId) {
+            $product = Product::with('variants')->find($productId);
+            if ($product) {
+                $currentPrice = $product->discount_price ?? $product->base_price;
+                $currentStock = $product->stock_quantity;
+                $currentDescription = $product->description ?? null;
+                $currentSku = $product->sku ?? null;
 
-                // Save to conversation context
-                if ($conversation && ! empty($dbProduct['product_id'])) {
-                    $productContextService = new ProductContextService;
-                    $productContextService->saveCurrentProduct($conversation, $dbProduct['product_id']);
+                $activeVariants = $product->variants->where('is_active', true);
+                if ($activeVariants->count() > 0) {
+                    $allVariants = $activeVariants->map(fn ($v) => [
+                        'attributes' => $v->attributes,
+                        'price' => $v->price ?? $product->discount_price ?? $product->base_price,
+                        'stock' => $v->stock_quantity,
+                    ])->values()->toArray();
                 }
             }
         }
 
-        // Fallback 2: if no DB match either, use last discussed product from history
-        if (! $textProductMatches && ! isset($dbProduct)) {
-            $lastProduct = $this->getLastDiscussedProduct();
+        $context = "কাস্টমার একটি নির্দিষ্ট প্রোডাক্টের উপর reply করে জিজ্ঞাসা করছে।\n\n";
+        $context .= "প্রোডাক্ট: {$productName}";
+        if ($currentPrice) {
+            $context .= ' — দাম: ৳'.number_format((float) $currentPrice, 2);
+        }
+        if ($currentSku) {
+            $context .= ", SKU: {$currentSku}";
+        }
+        if ($currentStock !== null) {
+            $stockText = $currentStock > 0 ? "{$currentStock}টি স্টকে" : 'স্টক শেষ';
+            $context .= ", স্টক: {$stockText}";
+        }
+        if ($currentDescription) {
+            $context .= ", বিবরণ: {$currentDescription}";
+        }
+        if ($currentAttributes && ! empty($currentAttributes)) {
+            $attrStr = collect($currentAttributes)->map(fn ($v, $k) => "{$k}: {$v}")->implode(', ');
+            $context .= ", বৈশিষ্ট্য: {$attrStr}";
+        }
+        if ($allVariants && ! empty($allVariants)) {
+            $context .= "\n\nউপলব্ধ বিকল্পসমূহ:\n";
+            foreach ($allVariants as $v) {
+                $vAttrs = collect($v['attributes'] ?? [])->map(fn ($val, $k) => "{$k}: {$val}")->implode(', ');
+                $vStock = ($v['stock'] ?? 0) > 0 ? "{$v['stock']}টি স্টকে" : 'স্টক শেষ';
+                $context .= "• {$vAttrs} — ৳".number_format($v['price'] ?? 0, 2)." [{$vStock}]\n";
+            }
+        }
+        $context .= "\n\nউপরের প্রোডাক্টটি নিয়ে কাস্টমার প্রশ্ন করছে। এই তথ্য ব্যবহার করে উত্তর দিন।";
 
-            if ($lastProduct && $lastProduct['name']) {
-                $context = "কাস্টমারের প্রশ্ন: {$this->messageText}\n\nগত কথোপকথনে আলোচিত প্রোডাক্ট:\n";
-                $context .= "- {$lastProduct['name']}";
-                if ($lastProduct['price']) {
-                    $context .= ' — দাম: ৳'.number_format($lastProduct['price'], 2);
+        return [
+            'context' => $context,
+            'product_info' => $productInfo,
+            'product_name' => $productName,
+            'product_id' => $productId,
+            'variant_id' => $variantId,
+            'current_price' => $currentPrice,
+        ];
+    }
+
+    /**
+     * Check if this is a follow-up question about the current product context.
+     * Returns context string if follow-up, null if new inquiry.
+     */
+    private function resolveFollowUpContext(Conversation $conversation): ?string
+    {
+        $productContextService = new ProductContextService;
+        $currentProduct = $productContextService->getCurrentProductContext($conversation);
+
+        if (! $currentProduct) {
+            return null;
+        }
+
+        $msgLower = mb_strtolower($this->messageText);
+        $isFollowUp = false;
+
+        // 1. If message contains current product's name → follow-up
+        if (! empty($currentProduct['name'])) {
+            $productName = mb_strtolower($currentProduct['name']);
+            $nameWords = array_filter(explode(' ', $productName), fn ($w) => mb_strlen($w) >= 3);
+            foreach ($nameWords as $word) {
+                if (str_contains($msgLower, $word)) {
+                    $isFollowUp = true;
+                    break;
                 }
-                if ($lastProduct['stock'] !== null) {
-                    $context .= ", স্টক: {$lastProduct['stock']}টি";
-                }
-                if ($lastProduct['description']) {
-                    $context .= ", বিবরণ: {$lastProduct['description']}";
-                }
-                if (! empty($lastProduct['variant_attributes'])) {
-                    $attrs = collect($lastProduct['variant_attributes'])->map(fn ($v, $k) => "{$k}: {$v}")->implode(', ');
-                    $context .= ", বৈশিষ্ট্য: {$attrs}";
-                }
-                // Show all available variants
-                if (! empty($lastProduct['all_variants'])) {
-                    $context .= "\n\nউপলব্ধ বিকল্পসমূহ:\n";
-                    foreach ($lastProduct['all_variants'] as $v) {
-                        $vAttrs = collect($v['attributes'] ?? [])->map(fn ($val, $k) => "{$k}: {$val}")->implode(', ');
-                        $vStock = ($v['stock'] ?? 0) > 0 ? "{$v['stock']}টি স্টকে" : 'স্টক শেষ';
-                        $context .= "• {$vAttrs} — ৳".number_format($v['price'] ?? 0, 2)." [{$vStock}]\n";
+            }
+        }
+
+        // 2. Follow-up question patterns (short, no new product keyword)
+        if (! $isFollowUp) {
+            $followUpPatterns = [
+                '/\b(price|dam|dama|daam|taka|kit|koto)\b/i',
+                '/\b(stock|ache|nai|shesh|kothay)\b/i',
+                '/\b(delivery|deliver|ship|pathano|diner)\b/i',
+                '/\b(order|ordered|kinte|nibo)\b/i',
+                '/\b(available|paben|diben|thake)\b/i',
+                '/\b(confirm|confir)\b/i',
+                '/\b(ok|thik|ji|ha|nah|nio|nii)\b/i',
+            ];
+
+            $isFollowUp = mb_strlen($this->messageText) < 20;
+            if (! $isFollowUp) {
+                foreach ($followUpPatterns as $pattern) {
+                    if (preg_match($pattern, $msgLower)) {
+                        $isFollowUp = true;
+                        break;
                     }
                 }
-                $context .= "\n\nউপরের প্রোডাক্টটি নিয়ে কাস্টমার জিজ্ঞাসা করছে বলে মনে হচ্ছে। এই তথ্য ব্যবহার করে উত্তর দিন।";
+            }
+        }
 
-                $messageToSend = $context;
-                Log::info('SendAiReplyJob: using last discussed product from history', [
-                    'product' => $lastProduct['name'],
-                ]);
-
-                // Save to conversation context
-                if ($conversation && ! empty($lastProduct['product_id'])) {
-                    $productContextService = new ProductContextService;
-                    $productContextService->saveCurrentProduct($conversation, $lastProduct['product_id']);
+        // 3. If message asks about a DIFFERENT product → NOT follow-up
+        if ($isFollowUp && mb_strlen($this->messageText) > 5) {
+            $productWords = ['pant', 'shirt', 't-shirt', 'tshirt', 'shoe', 'bag', 'watch',
+                'hat', 'cap', 'jacket', 'coat', 'dress', 'skirt', 'shorts', 'hoodie',
+                'saree', 'salwar', 'kameez', 'punjabi', 'panjabi', 'vest', 'inner',
+                'belt', 'wallet', 'sunglasses', 'glasses', 'ring', 'necklace'];
+            foreach ($productWords as $pw) {
+                if (str_contains($msgLower, $pw) && ! str_contains($msgLower, mb_strtolower($currentProduct['name'] ?? ''))) {
+                    $isFollowUp = false;
+                    Log::info('SendAiReplyJob: detected new product inquiry despite short message', [
+                        'message' => $this->messageText,
+                        'detected_product_word' => $pw,
+                    ]);
+                    break;
                 }
             }
         }
 
-        // Fallback chain: Groq → Cerebras → Gemini
-        ai_call:
+        if (! $isFollowUp) {
+            Log::info('SendAiReplyJob: skipping current product context - new product inquiry', [
+                'sender_id' => $this->senderId,
+                'message' => mb_substr($this->messageText, 0, 50),
+                'current_product' => $currentProduct['name'] ?? 'unknown',
+            ]);
+
+            return null;
+        }
+
+        $contextString = $productContextService->buildContextString($conversation, $this->messageText);
+        if ($contextString) {
+            Log::info('SendAiReplyJob: using conversation current product context (follow-up)', [
+                'sender_id' => $this->senderId,
+                'product' => $currentProduct['name'] ?? 'unknown',
+            ]);
+        }
+
+        return $contextString;
+    }
+
+    /**
+     * Call AI with fallback chain: Groq → Cerebras → Gemini.
+     */
+    private function callAi(
+        string $messageToSend,
+        array $history,
+        $aiKeys,
+        $cerebrasKeys,
+        $geminiKeys,
+        string $systemPrompt,
+        FacebookSetting $facebookSetting,
+        ?array $textProductMatches = null
+    ): ?array {
         if ($aiKeys->isNotEmpty()) {
             $aiService = new AiChatService($systemPrompt);
             $reply = $aiService->chatWithHistory(
@@ -867,7 +863,6 @@ class SendAiReplyJob implements ShouldQueue
             Log::info('SendAiReplyJob: no Groq keys, using Cerebras directly', ['user_id' => $facebookSetting->user_id]);
             $aiService = new AiChatService($systemPrompt);
             $reply = $aiService->chatWithCerebrasFallback($messageToSend, $cerebrasKeys, $history);
-            // If Cerebras fails, try Gemini
             if ($reply === null && $geminiKeys->isNotEmpty()) {
                 Log::info('SendAiReplyJob: Cerebras failed, falling back to Gemini');
                 $reply = $aiService->chatWithGeminiFallback($messageToSend, $geminiKeys, $history);
@@ -881,10 +876,12 @@ class SendAiReplyJob implements ShouldQueue
         return $reply ? ['reply' => $reply, 'text_product_matches' => $textProductMatches] : null;
     }
 
-    private function handleImageMessage(FacebookSetting $facebookSetting, string $systemPrompt): ?array
+    private function handleImageMessage(FacebookSetting $facebookSetting, string $systemPrompt, ?Conversation $conversation = null): ?array
     {
         // Check if a reply was already sent recently (within 10 sec) to avoid duplicate
-        $conversation = Conversation::where('sender_id', $this->senderId)->first();
+        if (! $conversation) {
+            $conversation = Conversation::where('sender_id', $this->senderId)->first();
+        }
         if ($conversation) {
             $recentReply = Message::where('conversation_id', $conversation->id)
                 ->where('direction', 'outgoing')
@@ -1812,12 +1809,24 @@ class SendAiReplyJob implements ShouldQueue
             return $this->zernioConversationId;
         }
 
+        $cacheKey = "zernio_conversation:{$this->zernioAccountId}:{$this->senderId}";
+        $cached = cache()->get($cacheKey);
+        if ($cached) {
+            return $cached;
+        }
+
         $zernio = new ZernioService($this->zernioApiKey);
         $conversations = $zernio->listConversations($this->zernioAccountId, 50);
         $conversation = collect($conversations)->first(function ($conv) {
             return ($conv['contactId'] ?? $conv['participantId'] ?? $conv['senderId'] ?? '') === $this->senderId;
         });
 
-        return $conversation['_id'] ?? $conversation['id'] ?? null;
+        $conversationId = $conversation['_id'] ?? $conversation['id'] ?? null;
+
+        if ($conversationId) {
+            cache()->put($cacheKey, $conversationId, now()->addMinutes(30));
+        }
+
+        return $conversationId;
     }
 }

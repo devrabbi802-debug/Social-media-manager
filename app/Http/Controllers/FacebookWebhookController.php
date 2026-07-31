@@ -376,15 +376,33 @@ class FacebookWebhookController extends Controller
 
     private function verifyZernioSignature(Request $request): void
     {
-        // Optional: verify X-Zernio-Signature header if webhook secret is configured
-        // For now, we'll skip signature verification
+        $secret = config('services.zernio.webhook_secret');
+
+        if (! $secret) {
+            return;
+        }
+
+        $signature = $request->header('X-Zernio-Signature');
+
+        if (! $signature) {
+            Log::warning('Zernio webhook: missing X-Zernio-Signature header');
+            abort(403, 'Missing signature');
+        }
+
+        $payload = $request->getContent();
+        $expectedSignature = hash_hmac('sha256', $payload, $secret);
+
+        if (! hash_equals($expectedSignature, $signature)) {
+            Log::warning('Zernio webhook: invalid signature');
+            abort(403, 'Invalid signature');
+        }
     }
 
     // --- Helper methods (existing) ---
 
     private function findTenantByVerifyToken(string $token): ?Tenant
     {
-        return Tenant::all()->first(function (Tenant $tenant) use ($token) {
+        return Tenant::cursor()->first(function (Tenant $tenant) use ($token) {
             return $tenant->run(function () use ($token) {
                 return FacebookSetting::where('verify_token', $token)->exists();
             });
@@ -397,9 +415,17 @@ class FacebookWebhookController extends Controller
             return null;
         }
 
-        return Tenant::all()->first(function (Tenant $tenant) use ($pageId) {
+        // Only match direct Facebook App connections — skip Zernio-connected pages
+        // (Zernio has its own webhook endpoint, so direct FB webhook should not handle those)
+        // null connection_type = old record = Facebook App (before connection_type column existed)
+        return Tenant::cursor()->first(function (Tenant $tenant) use ($pageId) {
             return $tenant->run(function () use ($pageId) {
-                return FacebookSetting::where('page_id', $pageId)->exists();
+                return FacebookSetting::where('page_id', $pageId)
+                    ->where(function ($q) {
+                        $q->where('connection_type', 'facebook_app')
+                            ->orWhereNull('connection_type');
+                    })
+                    ->exists();
             });
         });
     }
@@ -409,7 +435,7 @@ class FacebookWebhookController extends Controller
      */
     private function findTenantByZernioAccountId(string $accountId): ?Tenant
     {
-        return Tenant::all()->first(function (Tenant $tenant) use ($accountId) {
+        return Tenant::cursor()->first(function (Tenant $tenant) use ($accountId) {
             return $tenant->run(function () use ($accountId) {
                 return FacebookSetting::where('zernio_account_id', $accountId)->exists();
             });

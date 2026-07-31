@@ -36,7 +36,7 @@ class ProductContextService
     /**
      * Conversation e current product save koro.
      */
-    public function saveCurrentProduct(Conversation $conversation, int $productId, ?int $variantId = null): void
+    public function saveCurrentProduct(Conversation $conversation, $productId, ?int $variantId = null): void
     {
         $productData = $this->buildProductData($productId, $variantId);
 

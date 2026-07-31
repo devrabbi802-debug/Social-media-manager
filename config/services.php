@@ -20,6 +20,7 @@ return [
 
     'zernio' => [
         'base_url' => env('ZERNIO_BASE_URL', 'https://zernio.com/api/v1'),
+        'webhook_secret' => env('ZERNIO_WEBHOOK_SECRET'),
     ],
 
     'clip' => [
