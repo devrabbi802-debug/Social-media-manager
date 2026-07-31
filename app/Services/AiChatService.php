@@ -58,7 +58,7 @@ class AiChatService
             'last_error' => $lastException?->getMessage(),
         ]);
 
-        // Cerebras fallback
+        // Cerebras fallback — try if Cerebras keys available
         if ($fallbackProvider === 'cerebras' && $fallbackKeys && $fallbackKeys->isNotEmpty()) {
             Log::info('Trying Cerebras fallback keys', ['count' => $fallbackKeys->count()]);
             $cerebrasResult = $this->chatWithCerebrasFallback($message, $fallbackKeys, $history);
@@ -67,7 +67,7 @@ class AiChatService
             }
         }
 
-        // Gemini fallback
+        // Gemini fallback — try if Gemini keys available
         if ($secondFallbackProvider === 'gemini' && $secondFallbackKeys && $secondFallbackKeys->isNotEmpty()) {
             Log::info('Trying Gemini fallback keys', ['count' => $secondFallbackKeys->count()]);
             return $this->chatWithGeminiFallback($message, $secondFallbackKeys, $history);
@@ -79,6 +79,7 @@ class AiChatService
             return $this->chatWithGeminiFallback($message, $fallbackKeys, $history);
         }
 
+        // Only throw if ALL providers failed with rate limits (don't throw for other errors — just return null)
         if ($allRateLimited && $lastException) {
             throw $lastException;
         }

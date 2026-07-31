@@ -397,6 +397,16 @@ class SendAiReplyJob implements ShouldQueue
         $textProductMatches = null;
         $messageToSend = $this->messageText;
 
+        // FAST PATH: Greeting detection — skip all product searches, call AI directly
+        $greetingPatterns = '/^\s*(hello|hi|hey|assalamu[\s-]*alaikum|আসসালামু[\s-]*আলাইকুম|হ্যালো|নমস্কার|শুভ\s*(সকাল|সন্ধ্যা|রাত্রি)|good\s*(morning|evening|night)|sup|yo|kemon\s*aso|kemon\s*achen|কেমন\s*আছ[েন]*)\s*[!?.]*$/iu';
+        if (preg_match($greetingPatterns, $this->messageText)) {
+            Log::info('SendAiReplyJob: greeting detected, skipping product search', [
+                'message' => mb_substr($this->messageText, 0, 30),
+            ]);
+
+            return $this->callAi($messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting, null);
+        }
+
         // HIGHEST PRIORITY: If this is a reply to a specific message (swipe left), use that message's product context
         // Customer specifically asked about THIS product — must override current_product_data
         // If replyToMid not passed via job param (e.g. Zernio strips it), recover from DB
