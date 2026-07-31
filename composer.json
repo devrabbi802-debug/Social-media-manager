@@ -10,13 +10,13 @@
         "laravel/framework": "^13.8",
         "laravel/horizon": "^5.47",
         "laravel/octane": "^2.18",
+        "laravel/pail": "^1.2",
         "laravel/sanctum": "^4.3",
         "laravel/tinker": "^3.0",
         "stancl/tenancy": "^3.10"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
-        "laravel/pail": "^1.2.5",
         "laravel/pao": "^1.0.6",
         "laravel/pint": "^1.27",
         "mockery/mockery": "^1.6",
