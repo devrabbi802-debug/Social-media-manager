@@ -1245,9 +1245,9 @@ class SendAiReplyJob implements ShouldQueue
         }
 
         $context .= 'উপরের তথ্য ব্যবহার করে কাস্টমারকে উত্তর দিন। নিচের নিয়মগুলো মেনে চলুন:
-- কাস্টমার ছবি পাঠালে শুধুমাত্র প্রোডাক্টের নাম এবং দাম বলুন। বেশি কিছু বলবেন না।
-- যেমন: এটি [প্রোডাক্টের নাম], দাম [মূল্য] টাকা।
-- একাধিক প্রোডাক্ট ম্যাচ হলে প্রতিটির নাম ও দাম সংক্ষেপে বলুন।
+- কাস্টমার ছবি পাঠালে প্রোডাক্টের নাম এবং দাম বলুন।
+- ভ্যারিয়েন্ট রুল (গুরুত্বপূর্ণ): যদি "উপলব্ধ বিকল্পসমূহ" বা variants থাকে (Size, Color, Weight ইত্যাদি), তাহলে অবশ্যই জিজ্ঞাসা করো — "আমাদের কাছে [বিকল্পগুলো] available আছে। আপনি কোনটি নিতে চান?"। কিন্তু যদি প্রোডাক্টের কোনো variant না থাকে (শুধু একটাই অপশন), তাহলে শুধু দাম বলো — variant সম্পর্কে কিছু জিজ্ঞাসা করো না।
+- একাধিক প্রোডাক্ট ম্যাচ হলে প্রতিটির নাম ও দাম সংক্ষেপে বলুন। প্রতিটি প্রোডাক্টের variant থাকলে সেগুলোও উল্লেখ করো।
 - কাস্টমার আরো জানতে চাইলে (দাম, স্টক, ফিচার, ডেলিভারি ইত্যাদি) তাহলে বিস্তারিত জানাবে।
 - স্টক না থাকলে জানাবে এবং বিকল্প সুপারিশ করবে।
 - মূল্য নিশ্চিত না হলে বলুন অফিসিয়াল পেজে যোগাযোগ করুন।
@@ -1272,6 +1272,7 @@ class SendAiReplyJob implements ShouldQueue
                 $score = round($match['score'] * 100);
                 $name = $match['product_name'];
                 $metadata = $match['metadata'] ?? [];
+                $pid = $metadata['product_id'] ?? $match['product_id'] ?? null;
 
                 $line = "- {$name} (ম্যাচ: {$score}%)";
 
@@ -1291,9 +1292,25 @@ class SendAiReplyJob implements ShouldQueue
                 }
 
                 $context .= $line."\n";
+
+                // Load full product with all active variants from DB
+                if ($pid) {
+                    $product = Product::with('variants')->find($pid);
+                    if ($product) {
+                        $activeVariants = $product->variants->where('is_active', true);
+                        if ($activeVariants->count() > 0) {
+                            $context .= "  উপলব্ধ বিকল্পসমূহ:\n";
+                            foreach ($activeVariants as $v) {
+                                $vAttrs = collect($v->attributes ?? [])->map(fn ($val, $k) => "{$k}: {$val}")->implode(', ');
+                                $vStock = ($v->stock_quantity ?? 0) > 0 ? "{$v->stock_quantity}টি স্টকে" : 'স্টক শেষ';
+                                $context .= "    • {$vAttrs} — ৳".number_format($v->price ?? $product->discount_price ?? $product->base_price, 2)." [{$vStock}]\n";
+                            }
+                        }
+                    }
+                }
             }
 
-            $context .= "\nউপরের প্রোডাক্টগুলোর তথ্য ব্যবহার করে কাস্টমারকে সংক্ষেপে উত্তর দিন।";
+            $context .= "\nউপরের প্রোডাক্টগুলোর তথ্য ব্যবহার করে কাস্টমারকে সংক্ষেপে উত্তর দিন। ভ্যারিয়েন্ট রুল: যদি variant থাকে (Size, Color, Weight ইত্যাদি), তাহলে অবশ্যই জিজ্ঞাসা করো — 'কোন [size/color/weight] নিতে চান?'। variant না থাকলে শুধু দাম বলো।";
 
             return [
                 'context' => $context,
