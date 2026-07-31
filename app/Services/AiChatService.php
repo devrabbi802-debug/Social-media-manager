@@ -79,11 +79,6 @@ class AiChatService
             return $this->chatWithGeminiFallback($message, $fallbackKeys, $history);
         }
 
-        // Only throw if ALL providers failed with rate limits (don't throw for other errors — just return null)
-        if ($allRateLimited && $lastException) {
-            throw $lastException;
-        }
-
         return null;
     }
 
