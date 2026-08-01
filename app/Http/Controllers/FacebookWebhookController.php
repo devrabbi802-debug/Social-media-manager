@@ -62,6 +62,10 @@ class FacebookWebhookController extends Controller
             $tenant = $this->findTenantByPageId($pageId);
 
             if (! $tenant) {
+                // Zernio-connected pages are handled by the Zernio webhook, not here.
+                // But Zernio strips reply_to, so capture reply_to.mid from the raw
+                // Facebook payload here so the Zernio path can resolve replied products.
+                $this->cacheReplyToMidForZernio($entry);
                 Log::warning('Facebook webhook: no tenant for page', ['page_id' => $pageId]);
 
                 continue;
@@ -148,7 +152,7 @@ class FacebookWebhookController extends Controller
             return;
         }
 
-        $tenant->run(function () use ($tenant, $data, $accountId, $messageText, $senderId, $senderName, $conversationId, $attachments, $messageData) {
+        $tenant->run(function () use ($tenant, $data, $accountId, $messageText, $senderId, $senderName, $conversationId, $attachments, $messageData, $senderData) {
             // Extract image and audio URLs from attachments
             $imageUrls = [];
             $audioUrl = null;
@@ -183,6 +187,9 @@ class FacebookWebhookController extends Controller
             // Save incoming message(s)
             $messageId = $data['message']['id'] ?? $data['messageId'] ?? null;
             $replyToMid = $messageData['reply_to']['mid'] ?? $data['replyToMid'] ?? null;
+            // Zernio's own message id != Facebook mid. platformMessageId IS the real Facebook mid,
+            // which is what reply_to.mid contains — so store it as facebook_mid for reply resolution.
+            $facebookMid = $messageData['platformMessageId'] ?? $messageData['platform_message_id'] ?? $messageId;
 
             // Get facebookSetting early for page_id (needed for reply_to_mid cache key)
             $facebookSetting = FacebookSetting::where('connection_type', 'zernio')
@@ -191,15 +198,34 @@ class FacebookWebhookController extends Controller
 
             // Zernio strips reply_to, so check cache (stored by Facebook direct webhook using page_id-based key)
             if (! $replyToMid && $facebookSetting) {
-                $cacheKey = "reply_to_mid:{$facebookSetting->page_id}:{$senderId}";
-                $replyToMid = Cache::get($cacheKey);
-                if ($replyToMid) {
-                    Log::info('Zernio: picked up reply_to_mid from cache', [
-                        'page_id' => $facebookSetting->page_id,
-                        'sender_id' => $senderId,
-                        'reply_to_mid' => $replyToMid,
+                // Try Zernio contactId first, then the Facebook PSID (sender.id = PSID in Zernio payload)
+                $psid = $senderData['id'] ?? null;
+                $cacheKeys = [];
+                if ($senderId) {
+                    $cacheKeys[] = "reply_to_mid:{$facebookSetting->page_id}:{$senderId}";
+                }
+                if ($psid && $psid !== $senderId) {
+                    $cacheKeys[] = "reply_to_mid:{$facebookSetting->page_id}:{$psid}";
+                }
+
+                foreach ($cacheKeys as $cacheKey) {
+                    $cached = Cache::get($cacheKey);
+                    Log::info('Zernio: reply_to_mid cache lookup', [
+                        'cache_key' => $cacheKey,
+                        'found' => $cached ? true : false,
+                        'fb_setting_page_id' => $facebookSetting->page_id ?? null,
+                        'psid' => $psid ?? null,
                     ]);
-                    Cache::forget($cacheKey);
+                    if ($cached) {
+                        $replyToMid = $cached;
+                        Log::info('Zernio: picked up reply_to_mid from cache', [
+                            'page_id' => $facebookSetting->page_id,
+                            'sender_id' => $senderId,
+                            'reply_to_mid' => $replyToMid,
+                        ]);
+                        Cache::forget($cacheKey);
+                        break;
+                    }
                 }
             }
 
@@ -209,6 +235,8 @@ class FacebookWebhookController extends Controller
                 'text' => $messageText,
                 'message_id' => $messageId,
                 'reply_to_mid' => $replyToMid,
+                'platform_message_id' => $messageData['platformMessageId'] ?? $messageData['platform_message_id'] ?? null,
+                'sender_data' => $senderData,
                 'message_data_keys' => is_array($messageData) ? array_keys($messageData) : 'not_array',
             ]);
 
@@ -221,7 +249,7 @@ class FacebookWebhookController extends Controller
                             'type' => 'image',
                             'content' => 'ইমেজ পাঠিয়েছে',
                             'image_path' => $imageUrl,
-                            'facebook_mid' => $messageId,
+                            'facebook_mid' => $facebookMid,
                             'reply_to_mid' => $replyToMid,
                         ]);
                     } catch (\Throwable $e) {
@@ -236,7 +264,7 @@ class FacebookWebhookController extends Controller
                         'type' => 'audio',
                         'content' => 'ভয়েস মেসেজ পাঠিয়েছে',
                         'audio_path' => $audioUrl,
-                        'facebook_mid' => $messageId,
+                        'facebook_mid' => $facebookMid,
                         'reply_to_mid' => $replyToMid,
                     ]);
                 } catch (\Throwable $e) {
@@ -249,7 +277,7 @@ class FacebookWebhookController extends Controller
                         'direction' => 'incoming',
                         'type' => 'text',
                         'content' => $messageText,
-                        'facebook_mid' => $messageId,
+                        'facebook_mid' => $facebookMid,
                         'reply_to_mid' => $replyToMid,
                     ]);
                 } catch (\Throwable $e) {
@@ -426,6 +454,23 @@ class FacebookWebhookController extends Controller
                             ->orWhereNull('connection_type');
                     })
                     ->exists();
+            });
+        });
+    }
+
+    /**
+     * Find tenant by page ID regardless of connection type (used to write
+     * reply_to_mid cache inside the tenant context for Zernio pickup).
+     */
+    private function findTenantByPageIdAnyType(?string $pageId): ?Tenant
+    {
+        if (! $pageId) {
+            return null;
+        }
+
+        return Tenant::cursor()->first(function (Tenant $tenant) use ($pageId) {
+            return $tenant->run(function () use ($pageId) {
+                return FacebookSetting::where('page_id', $pageId)->exists();
             });
         });
     }
@@ -695,6 +740,48 @@ class FacebookWebhookController extends Controller
             Log::error('Failed to dispatch AI reply job', [
                 'tenant_id' => $tenant->id,
                 'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * For Zernio-connected pages, the direct Facebook webhook only needs to stash
+     * reply_to.mid into the shared cache — the actual AI job is dispatched by the
+     * Zernio webhook (which strips reply_to, so it reads this cached value).
+     */
+    private function cacheReplyToMidForZernio(array $entry): void
+    {
+        $pageId = $entry['id'] ?? null;
+        $recipientId = $entry['recipient']['id'] ?? $pageId;
+
+        // Cache must be written inside the tenant context so it gets the same
+        // tenant tag that the Zernio webhook (running inside $tenant->run) uses
+        // to read it. Written in central context it would never be found there.
+        $tenant = $this->findTenantByPageIdAnyType($recipientId);
+
+        foreach ($entry['messaging'] ?? [] as $event) {
+            $senderId = $event['sender']['id'] ?? null;
+            $replyToMid = $event['message']['reply_to']['mid'] ?? null;
+
+            if (! $senderId || ! $replyToMid || ! $recipientId) {
+                continue;
+            }
+
+            $cacheKey = "reply_to_mid:{$recipientId}:{$senderId}";
+
+            if ($tenant) {
+                $tenant->run(function () use ($cacheKey, $replyToMid) {
+                    Cache::put($cacheKey, $replyToMid, now()->addSeconds(30));
+                });
+            } else {
+                Cache::put($cacheKey, $replyToMid, now()->addSeconds(30));
+            }
+
+            Log::info('Cached reply_to_mid for Zernio pickup', [
+                'page_id' => $recipientId,
+                'sender_id' => $senderId,
+                'reply_to_mid' => $replyToMid,
+                'tenant_context' => $tenant ? $tenant->id : null,
             ]);
         }
     }

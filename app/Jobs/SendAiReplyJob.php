@@ -18,6 +18,7 @@ use App\Services\ClipService;
 use App\Services\ProductContextService;
 use App\Services\TextSearchService;
 use App\Services\ZernioService;
+use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -138,16 +139,26 @@ class SendAiReplyJob implements ShouldQueue
         $tenant->run(function () use ($tenant) {
             $conversation = Conversation::where('sender_id', $this->senderId)->first();
 
-            // Dedup: check if a reply was already sent recently (avoids duplicate processing)
+            // Dedup: only skip when the triggering incoming message has ALREADY been answered.
+            // A brand-new customer message arriving right after a reply must still be processed.
             if ($conversation) {
-                $hasRecentReply = Message::where('conversation_id', $conversation->id)
-                    ->where('direction', 'outgoing')
-                    ->where('created_at', '>=', now()->subSeconds(15))
-                    ->exists();
+                $lastIncomingAt = Message::where('conversation_id', $conversation->id)
+                    ->where('direction', 'incoming')
+                    ->max('created_at');
 
-                if ($hasRecentReply) {
-                    Log::info('SendAiReplyJob: SKIPPED - reply already sent recently', [
+                $lastOutgoingAt = Message::where('conversation_id', $conversation->id)
+                    ->where('direction', 'outgoing')
+                    ->max('created_at');
+
+                $alreadyAnswered = $lastIncomingAt
+                    && $lastOutgoingAt
+                    && Carbon::parse($lastOutgoingAt)->greaterThanOrEqualTo(Carbon::parse($lastIncomingAt));
+
+                if ($alreadyAnswered) {
+                    Log::info('SendAiReplyJob: SKIPPED - latest incoming message already answered', [
                         'sender_id' => $this->senderId,
+                        'last_incoming_at' => $lastIncomingAt?->toDateTimeString(),
+                        'last_outgoing_at' => $lastOutgoingAt?->toDateTimeString(),
                     ]);
 
                     return;
@@ -374,6 +385,57 @@ class SendAiReplyJob implements ShouldQueue
         if (! $conversation) {
             $conversation = Conversation::where('sender_id', $this->senderId)->first();
         }
+
+        // HIGHEST PRIORITY: If this is a reply to a specific message (swipe left), use that message's product context
+        // Customer specifically asked about THIS product — must override current_product_data
+        // If replyToMid not passed via job param (e.g. Zernio strips it), recover from DB
+        // Search ALL conversations — FB direct saves with reply_to_mid in FB conversation, Zernio in separate conversation
+        if (empty($this->replyToMid)) {
+            $sameTextMessage = Message::where('direction', 'incoming')
+                ->where('type', 'text')
+                ->where('content', $this->messageText)
+                ->whereNotNull('reply_to_mid')
+                ->where('created_at', '>=', now()->subSeconds(10))
+                ->latest()
+                ->first();
+            if ($sameTextMessage && $sameTextMessage->reply_to_mid) {
+                $this->replyToMid = $sameTextMessage->reply_to_mid;
+                Log::info('SendAiReplyJob: recovered reply_to_mid from FB conversation message', [
+                    'reply_to_mid' => $this->replyToMid,
+                    'found_in_message_id' => $sameTextMessage->id,
+                ]);
+            }
+        }
+
+        // PRIORITY 1: Reply-to specific message product context
+        if (! empty($this->replyToMid) && $conversation) {
+            $replyContext = $this->resolveReplyToProductContext($conversation);
+            if ($replyContext) {
+                $history = $this->getConversationHistory();
+                $textProductMatches = $replyContext['product_info'];
+                $messageToSend = "{$this->messageText}\n\n{$replyContext['context']}";
+
+                Log::info('SendAiReplyJob: using replied message product context (live DB prices)', [
+                    'reply_to_mid' => $this->replyToMid,
+                    'product' => $replyContext['product_name'],
+                    'current_price' => $replyContext['current_price'],
+                ]);
+
+                // Save to conversation's current product context
+                if ($replyContext['product_id']) {
+                    $productContextService = new ProductContextService;
+                    $productContextService->saveCurrentProduct($conversation, $replyContext['product_id'], $replyContext['variant_id']);
+                }
+
+                return $this->callAi($messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting, $textProductMatches);
+            }
+
+            Log::info('SendAiReplyJob: reply_to_mid found but no product context in original message', [
+                'reply_to_mid' => $this->replyToMid,
+            ]);
+        }
+
+        // Only after reply-to check: if there are recent images, treat as text+image scenario
         if ($conversation) {
             $recentImages = Message::where('conversation_id', $conversation->id)
                 ->where('direction', 'incoming')
@@ -405,55 +467,6 @@ class SendAiReplyJob implements ShouldQueue
             ]);
 
             return $this->callAi($messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting, null);
-        }
-
-        // HIGHEST PRIORITY: If this is a reply to a specific message (swipe left), use that message's product context
-        // Customer specifically asked about THIS product — must override current_product_data
-        // If replyToMid not passed via job param (e.g. Zernio strips it), recover from DB
-        // Search ALL conversations — FB direct saves with reply_to_mid in FB conversation, Zernio in separate conversation
-        if (empty($this->replyToMid)) {
-            $sameTextMessage = Message::where('direction', 'incoming')
-                ->where('type', 'text')
-                ->where('content', $this->messageText)
-                ->whereNotNull('reply_to_mid')
-                ->where('created_at', '>=', now()->subSeconds(10))
-                ->latest()
-                ->first();
-            if ($sameTextMessage && $sameTextMessage->reply_to_mid) {
-                $this->replyToMid = $sameTextMessage->reply_to_mid;
-                Log::info('SendAiReplyJob: recovered reply_to_mid from FB conversation message', [
-                    'reply_to_mid' => $this->replyToMid,
-                    'found_in_message_id' => $sameTextMessage->id,
-                ]);
-            }
-        }
-
-        // PRIORITY 1: Reply-to specific message product context
-        if (! empty($this->replyToMid) && $conversation) {
-            $replyContext = $this->resolveReplyToProductContext($conversation);
-            if ($replyContext) {
-                $messageToSend = "{$this->messageText}\n\n{$replyContext['context']}";
-                $textProductMatches = $replyContext['product_info'];
-
-                Log::info('SendAiReplyJob: using replied message product context (live DB prices)', [
-                    'reply_to_mid' => $this->replyToMid,
-                    'product' => $replyContext['product_name'],
-                    'current_price' => $replyContext['current_price'],
-                ]);
-
-                // Save to conversation's current product context
-                if ($conversation && $replyContext['product_id']) {
-                    $productContextService = new ProductContextService;
-                    $productContextService->saveCurrentProduct($conversation, $replyContext['product_id'], $replyContext['variant_id']);
-                }
-
-                return $this->callAi($messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting, $textProductMatches);
-            }
-
-            Log::info('SendAiReplyJob: reply_to_mid found but no product context in original message', [
-                'reply_to_mid' => $this->replyToMid,
-                'has_image_analysis' => isset($repliedMessage) ? (bool) $repliedMessage->image_analysis : false,
-            ]);
         }
 
         // PRIORITY 2: Follow-up question about current product context
@@ -627,14 +640,41 @@ class SendAiReplyJob implements ShouldQueue
                 }
             }
 
-            // Case 2: Replied to incoming image message — find the AI reply that was sent AFTER it
+            // Case 2: Replied to incoming image message — find the product for THAT specific image.
+            // No tight time window: match the AI reply whose original_image_urls contains the
+            // replied image URL, so replying to an older image still resolves correctly.
             if (! $productInfo && $repliedMessage->direction === 'incoming') {
                 $aiReply = Message::where('direction', 'outgoing')
                     ->where('created_at', '>=', $repliedMessage->created_at)
-                    ->where('created_at', '<=', $repliedMessage->created_at->addSeconds(60))
                     ->whereNotNull('image_analysis')
                     ->orderBy('created_at', 'asc')
-                    ->first();
+                    ->get()
+                    ->first(function ($msg) use ($repliedImageUrl) {
+                        if (! $repliedImageUrl) {
+                            return false;
+                        }
+
+                        $analysis = $msg->image_analysis;
+                        $urls = $analysis['original_image_urls']
+                            ?? $analysis['image_analysis']['original_image_urls']
+                            ?? [];
+
+                        $repliedPath = parse_url($repliedImageUrl, PHP_URL_PATH) ?? $repliedImageUrl;
+
+                        foreach ($urls as $url) {
+                            $urlPath = parse_url($url, PHP_URL_PATH) ?? $url;
+                            if ($repliedImageUrl === $url
+                                || $repliedPath === $urlPath
+                                || str_contains($repliedImageUrl, $url)
+                                || str_contains($url, $repliedImageUrl)
+                                || str_contains($repliedPath, $urlPath)
+                            ) {
+                                return true;
+                            }
+                        }
+
+                        return false;
+                    });
 
                 if ($aiReply && $aiReply->image_analysis) {
                     $analysis = $aiReply->image_analysis;
@@ -648,6 +688,17 @@ class SendAiReplyJob implements ShouldQueue
                         $productInfo = $analysis['text_product_matches'][0]
                             ?? $analysis['image_analysis']['text_product_matches'][0]
                             ?? null;
+                    }
+                }
+
+                // Stored analysis did not resolve (CLIP failed at the time, URL changed, or reply
+                // was processed long ago). Re-run CLIP matching on the replied image directly.
+                if (! $productInfo && $repliedImageUrl) {
+                    $productInfo = $this->matchImageUrlToProduct($repliedImageUrl);
+                    if ($productInfo) {
+                        Log::info('SendAiReplyJob: replied image resolved via fresh CLIP match', [
+                            'product' => $productInfo['product_name'] ?? 'unknown',
+                        ]);
                     }
                 }
             }
@@ -858,48 +909,68 @@ class SendAiReplyJob implements ShouldQueue
         FacebookSetting $facebookSetting,
         ?array $textProductMatches = null
     ): ?array {
-        if ($aiKeys->isNotEmpty()) {
-            $aiService = new AiChatService($systemPrompt);
-            $reply = $aiService->chatWithHistory(
+        $reply = $this->chatWithAiChain($systemPrompt, $messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys);
+
+        return $reply ? ['reply' => $reply, 'text_product_matches' => $textProductMatches] : null;
+    }
+
+    /**
+     * Run the AI fallback chain: Groq → Cerebras → Gemini.
+     */
+    private function chatWithAiChain(string $systemPrompt, string $messageToSend, array $history, $groqKeys, $cerebrasKeys, $geminiKeys): ?string
+    {
+        $aiService = new AiChatService($systemPrompt);
+
+        if ($groqKeys->isNotEmpty()) {
+            return $aiService->chatWithHistory(
                 $messageToSend,
-                $aiKeys,
+                $groqKeys,
                 $history,
                 'cerebras',
                 $cerebrasKeys->isNotEmpty() ? $cerebrasKeys : null,
                 'gemini',
                 $geminiKeys->isNotEmpty() ? $geminiKeys : null,
             );
-        } elseif ($cerebrasKeys->isNotEmpty()) {
-            Log::info('SendAiReplyJob: no Groq keys, using Cerebras directly', ['user_id' => $facebookSetting->user_id]);
-            $aiService = new AiChatService($systemPrompt);
+        }
+
+        if ($cerebrasKeys->isNotEmpty()) {
+            Log::info('SendAiReplyJob: no Groq keys, using Cerebras directly');
             $reply = $aiService->chatWithCerebrasFallback($messageToSend, $cerebrasKeys, $history);
             if ($reply === null && $geminiKeys->isNotEmpty()) {
                 Log::info('SendAiReplyJob: Cerebras failed, falling back to Gemini');
                 $reply = $aiService->chatWithGeminiFallback($messageToSend, $geminiKeys, $history);
             }
-        } else {
-            Log::info('SendAiReplyJob: no Groq/Cerebras keys, using Gemini directly', ['user_id' => $facebookSetting->user_id]);
-            $aiService = new AiChatService($systemPrompt);
-            $reply = $aiService->chatWithGeminiFallback($messageToSend, $geminiKeys, $history);
+
+            return $reply;
         }
 
-        return $reply ? ['reply' => $reply, 'text_product_matches' => $textProductMatches] : null;
+        Log::info('SendAiReplyJob: no Groq/Cerebras keys, using Gemini directly');
+
+        return $aiService->chatWithGeminiFallback($messageToSend, $geminiKeys, $history);
     }
 
     private function handleImageMessage(FacebookSetting $facebookSetting, string $systemPrompt, ?Conversation $conversation = null): ?array
     {
-        // Check if a reply was already sent recently (within 10 sec) to avoid duplicate
+        // Dedup: only skip when the triggering incoming message has ALREADY been answered.
+        // A brand-new image message arriving right after a reply must still be processed.
         if (! $conversation) {
             $conversation = Conversation::where('sender_id', $this->senderId)->first();
         }
         if ($conversation) {
-            $recentReply = Message::where('conversation_id', $conversation->id)
-                ->where('direction', 'outgoing')
-                ->where('created_at', '>=', now()->subSeconds(10))
-                ->exists();
+            $lastIncomingAt = Message::where('conversation_id', $conversation->id)
+                ->where('direction', 'incoming')
+                ->max('created_at');
 
-            if ($recentReply) {
-                Log::info('SendAiReplyJob: skipping image job - reply already sent recently', [
+            $lastOutgoingAt = Message::where('conversation_id', $conversation->id)
+                ->where('direction', 'outgoing')
+                ->max('created_at');
+
+            $alreadyAnswered = $lastIncomingAt
+                && $lastOutgoingAt
+                && Carbon::parse($lastOutgoingAt)->greaterThanOrEqualTo(Carbon::parse($lastIncomingAt));
+
+            if ($alreadyAnswered) {
+                Log::info('SendAiReplyJob: skipping image job - latest incoming already answered', [
                     'sender_id' => $this->senderId,
                 ]);
 
@@ -931,6 +1002,35 @@ class SendAiReplyJob implements ShouldQueue
             ]);
 
             return null;
+        }
+
+        // If the customer replied to a specific message (swipe reply), prioritize THAT image's
+        // product over a fresh re-analysis — the reply may reference an earlier image.
+        if (! empty($this->replyToMid) && $conversation) {
+            $replyContext = $this->resolveReplyToProductContext($conversation);
+            if ($replyContext && $replyContext['product_id']) {
+                Log::info('SendAiReplyJob: image job resolved replied product context', [
+                    'sender_id' => $this->senderId,
+                    'product' => $replyContext['product_name'] ?? 'unknown',
+                ]);
+                $productContextService = new ProductContextService;
+                $productContextService->saveCurrentProduct(
+                    $conversation,
+                    $replyContext['product_id'],
+                    $replyContext['variant_id']
+                );
+
+                return $this->callAi(
+                    $this->messageText ? "{$this->messageText}\n\n{$replyContext['context']}" : $replyContext['context'],
+                    $this->getConversationHistory(),
+                    $groqKeys,
+                    $cerebrasKeys,
+                    $geminiKeys,
+                    $systemPrompt,
+                    $facebookSetting,
+                    $replyContext['product_info']
+                );
+            }
         }
 
         // Check CLIP server health
@@ -1076,30 +1176,9 @@ class SendAiReplyJob implements ShouldQueue
         $combinedMessage = "{$userMessage}\n\nইমেজ বিশ্লেষণ:\n{$productContext}";
 
         $history = $this->getConversationHistory();
-        $aiService = new AiChatService($systemPrompt);
 
         // Fallback chain: Groq → Cerebras → Gemini
-        if ($groqKeys->isNotEmpty()) {
-            $reply = $aiService->chatWithHistory(
-                $combinedMessage,
-                $groqKeys,
-                $history,
-                'cerebras',
-                $cerebrasKeys->isNotEmpty() ? $cerebrasKeys : null,
-                'gemini',
-                $geminiKeys->isNotEmpty() ? $geminiKeys : null,
-            );
-        } elseif ($cerebrasKeys->isNotEmpty()) {
-            Log::info('SendAiReplyJob: no Groq keys for image reply, using Cerebras');
-            $reply = $aiService->chatWithCerebrasFallback($combinedMessage, $cerebrasKeys, $history);
-            if ($reply === null && $geminiKeys->isNotEmpty()) {
-                Log::info('SendAiReplyJob: Cerebras failed for image reply, falling back to Gemini');
-                $reply = $aiService->chatWithGeminiFallback($combinedMessage, $geminiKeys, $history);
-            }
-        } else {
-            Log::info('SendAiReplyJob: no Groq/Cerebras keys for image reply, using Gemini');
-            $reply = $aiService->chatWithGeminiFallback($combinedMessage, $geminiKeys, $history);
-        }
+        $reply = $this->chatWithAiChain($systemPrompt, $combinedMessage, $history, $groqKeys, $cerebrasKeys, $geminiKeys);
 
         return $reply ? [
             'reply' => $reply,
@@ -1244,14 +1323,14 @@ class SendAiReplyJob implements ShouldQueue
             $context .= "\n";
         }
 
-        $context .= "উপরের তথ্য ব্যবহার করে কাস্টমারকে উত্তর দিন। নিচের নিয়মগুলো মেনে চলুন:
+        $context .= 'উপরের তথ্য ব্যবহার করে কাস্টমারকে উত্তর দিন। নিচের নিয়মগুলো মেনে চলুন:
 - কাস্টমার ছবি পাঠালে প্রোডাক্টের নাম এবং দাম বলুন।
-- ভ্যারিয়েন্ট রুল (গুরুত্বপূর্ণ): যদি উপলব্ধ বিকল্পসমূহ বা variants থাকে (Size, Color, Weight ইত্যাদি), তাহলে প্রোডাক্টের নাম, দাম এবং বিকল্পগুলো লিস্ট করে শুধু জিজ্ঞাসা করো — \"আপনি কোনটি নিতে চান?\"। \"আমাদের কাছে available আছে\" এরকম অতিরিক্ত কথা বলো না। কিন্তু যদি প্রোডাক্টের কোনো variant না থাকে (শুধু একটাই অপশন), তাহলে শুধু দাম বলো — variant সম্পর্কে কিছু জিজ্ঞাসা করো না।
+- ভ্যারিয়েন্ট রুল (গুরুত্বপূর্ণ): যদি উপলব্ধ বিকল্পসমূহ বা variants থাকে (Size, Color, Weight ইত্যাদি), তাহলে প্রোডাক্টের নাম, দাম এবং বিকল্পগুলো লিস্ট করে শুধু জিজ্ঞাসা করো — "আপনি কোনটি নিতে চান?"। "আমাদের কাছে available আছে" এরকম অতিরিক্ত কথা বলো না। কিন্তু যদি প্রোডাক্টের কোনো variant না থাকে (শুধু একটাই অপশন), তাহলে শুধু দাম বলো — variant সম্পর্কে কিছু জিজ্ঞাসা করো না।
 - একাধিক প্রোডাক্ট ম্যাচ হলে প্রতিটির নাম ও দাম সংক্ষেপে বলুন। প্রতিটি প্রোডাক্টের variant থাকলে সেগুলোও উল্লেখ করো।
 - কাস্টমার আরো জানতে চাইলে (দাম, স্টক, ফিচার, ডেলিভারি ইত্যাদি) তাহলে বিস্তারিত জানাবে।
 - স্টক না থাকলে জানাবে এবং বিকল্প সুপারিশ করবে।
 - মূল্য নিশ্চিত না হলে বলুন অফিসিয়াল পেজে যোগাযোগ করুন।
-- কথোপকথনের স্বাভাবিক ধারা বজায় রাখুন।";
+- কথোপকথনের স্বাভাবিক ধারা বজায় রাখুন।';
 
         return $context;
     }
@@ -1635,6 +1714,85 @@ class SendAiReplyJob implements ShouldQueue
         }
 
         return null;
+    }
+
+    /**
+     * Match a single image URL against the tenant catalog via CLIP and return
+     * product info compatible with resolveReplyToProductContext's expectations.
+     */
+    private function matchImageUrlToProduct(string $imageUrl): ?array
+    {
+        try {
+            $clipService = new ClipService;
+            $catalogEmbeddings = $clipService->getCatalogEmbeddings();
+
+            if (empty($catalogEmbeddings)) {
+                Log::warning('SendAiReplyJob: no catalog embeddings for replied image match', [
+                    'image_url' => substr($imageUrl, 0, 80),
+                ]);
+
+                return null;
+            }
+
+            $customerEmbedding = $clipService->getEmbeddingFromUrl($imageUrl);
+
+            if (! $customerEmbedding || ! isset($customerEmbedding['embedding'])) {
+                Log::warning('SendAiReplyJob: could not embed replied image', [
+                    'image_url' => substr($imageUrl, 0, 80),
+                ]);
+
+                return null;
+            }
+
+            $matchResult = $clipService->matchImage(
+                base64_encode(file_get_contents($imageUrl)),
+                $catalogEmbeddings,
+                5,
+                config('services.clip.threshold', 0.7)
+            );
+
+            if (! $matchResult || ! isset($matchResult['best_match'])) {
+                return null;
+            }
+
+            $bestMatch = $matchResult['best_match'];
+            $score = round($bestMatch['score'] * 100, 1);
+
+            if ($score < 80) {
+                Log::info('SendAiReplyJob: replied image CLIP score too low', [
+                    'score' => $score,
+                    'product' => $bestMatch['product_name'] ?? 'unknown',
+                ]);
+
+                return null;
+            }
+
+            $catalogItem = collect($catalogEmbeddings)->first(function ($item) use ($bestMatch) {
+                return $item['id'] == $bestMatch['id'] && $item['product_name'] == $bestMatch['product_name'];
+            });
+
+            if (! $catalogItem) {
+                return null;
+            }
+
+            return [
+                'product_id' => $catalogItem['product_id'],
+                'variant_id' => $catalogItem['variant_id'] ?? null,
+                'product_name' => $catalogItem['product_name'],
+                'product_sku' => $catalogItem['product_sku'],
+                'product_price' => $catalogItem['product_price'],
+                'variant_attributes' => $catalogItem['variant_attributes'] ?? [],
+                'full_details' => $this->getFullProductDetails($catalogItem),
+                'match_score' => $score,
+            ];
+        } catch (\Exception $e) {
+            Log::error('SendAiReplyJob: replied image CLIP match failed', [
+                'image_url' => substr($imageUrl, 0, 80),
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     /**
