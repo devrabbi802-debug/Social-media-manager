@@ -108,6 +108,8 @@ docker exec laravel-app php artisan <command>
 | `TextSearchService` | Text embedding generation (posts to `clip-server:8089/text-embed`) |
 | `ZernioService` | Zernio social media API v1 |
 | `AudioTranscriptionService` | Audio→text for voice messages |
+| `ChatOrderService` | Order creation from chat conversations |
+| `ProductContextService` | Manages product context during conversations |
 
 ## Inventory (`app/Http/Controllers/Dashboard/`)
 
@@ -121,7 +123,7 @@ Minimal — 2 Laravel examples (`tests/Feature/ExampleTest.php`, `tests/Unit/Exa
 
 ## Formatting
 
-- `.editorconfig`: 4-space indent, LF endings (2-space `.yml`/`.yaml`)
+- `.editorconfig`: 4-space indent, LF endings (2-space `.yml`/`.yaml`, 4-space `docker-compose.*.yml`)
 - PHP: `./vendor/bin/pint` (Laravel Pint, no custom config)
 - No Prettier, ESLint, or stylelint configs
 
