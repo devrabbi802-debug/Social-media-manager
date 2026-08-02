@@ -261,6 +261,7 @@ class SendAiReplyJob implements ShouldQueue
                 $this->finalizeReply(
                     $result['reply'],
                     null,
+                    null,
                     $hasImages,
                     $imageAnalysis,
                     $textProductMatches,
@@ -269,13 +270,14 @@ class SendAiReplyJob implements ShouldQueue
                 );
             } else {
                 // One separate reply per matched product, each with its image attached
-                foreach ($replies as $index => $item) {
+                foreach ($replies as $item) {
                     $this->finalizeReply(
                         $item['text'],
                         $item['image_url'] ?? null,
+                        $item['product'] ?? null,
                         $hasImages,
-                        $index === 0 ? $imageAnalysis : null,
-                        $index === 0 ? $textProductMatches : null,
+                        $imageAnalysis,
+                        $textProductMatches,
                         $conversation,
                         $facebookSetting
                     );
@@ -295,6 +297,7 @@ class SendAiReplyJob implements ShouldQueue
     private function finalizeReply(
         string $replyText,
         ?string $imageUrl,
+        ?array $product,
         bool $hasImages,
         ?array $imageAnalysis,
         $textProductMatches,
@@ -330,7 +333,9 @@ class SendAiReplyJob implements ShouldQueue
             }
         }
 
-        $outgoingFacebookMid = $this->sendFacebookMessage($replyText, $imageUrl);
+        $sentMids = $this->sendFacebookMessage($replyText, $imageUrl);
+        $imageMid = $sentMids['image_mid'] ?? null;
+        $textMid = $sentMids['text_mid'] ?? null;
 
         try {
             if (! $conversation) {
@@ -341,18 +346,23 @@ class SendAiReplyJob implements ShouldQueue
                 $messageType = $hasImages ? 'ai_reply' : 'text';
                 $extra = [];
 
-                if ($imageAnalysis) {
+                // Per-product reply: store the product matched for THIS image so a
+                // future reply-to the sent image resolves the correct product.
+                if ($product) {
+                    $extra['matched_products'] = [$product];
+                    $extra['original_image_urls'] = $imageUrl ? [$imageUrl] : ($this->imageUrls ?? []);
+                } elseif ($imageAnalysis) {
                     foreach ($imageAnalysis as $key => $value) {
                         $extra[$key] = $value;
                     }
                 }
 
-                if ($textProductMatches) {
-                    $extra['text_product_matches'] = $textProductMatches;
+                if ($hasImages && empty($extra['original_image_urls'])) {
+                    $extra['original_image_urls'] = $this->imageUrls;
                 }
 
-                if ($hasImages) {
-                    $extra['original_image_urls'] = $this->imageUrls;
+                if ($textProductMatches && empty($extra['text_product_matches'])) {
+                    $extra['text_product_matches'] = $textProductMatches;
                 }
 
                 if ($orderCreated && isset($order)) {
@@ -360,12 +370,16 @@ class SendAiReplyJob implements ShouldQueue
                     $extra['chat_order_number'] = $order->order_number;
                 }
 
+                if ($imageMid) {
+                    $extra['image_mid'] = $imageMid;
+                }
+
                 Message::create([
                     'conversation_id' => $conversation->id,
                     'direction' => 'outgoing',
                     'type' => $messageType,
                     'content' => $replyText,
-                    'facebook_mid' => $outgoingFacebookMid,
+                    'facebook_mid' => $textMid,
                     'image_analysis' => $extra !== [] ? $extra : null,
                 ]);
 
@@ -752,7 +766,11 @@ class SendAiReplyJob implements ShouldQueue
      */
     private function resolveReplyToProductContext(Conversation $conversation): ?array
     {
-        $repliedMessage = Message::where('facebook_mid', $this->replyToMid)->first();
+        // Match by the text message id OR the image bubble id stored in image_analysis,
+        // so quoting either the AI's text or the AI's sent image resolves correctly.
+        $repliedMessage = Message::where('facebook_mid', $this->replyToMid)
+            ->orWhere('image_analysis->image_mid', $this->replyToMid)
+            ->first();
 
         $productInfo = null;
         $productName = null;
@@ -1349,8 +1367,7 @@ class SendAiReplyJob implements ShouldQueue
 
             $replies[] = [
                 'text' => $reply,
-                'product_id' => $matched['product_id'],
-                'variant_id' => $matched['variant_id'] ?? null,
+                'product' => $matched,
                 'image_url' => $this->imageUrls[$matched['image_index'] - 1] ?? null,
             ];
         }
@@ -2060,18 +2077,22 @@ class SendAiReplyJob implements ShouldQueue
         });
     }
 
-    private function sendFacebookMessage(string $text, ?string $imageUrl = null): ?string
+    /**
+     * Send a reply via the connected channel. Returns the platform message ids
+     * of the (optional) image bubble and the text bubble so reply-to can resolve.
+     *
+     * @return array{image_mid: ?string, text_mid: ?string}
+     */
+    private function sendFacebookMessage(string $text, ?string $imageUrl = null): array
     {
         // If connected via Zernio, use Zernio API
         if ($this->zernioAccountId && $this->zernioApiKey) {
-            $this->sendZernioMessage($text, $imageUrl);
-
-            return null;
+            return $this->sendZernioMessage($text, $imageUrl);
         }
 
         // Otherwise, use Facebook Graph API directly. Send the image as its own
         // bubble first, then the details text below it.
-        $lastMid = null;
+        $imageMid = null;
 
         if ($imageUrl) {
             $response = Http::withHeaders([
@@ -2088,7 +2109,7 @@ class SendAiReplyJob implements ShouldQueue
             ]);
 
             if ($response->successful()) {
-                $lastMid = $response->json('message_id');
+                $imageMid = $response->json('message_id');
             } else {
                 Log::warning('Facebook: image send failed, sending text only', [
                     'sender_id' => $this->senderId,
@@ -2109,13 +2130,19 @@ class SendAiReplyJob implements ShouldQueue
             throw new \Exception('Facebook send message failed: '.$response->body());
         }
 
-        return $response->json('message_id') ?? $lastMid;
+        return [
+            'image_mid' => $imageMid,
+            'text_mid' => $response->json('message_id'),
+        ];
     }
 
     /**
-     * Send message via Zernio API.
+     * Send message via Zernio API. Returns the platform ids of the image and
+     * text bubbles so reply-to resolves the correct product.
+     *
+     * @return array{image_mid: ?string, text_mid: ?string}
      */
-    private function sendZernioMessage(string $text, ?string $imageUrl = null): void
+    private function sendZernioMessage(string $text, ?string $imageUrl = null): array
     {
         $zernio = new ZernioService($this->zernioApiKey);
 
@@ -2128,6 +2155,7 @@ class SendAiReplyJob implements ShouldQueue
         // Send the image as its own bubble first, then the details text below it.
         // Zernio delivers image + text as ONE platform message (text often dropped),
         // so splitting into two messages gives the customer image-then-details.
+        $imageMid = null;
         if ($imageUrl) {
             $imageResult = $zernio->sendInboxMessage(
                 $conversationId,
@@ -2136,7 +2164,9 @@ class SendAiReplyJob implements ShouldQueue
                 $imageUrl
             );
 
-            if (! $imageResult) {
+            if ($imageResult) {
+                $imageMid = $this->extractZernioMid($imageResult);
+            } else {
                 Log::warning('Zernio: image send failed, sending text only', [
                     'conversation_id' => $conversationId,
                     'image_url' => substr($imageUrl, 0, 80),
@@ -2153,6 +2183,27 @@ class SendAiReplyJob implements ShouldQueue
         if (! $result) {
             throw new \Exception('Zernio: Failed to send message');
         }
+
+        return [
+            'image_mid' => $imageMid,
+            'text_mid' => $this->extractZernioMid($result),
+        ];
+    }
+
+    private function extractZernioMid(?array $response): ?string
+    {
+        if (empty($response)) {
+            return null;
+        }
+
+        $data = $response['data'] ?? $response;
+
+        return $data['platformMessageId']
+            ?? $data['platform_message_id']
+            ?? $data['messageId']
+            ?? $data['message_id']
+            ?? $data['id']
+            ?? null;
     }
 
     private function sendTypingIndicator(bool $on): void
