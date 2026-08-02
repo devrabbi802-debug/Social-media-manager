@@ -303,6 +303,7 @@ class FacebookWebhookController extends Controller
             $dispatchKey = "zernio_job_dispatched:{$senderId}";
             if (Cache::get($dispatchKey)) {
                 Log::info('Zernio webhook debounce: skipping duplicate dispatch', ['sender_id' => $senderId]);
+                $this->queueDebouncedMessage($senderId, $imageUrls, $messageText);
 
                 return;
             }
@@ -427,6 +428,40 @@ class FacebookWebhookController extends Controller
     }
 
     // --- Helper methods (existing) ---
+
+    /**
+     * Queue debounced message data into a tenant-scoped cache bucket.
+     * The already-dispatched SendAiReplyJob drains this bucket so that images/text
+     * arriving during the debounce window (bursts of 2-3 messages) are not dropped.
+     */
+    private function queueDebouncedMessage(string $senderId, array $imageUrls, ?string $text = null): void
+    {
+        if (empty($imageUrls) && empty($text)) {
+            return;
+        }
+
+        $pendingKey = "pending_messages:{$senderId}";
+        $pending = Cache::get($pendingKey);
+
+        if (empty($pending)) {
+            $pending = ['images' => [], 'text' => null];
+        }
+
+        if (! empty($imageUrls)) {
+            $pending['images'] = array_values(array_unique(array_merge($pending['images'], $imageUrls)));
+        }
+        if ($text) {
+            $pending['text'] = $text;
+        }
+
+        Cache::put($pendingKey, $pending, now()->addMinutes(5));
+
+        Log::info('Webhook: queued debounced message for drain', [
+            'sender_id' => $senderId,
+            'images' => count($pending['images']),
+            'text' => $text ? mb_substr($text, 0, 50) : null,
+        ]);
+    }
 
     private function findTenantByVerifyToken(string $token): ?Tenant
     {
@@ -651,6 +686,7 @@ class FacebookWebhookController extends Controller
                     'sender_id' => $senderId,
                     'has_images' => ! empty($imageUrls),
                 ]);
+                $this->queueDebouncedMessage($senderId, $imageUrls, $text);
 
                 return;
             }

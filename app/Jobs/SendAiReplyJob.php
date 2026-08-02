@@ -24,6 +24,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -54,6 +55,7 @@ class SendAiReplyJob implements ShouldQueue
         public ?string $zernioApiKey = null,
         public ?string $zernioConversationId = null,
         public ?string $replyToMid = null,
+        public bool $drainPending = false,
     ) {
         $this->onQueue('facebook');
     }
@@ -139,6 +141,10 @@ class SendAiReplyJob implements ShouldQueue
         $tenant->run(function () use ($tenant) {
             $conversation = Conversation::where('sender_id', $this->senderId)->first();
 
+            // Drain images/text queued by debounced webhooks while this job was waiting.
+            // Without this, burst images arriving during the debounce window get dropped.
+            $this->drainPendingMessage();
+
             // Dedup: only skip when the triggering incoming message has ALREADY been answered.
             // A brand-new customer message arriving right after a reply must still be processed.
             if ($conversation) {
@@ -154,7 +160,7 @@ class SendAiReplyJob implements ShouldQueue
                     && $lastOutgoingAt
                     && Carbon::parse($lastOutgoingAt)->greaterThanOrEqualTo(Carbon::parse($lastIncomingAt));
 
-                if ($alreadyAnswered) {
+                if ($alreadyAnswered && ! $this->isDrainImageJob()) {
                     Log::info('SendAiReplyJob: SKIPPED - latest incoming message already answered', [
                         'sender_id' => $this->senderId,
                         'last_incoming_at' => $lastIncomingAt?->toDateTimeString(),
@@ -174,14 +180,14 @@ class SendAiReplyJob implements ShouldQueue
                     ->values()
                     ->toArray();
 
-                if (empty($this->imageUrls) && ! empty($recentImages)) {
+                if (! $this->drainPending && empty($this->imageUrls) && ! empty($recentImages)) {
                     // Text job: pick up recent images if available
                     Log::info('SendAiReplyJob: text job found recent images', [
                         'sender_id' => $this->senderId,
                         'image_count' => count($recentImages),
                     ]);
                     $this->imageUrls = $recentImages;
-                } elseif (! empty($this->imageUrls) && count($recentImages) > count($this->imageUrls)) {
+                } elseif (! $this->drainPending && ! empty($this->imageUrls) && count($recentImages) > count($this->imageUrls)) {
                     // Image job: collect additional images from same batch
                     Log::info('SendAiReplyJob: image job collected additional images', [
                         'sender_id' => $this->senderId,
@@ -343,7 +349,99 @@ class SendAiReplyJob implements ShouldQueue
                 'image_count' => count($this->imageUrls ?? []),
                 'reply' => $reply,
             ]);
+
+            // If more debounced messages arrived while we were processing, hand them
+            // to a follow-up drain job so no image in the burst is left unanswered.
+            $this->maybeDispatchPendingDrain();
         });
+    }
+
+    /**
+     * True when this job is a follow-up drain that must process images that arrived
+     * after the main reply was already sent (i.e. the normal dedup would wrongly
+     * consider them "already answered" even though they were never covered).
+     */
+    private function isDrainImageJob(): bool
+    {
+        return $this->drainPending && ! empty($this->imageUrls);
+    }
+
+    /**
+     * Merge any debounced messages queued by the webhook into this job's payload.
+     * The webhook queues images/text for every message it skips during the debounce
+     * window; the job consumes them here so bursts of 2-3 images are all analyzed.
+     */
+    private function drainPendingMessage(): void
+    {
+        $pendingKey = "pending_messages:{$this->senderId}";
+        $pending = Cache::get($pendingKey);
+
+        if (empty($pending)) {
+            return;
+        }
+
+        $images = $pending['images'] ?? [];
+        $text = $pending['text'] ?? null;
+
+        if (! empty($images)) {
+            $this->imageUrls = array_values(array_unique(array_merge($this->imageUrls ?? [], $images)));
+        }
+        if ($text && empty($this->messageText)) {
+            $this->messageText = $text;
+        }
+
+        Cache::forget($pendingKey);
+
+        Log::info('SendAiReplyJob: drained pending debounced messages', [
+            'sender_id' => $this->senderId,
+            'drained_images' => count($images),
+            'drained_text' => $text ? mb_substr($text, 0, 50) : null,
+            'total_images' => count($this->imageUrls ?? []),
+        ]);
+    }
+
+    /**
+     * After a reply is saved, hand off any messages that were queued while this job
+     * was processing to a follow-up drain job, so they are not lost to the debounce.
+     */
+    private function maybeDispatchPendingDrain(): void
+    {
+        $pendingKey = "pending_messages:{$this->senderId}";
+        $pending = Cache::get($pendingKey);
+
+        if (empty($pending)) {
+            return;
+        }
+
+        $images = $pending['images'] ?? [];
+        $text = $pending['text'] ?? null;
+
+        if (empty($images) && empty($text)) {
+            Cache::forget($pendingKey);
+
+            return;
+        }
+
+        Cache::forget($pendingKey);
+
+        Log::info('SendAiReplyJob: dispatching drain job for queued messages', [
+            'sender_id' => $this->senderId,
+            'images' => count($images),
+            'text' => $text ? mb_substr($text, 0, 50) : null,
+        ]);
+
+        SendAiReplyJob::dispatch(
+            tenantId: $this->tenantId,
+            senderId: $this->senderId,
+            messageText: $text ?? '',
+            pageAccessToken: $this->pageAccessToken,
+            imageUrls: $images,
+            audioUrl: null,
+            zernioAccountId: $this->zernioAccountId,
+            zernioApiKey: $this->zernioApiKey,
+            zernioConversationId: $this->zernioConversationId,
+            drainPending: true,
+        );
     }
 
     private function handleTextMessage(FacebookSetting $facebookSetting, string $systemPrompt, ?Conversation $conversation = null): ?array
@@ -436,7 +534,7 @@ class SendAiReplyJob implements ShouldQueue
         }
 
         // Only after reply-to check: if there are recent images, treat as text+image scenario
-        if ($conversation) {
+        if ($conversation && ! $this->drainPending) {
             $recentImages = Message::where('conversation_id', $conversation->id)
                 ->where('direction', 'incoming')
                 ->where('type', 'image')
@@ -969,7 +1067,7 @@ class SendAiReplyJob implements ShouldQueue
                 && $lastOutgoingAt
                 && Carbon::parse($lastOutgoingAt)->greaterThanOrEqualTo(Carbon::parse($lastIncomingAt));
 
-            if ($alreadyAnswered) {
+            if ($alreadyAnswered && ! $this->isDrainImageJob()) {
                 Log::info('SendAiReplyJob: skipping image job - latest incoming already answered', [
                     'sender_id' => $this->senderId,
                 ]);
