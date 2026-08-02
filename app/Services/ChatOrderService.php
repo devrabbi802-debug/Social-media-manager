@@ -8,6 +8,7 @@ use App\Models\CustomerAddress;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -128,18 +129,24 @@ class ChatOrderService
                     $product = Product::find($item['product_id']);
                 }
 
-                // If product found, use its actual price and details
+                // If product not found, try by name from conversation history
+                if (! $product && $name) {
+                    $product = Product::where('name', 'LIKE', '%'.$name.'%')->first();
+                }
+
                 if ($product) {
                     $name = $product->name;
-                    $unitPrice = (float) ($product->discount_price ?? $product->base_price);
                     $sku = $product->sku ?? '';
-                } else {
-                    // Try to find by name from conversation history
-                    $product = Product::where('name', 'LIKE', '%'.$name.'%')->first();
-                    if ($product) {
-                        $name = $product->name;
+
+                    // Resolve the specific variant the customer chose (price must match the quote).
+                    // Without this, a product with variants always uses the product-level price,
+                    // which ignores the variant price the AI quoted and the customer confirmed.
+                    $variant = $this->resolveVariant($product, $item);
+                    if ($variant) {
+                        $unitPrice = (float) ($variant->price ?? $product->discount_price ?? $product->base_price);
+                        $sku = $variant->sku ?? $sku;
+                    } else {
                         $unitPrice = (float) ($product->discount_price ?? $product->base_price);
-                        $sku = $product->sku ?? '';
                     }
                 }
 
@@ -152,7 +159,7 @@ class ChatOrderService
 
                 $orderItems[] = [
                     'product_id' => $product?->id,
-                    'variant_id' => $item['variant_id'] ?? null,
+                    'variant_id' => $variant?->id ?? $item['variant_id'] ?? null,
                     'name' => $name,
                     'sku' => $sku,
                     'quantity' => $quantity,
@@ -290,6 +297,104 @@ class ChatOrderService
 
             return null;
         }
+    }
+
+    /**
+     * Resolve the specific product variant the customer chose.
+     *
+     * Priority:
+     * 1. Explicit variant_id from the AI.
+     * 2. Match by variant attributes (Size/Color/Weight etc.) — the AI includes
+     *    these in the order JSON from the conversation context.
+     * 3. Match by the quoted unit_price — if the AI quoted a price that belongs to
+     *    exactly one variant, use that variant so the order price matches the quote.
+     */
+    private function resolveVariant(Product $product, array $item): ?ProductVariant
+    {
+        $variantId = $item['variant_id'] ?? null;
+        $attributes = $item['variant_attributes'] ?? $item['attributes'] ?? null;
+
+        // 1. Exact variant_id
+        if ($variantId) {
+            $variant = ProductVariant::find($variantId);
+            if ($variant && $variant->product_id === $product->id) {
+                return $variant;
+            }
+        }
+
+        // 2. Match by attributes (lenient on keys, strict on values)
+        $aiValues = $this->normalizeAttributeValues($attributes);
+        if (! empty($aiValues)) {
+            foreach ($product->variants->where('is_active', true) as $variant) {
+                $variantValues = collect($variant->attributes ?? [])
+                    ->map(fn ($v) => $this->normalizeValue($v))
+                    ->filter(fn ($v) => $v !== '')
+                    ->values()
+                    ->all();
+
+                $allMatch = true;
+                foreach ($aiValues as $value) {
+                    if (! in_array($value, $variantValues, true)) {
+                        $allMatch = false;
+                        break;
+                    }
+                }
+
+                if ($allMatch) {
+                    return $variant;
+                }
+            }
+        }
+
+        // 3. Match by quoted unit_price (exact match against variant price)
+        $aiPrice = (float) ($item['unit_price'] ?? 0);
+        if ($aiPrice > 0) {
+            $priceMatches = [];
+            foreach ($product->variants->where('is_active', true) as $variant) {
+                $variantPrice = (float) ($variant->price ?? $product->discount_price ?? $product->base_price);
+                if (abs($variantPrice - $aiPrice) < 0.01) {
+                    $priceMatches[] = $variant;
+                }
+            }
+
+            // Only use price match when it is unambiguous
+            if (count($priceMatches) === 1) {
+                return $priceMatches[0];
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizeAttributeValues($attributes): array
+    {
+        if (! is_array($attributes) || empty($attributes)) {
+            return [];
+        }
+
+        $values = [];
+        foreach ($attributes as $value) {
+            if (is_array($value)) {
+                foreach ($value as $v) {
+                    $normalized = $this->normalizeValue($v);
+                    if ($normalized !== '') {
+                        $values[] = $normalized;
+                    }
+                }
+            } else {
+                $normalized = $this->normalizeValue($value);
+                if ($normalized !== '') {
+                    $values[] = $normalized;
+                }
+            }
+        }
+
+        return array_values(array_unique($values));
+    }
+
+    private function normalizeValue($value): string
+    {
+        return mb_strtolower(trim((string) $value));
     }
 
     /**

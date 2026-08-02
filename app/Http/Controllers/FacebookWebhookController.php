@@ -334,7 +334,9 @@ class FacebookWebhookController extends Controller
                     ->pluck('image_path')
                     ->toArray();
                 if (! empty($recentImages)) {
-                    $finalImageUrls = array_merge($recentImages, $finalImageUrls);
+                    // Dedupe: the query also returns the images just saved by THIS request,
+                    // so merge then collapse to unique URLs.
+                    $finalImageUrls = array_values(array_unique(array_merge($recentImages, $finalImageUrls)));
                     Log::info('Zernio: Combined image with recent images', [
                         'sender_id' => $senderId,
                         'image_count' => count($finalImageUrls),
@@ -349,7 +351,7 @@ class FacebookWebhookController extends Controller
                     ->pluck('image_path')
                     ->toArray();
                 if (! empty($recentImages)) {
-                    $finalImageUrls = $recentImages;
+                    $finalImageUrls = array_values(array_unique($recentImages));
                 }
             }
 
@@ -718,7 +720,7 @@ class FacebookWebhookController extends Controller
                     ->toArray();
 
                 if (! empty($recentImages)) {
-                    $finalImageUrls = array_merge($recentImages, $finalImageUrls);
+                    $finalImageUrls = array_values(array_unique(array_merge($recentImages, $finalImageUrls)));
                     Log::info('Combined image with recent images', [
                         'sender_id' => $senderId,
                         'image_count' => count($finalImageUrls),
@@ -734,7 +736,7 @@ class FacebookWebhookController extends Controller
                     ->toArray();
 
                 if (! empty($recentImages)) {
-                    $finalImageUrls = $recentImages;
+                    $finalImageUrls = array_values(array_unique($recentImages));
                     Log::info('Combined text with recent images', [
                         'sender_id' => $senderId,
                         'image_count' => count($recentImages),

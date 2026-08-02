@@ -70,12 +70,14 @@ class AiChatService
         // Gemini fallback — try if Gemini keys available
         if ($secondFallbackProvider === 'gemini' && $secondFallbackKeys && $secondFallbackKeys->isNotEmpty()) {
             Log::info('Trying Gemini fallback keys', ['count' => $secondFallbackKeys->count()]);
+
             return $this->chatWithGeminiFallback($message, $secondFallbackKeys, $history);
         }
 
         // If only Gemini was provided as fallback (no Cerebras)
         if ($fallbackProvider === 'gemini' && $fallbackKeys && $fallbackKeys->isNotEmpty()) {
             Log::info('Trying Gemini fallback keys', ['count' => $fallbackKeys->count()]);
+
             return $this->chatWithGeminiFallback($message, $fallbackKeys, $history);
         }
 
@@ -92,6 +94,7 @@ class AiChatService
                     Log::info('Gemini fallback succeeded', [
                         'key_id' => $key->id,
                     ]);
+
                     return $result;
                 }
 
@@ -107,6 +110,7 @@ class AiChatService
         }
 
         Log::error('All Gemini fallback keys exhausted');
+
         return null;
     }
 
@@ -120,6 +124,7 @@ class AiChatService
                     Log::info('Cerebras fallback succeeded', [
                         'key_id' => $key->id,
                     ]);
+
                     return $result;
                 }
 
@@ -135,6 +140,7 @@ class AiChatService
         }
 
         Log::error('All Cerebras fallback keys exhausted');
+
         return null;
     }
 
@@ -161,7 +167,7 @@ class AiChatService
                 'model' => config('services.cerebras.model', 'gpt-oss-120b'),
                 'messages' => $messages,
                 'temperature' => 0.7,
-                'max_tokens' => 512,
+                'max_tokens' => 1024,
                 'top_p' => 0.9,
             ]);
 
@@ -173,12 +179,14 @@ class AiChatService
             if ($response->status() === 413) {
                 if ($isRetry) {
                     Log::error('Cerebras API request too large (413), already retried with truncation');
+
                     return null;
                 }
                 Log::error('Cerebras API request too large (413)', [
                     'message_length' => mb_strlen($message),
                 ]);
-                $truncatedMessage = mb_substr($message, 0, 4000) . "\n\n[বার্তা সংক্ষিপ্ত করা হয়েছে]";
+                $truncatedMessage = mb_substr($message, 0, 4000)."\n\n[বার্তা সংক্ষিপ্ত করা হয়েছে]";
+
                 return $this->chatWithCerebras($truncatedMessage, $apiKey, $history, true);
             }
 
@@ -238,7 +246,7 @@ class AiChatService
                     ],
                     'generationConfig' => [
                         'temperature' => 0.7,
-                        'maxOutputTokens' => 512,
+                        'maxOutputTokens' => 1024,
                         'topP' => 0.9,
                     ],
                 ]
@@ -258,6 +266,7 @@ class AiChatService
                     'status' => $response->status(),
                     'body' => $response->body(),
                 ]);
+
                 return null;
             }
 
@@ -314,7 +323,7 @@ class AiChatService
             }
         }
 
-        while (!empty($normalized) && $normalized[0]['role'] === 'model') {
+        while (! empty($normalized) && $normalized[0]['role'] === 'model') {
             array_shift($normalized);
         }
 
@@ -349,7 +358,7 @@ class AiChatService
                 'model' => config('services.groq.model', 'llama-3.3-70b-versatile'),
                 'messages' => $messages,
                 'temperature' => 0.7,
-                'max_tokens' => 512,
+                'max_tokens' => 1024,
                 'top_p' => 0.9,
             ]);
 
@@ -362,12 +371,14 @@ class AiChatService
             if ($response->status() === 413) {
                 if ($isRetry) {
                     Log::error('Groq API request too large (413), already retried with truncation');
+
                     return null;
                 }
                 Log::error('Groq API request too large (413)', [
                     'message_length' => mb_strlen($message),
                 ]);
-                $truncatedMessage = mb_substr($message, 0, 4000) . "\n\n[বার্তা সংক্ষিপ্ত করা হয়েছে]";
+                $truncatedMessage = mb_substr($message, 0, 4000)."\n\n[বার্তা সংক্ষিপ্ত করা হয়েছে]";
+
                 return $this->chatWithMessages($truncatedMessage, $apiKey, $history, true);
             }
 

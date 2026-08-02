@@ -252,108 +252,150 @@ class SendAiReplyJob implements ShouldQueue
                 return;
             }
 
-            $reply = $result['reply'];
             $imageAnalysis = $result['image_analysis'] ?? null;
             $textProductMatches = $result['text_product_matches'] ?? null;
+            $replies = $result['replies'] ?? null;
 
-            // ─── Chat Order Detection ───────────────────────────
-            $chatOrderService = new ChatOrderService;
-            $orderData = $chatOrderService->extractOrderData($reply);
-            $orderCreated = false;
-
-            if ($orderData) {
-                $cleanReply = $chatOrderService->removeOrderDataBlock($reply);
-                $order = $chatOrderService->createChatOrder($orderData, $facebookSetting->user_id);
-
-                if ($order) {
-                    $orderCreated = true;
-                    $confirmationMsg = "\n\n✅ আপনার অর্ডার কনফার্ম হয়েছে!\n📋 অর্ডার নম্বর: {$order->order_number}\n💰 মোট: ৳".number_format($order->total, 2)."\n📦 স্ট্যাটাস: {$order->status}";
-                    $reply = $cleanReply.$confirmationMsg;
-
-                    Log::info('SendAiReplyJob: Chat order created', [
-                        'order_id' => $order->id,
-                        'order_number' => $order->order_number,
-                        'sender_id' => $this->senderId,
-                    ]);
-                } else {
-                    // Order creation failed — send original reply without JSON block
-                    $reply = $cleanReply;
-                    Log::warning('SendAiReplyJob: Chat order creation failed', [
-                        'sender_id' => $this->senderId,
-                    ]);
+            if (empty($replies)) {
+                // Single reply (text path or one matched product)
+                $this->finalizeReply(
+                    $result['reply'],
+                    null,
+                    $hasImages,
+                    $imageAnalysis,
+                    $textProductMatches,
+                    $conversation,
+                    $facebookSetting
+                );
+            } else {
+                // One separate reply per matched product, each with its image attached
+                foreach ($replies as $index => $item) {
+                    $this->finalizeReply(
+                        $item['text'],
+                        $item['image_url'] ?? null,
+                        $hasImages,
+                        $index === 0 ? $imageAnalysis : null,
+                        $index === 0 ? $textProductMatches : null,
+                        $conversation,
+                        $facebookSetting
+                    );
                 }
             }
-
-            $outgoingFacebookMid = $this->sendFacebookMessage($reply);
-
-            try {
-                if (! $conversation) {
-                    $conversation = Conversation::where('sender_id', $this->senderId)->first();
-                }
-
-                if ($conversation) {
-                    $messageType = $hasImages ? 'ai_reply' : 'text';
-                    $extra = [];
-
-                    if ($imageAnalysis) {
-                        foreach ($imageAnalysis as $key => $value) {
-                            $extra[$key] = $value;
-                        }
-                    }
-
-                    if ($textProductMatches) {
-                        $extra['text_product_matches'] = $textProductMatches;
-                    }
-
-                    if ($hasImages) {
-                        $extra['original_image_urls'] = $this->imageUrls;
-                    }
-
-                    if ($orderCreated && isset($order)) {
-                        $extra['chat_order_id'] = $order->id;
-                        $extra['chat_order_number'] = $order->order_number;
-                    }
-
-                    Message::create([
-                        'conversation_id' => $conversation->id,
-                        'direction' => 'outgoing',
-                        'type' => $messageType,
-                        'content' => $reply,
-                        'facebook_mid' => $outgoingFacebookMid,
-                        'image_analysis' => $extra !== [] ? $extra : null,
-                    ]);
-
-                    $conversation->update(['last_message_at' => now()]);
-
-                    Log::info('AI reply saved to conversation', [
-                        'conversation_id' => $conversation->id,
-                        'sender_id' => $this->senderId,
-                    ]);
-                } else {
-                    Log::warning('Conversation not found for outgoing message', [
-                        'sender_id' => $this->senderId,
-                    ]);
-                }
-            } catch (\Throwable $e) {
-                Log::error('Failed to save AI reply to conversation', [
-                    'sender_id' => $this->senderId,
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString(),
-                ]);
-            }
-
-            Log::info('AI reply sent via Facebook', [
-                'tenant_id' => $tenant->id,
-                'sender_id' => $this->senderId,
-                'message' => $this->messageText,
-                'image_count' => count($this->imageUrls ?? []),
-                'reply' => $reply,
-            ]);
 
             // If more debounced messages arrived while we were processing, hand them
             // to a follow-up drain job so no image in the burst is left unanswered.
             $this->maybeDispatchPendingDrain();
         });
+    }
+
+    /**
+     * Detect a chat order in the reply, send it (optionally with an image
+     * attachment), and persist the outgoing message record.
+     */
+    private function finalizeReply(
+        string $replyText,
+        ?string $imageUrl,
+        bool $hasImages,
+        ?array $imageAnalysis,
+        $textProductMatches,
+        ?Conversation $conversation,
+        FacebookSetting $facebookSetting
+    ): void {
+        // ─── Chat Order Detection ───────────────────────────
+        $chatOrderService = new ChatOrderService;
+        $orderData = $chatOrderService->extractOrderData($replyText);
+        $order = null;
+        $orderCreated = false;
+
+        if ($orderData) {
+            $cleanReply = $chatOrderService->removeOrderDataBlock($replyText);
+            $order = $chatOrderService->createChatOrder($orderData, $facebookSetting->user_id);
+
+            if ($order) {
+                $orderCreated = true;
+                $confirmationMsg = "\n\n✅ আপনার অর্ডার কনফার্ম হয়েছে!\n📋 অর্ডার নম্বর: {$order->order_number}\n💰 মোট: ৳".number_format($order->total, 2)."\n📦 স্ট্যাটাস: {$order->status}";
+                $replyText = $cleanReply.$confirmationMsg;
+
+                Log::info('SendAiReplyJob: Chat order created', [
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'sender_id' => $this->senderId,
+                ]);
+            } else {
+                // Order creation failed — send original reply without JSON block
+                $replyText = $cleanReply;
+                Log::warning('SendAiReplyJob: Chat order creation failed', [
+                    'sender_id' => $this->senderId,
+                ]);
+            }
+        }
+
+        $outgoingFacebookMid = $this->sendFacebookMessage($replyText, $imageUrl);
+
+        try {
+            if (! $conversation) {
+                $conversation = Conversation::where('sender_id', $this->senderId)->first();
+            }
+
+            if ($conversation) {
+                $messageType = $hasImages ? 'ai_reply' : 'text';
+                $extra = [];
+
+                if ($imageAnalysis) {
+                    foreach ($imageAnalysis as $key => $value) {
+                        $extra[$key] = $value;
+                    }
+                }
+
+                if ($textProductMatches) {
+                    $extra['text_product_matches'] = $textProductMatches;
+                }
+
+                if ($hasImages) {
+                    $extra['original_image_urls'] = $this->imageUrls;
+                }
+
+                if ($orderCreated && isset($order)) {
+                    $extra['chat_order_id'] = $order->id;
+                    $extra['chat_order_number'] = $order->order_number;
+                }
+
+                Message::create([
+                    'conversation_id' => $conversation->id,
+                    'direction' => 'outgoing',
+                    'type' => $messageType,
+                    'content' => $replyText,
+                    'facebook_mid' => $outgoingFacebookMid,
+                    'image_analysis' => $extra !== [] ? $extra : null,
+                ]);
+
+                $conversation->update(['last_message_at' => now()]);
+
+                Log::info('AI reply saved to conversation', [
+                    'conversation_id' => $conversation->id,
+                    'sender_id' => $this->senderId,
+                ]);
+            } else {
+                Log::warning('Conversation not found for outgoing message', [
+                    'sender_id' => $this->senderId,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Failed to save AI reply to conversation', [
+                'sender_id' => $this->senderId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
+
+        Log::info('AI reply sent via Facebook', [
+            'tenant_id' => $this->tenantId,
+            'sender_id' => $this->senderId,
+            'message' => $this->messageText,
+            'image_count' => count($this->imageUrls ?? []),
+            'reply' => $replyText,
+            'with_image' => $imageUrl !== null,
+        ]);
     }
 
     /**
@@ -415,6 +457,17 @@ class SendAiReplyJob implements ShouldQueue
 
         $images = $pending['images'] ?? [];
         $text = $pending['text'] ?? null;
+
+        // Drop images this job already processed (e.g. collected via DB recent-images
+        // while pending was still empty). Otherwise the drain would re-reply about the
+        // exact same products the customer already received.
+        $processedImages = $this->imageUrls ?? [];
+        if (! empty($images) && ! empty($processedImages)) {
+            $images = array_values(array_filter(
+                $images,
+                fn ($url) => ! in_array($url, $processedImages, true)
+            ));
+        }
 
         if (empty($images) && empty($text)) {
             Cache::forget($pendingKey);
@@ -1258,35 +1311,59 @@ class SendAiReplyJob implements ShouldQueue
             );
         }
 
-        // Step 2: Create grouped product context
-        $productContext = $this->buildProductContext($matchedProducts);
-
-        // Step 3: Build message for AI
+        // Step 2: Generate a SEPARATE reply per matched product, each with the
+        // customer's own matched image attached, so one image gets one clear answer.
         $imageCount = count($processedImages);
         $matchedCount = count($matchedProducts);
-        $imageWord = $imageCount > 1 ? "{$imageCount}টি ইমেজ" : 'একটি ইমেজ';
-        $productWord = $matchedCount > 1 ? "{$matchedCount}টি প্রোডাক্ট" : 'একটি প্রোডাক্ট';
 
-        $userMessage = $this->messageText
-            ? "কাস্টমারের বার্তা: {$this->messageText}"
-            : "কাস্টমার {$imageWord} পাঠিয়েছে।";
-
-        $combinedMessage = "{$userMessage}\n\nইমেজ বিশ্লেষণ:\n{$productContext}";
+        $imageAnalysis = [
+            'matched_products' => $matchedProducts,
+            'processed_images' => $processedImages,
+            'image_count' => $imageCount,
+            'matched_count' => $matchedCount,
+        ];
 
         $history = $this->getConversationHistory();
 
-        // Fallback chain: Groq → Cerebras → Gemini
-        $reply = $this->chatWithAiChain($systemPrompt, $combinedMessage, $history, $groqKeys, $cerebrasKeys, $geminiKeys);
+        $replies = [];
+        foreach ($matchedProducts as $index => $matched) {
+            // Keep the typing indicator alive across the multiple AI calls
+            if ($index > 0) {
+                $this->sendTypingIndicator(true);
+            }
 
-        return $reply ? [
-            'reply' => $reply,
-            'image_analysis' => [
-                'matched_products' => $matchedProducts,
-                'processed_images' => $processedImages,
-                'image_count' => $imageCount,
-                'matched_count' => $matchedCount,
-            ],
-        ] : null;
+            $productContext = $this->buildSingleProductContext($matched);
+
+            $userMessage = $this->messageText
+                ? "কাস্টমারের বার্তা: {$this->messageText}"
+                : 'কাস্টমার একটি ছবি পাঠিয়েছে যা নিচের প্রোডাক্টের সাথে ম্যাচ করেছে।';
+
+            $combinedMessage = "{$userMessage}\n\nইমেজ বিশ্লেষণ:\n{$productContext}";
+
+            // Fallback chain: Groq → Cerebras → Gemini
+            $reply = $this->chatWithAiChain($systemPrompt, $combinedMessage, $history, $groqKeys, $cerebrasKeys, $geminiKeys);
+
+            if (! $reply) {
+                continue;
+            }
+
+            $replies[] = [
+                'text' => $reply,
+                'product_id' => $matched['product_id'],
+                'variant_id' => $matched['variant_id'] ?? null,
+                'image_url' => $this->imageUrls[$matched['image_index'] - 1] ?? null,
+            ];
+        }
+
+        if (empty($replies)) {
+            return null;
+        }
+
+        return [
+            'replies' => $replies,
+            'image_analysis' => $imageAnalysis,
+            'reply' => count($replies) === 1 ? $replies[0]['text'] : null,
+        ];
     }
 
     private function getFullProductDetails(array $catalogItem): array
@@ -1369,62 +1446,56 @@ class SendAiReplyJob implements ShouldQueue
         return $details;
     }
 
-    private function buildProductContext(array $matchedProducts): string
+    /**
+     * Build an AI context for a SINGLE matched product (one image → one reply).
+     * Includes the full variant list so the per-image reply can quote options.
+     */
+    private function buildSingleProductContext(array $product): string
     {
-        $context = "ম্যাচ করা প্রোডাক্টসমূহ:\n\n";
+        $details = $product['full_details'];
 
-        foreach ($matchedProducts as $index => $product) {
-            $details = $product['full_details'];
-            $context .= '**প্রোডাক্ট '.($index + 1).":**\n";
-            $context .= "- নাম: {$details['name']}\n";
-            $context .= "- SKU: {$details['sku']}\n";
-            $context .= '- মূল্য: ৳'.number_format($details['price'], 2)."\n";
+        $context = "ম্যাচ করা প্রোডাক্ট:\n\n";
+        $context .= '**প্রোডাক্ট:**'."\n";
+        $context .= "- নাম: {$details['name']}\n";
+        $context .= "- SKU: {$details['sku']}\n";
+        $context .= '- মূল্য: ৳'.number_format($details['price'], 2)."\n";
 
-            if (isset($details['description']) && $details['description']) {
-                $context .= "- বিবরণ: {$details['description']}\n";
-            }
-            if (isset($details['category']) && $details['category']) {
-                $context .= "- ক্যাটাগরি: {$details['category']}\n";
-            }
-            if (isset($details['brand']) && $details['brand']) {
-                $context .= "- ব্র্যান্ড: {$details['brand']}\n";
-            }
-            if (isset($details['stock'])) {
-                $stockText = $details['stock'] > 0 ? "{$details['stock']}টি স্টকে আছে" : 'স্টক শেষ';
-                $context .= "- স্টক: {$stockText}\n";
-            }
-            if (isset($details['attributes']) && ! empty($details['attributes'])) {
-                $attrs = collect($details['attributes'])->map(fn ($v, $k) => "{$k}: {$v}")->implode(', ');
-                $context .= "- বিকল্প: {$attrs}\n";
-            }
-            if (isset($details['discount_price']) && $details['discount_price'] && $details['discount_price'] < $details['base_price']) {
-                $context .= '- মূল্যছাড় মূল্য: ৳'.number_format($details['discount_price'], 2)."\n";
-            }
-
-            // Show all available variants of this product
-            if (isset($details['all_variants']) && ! empty($details['all_variants'])) {
-                $context .= "- উপলব্ধ বিকল্পসমূহ:\n";
-                foreach ($details['all_variants'] as $variant) {
-                    $vAttrs = collect($variant['attributes'] ?? [])->map(fn ($v, $k) => "{$k}: {$v}")->implode(', ');
-                    $vStock = ($variant['stock'] ?? 0) > 0 ? "{$variant['stock']}টি স্টকে" : 'স্টক শেষ';
-                    $context .= "  • {$vAttrs} — ৳".number_format($variant['price'] ?? 0, 2)." [{$vStock}]\n";
-                }
-            }
-
-            $context .= "- ম্যাচ স্কোর: {$product['match_score']}%\n";
-
-            if (! empty($product['alternatives'])) {
-                $altNames = collect($product['alternatives'])->pluck('product_name')->implode(', ');
-                $context .= "- অন্যান্য সম্ভাব্য: {$altNames}\n";
-            }
-
-            $context .= "\n";
+        if (isset($details['description']) && $details['description']) {
+            $context .= "- বিবরণ: {$details['description']}\n";
         }
+        if (isset($details['category']) && $details['category']) {
+            $context .= "- ক্যাটাগরি: {$details['category']}\n";
+        }
+        if (isset($details['brand']) && $details['brand']) {
+            $context .= "- ব্র্যান্ড: {$details['brand']}\n";
+        }
+        if (isset($details['stock'])) {
+            $stockText = $details['stock'] > 0 ? "{$details['stock']}টি স্টকে আছে" : 'স্টক শেষ';
+            $context .= "- স্টক: {$stockText}\n";
+        }
+        if (isset($details['attributes']) && ! empty($details['attributes'])) {
+            $attrs = collect($details['attributes'])->map(fn ($v, $k) => "{$k}: {$v}")->implode(', ');
+            $context .= "- বিকল্প: {$attrs}\n";
+        }
+        if (isset($details['discount_price']) && $details['discount_price'] && $details['discount_price'] < $details['base_price']) {
+            $context .= '- মূল্যছাড় মূল্য: ৳'.number_format($details['discount_price'], 2)."\n";
+        }
+
+        // Show all available variants of this product
+        if (isset($details['all_variants']) && ! empty($details['all_variants'])) {
+            $context .= "- উপলব্ধ বিকল্পসমূহ:\n";
+            foreach ($details['all_variants'] as $variant) {
+                $vAttrs = collect($variant['attributes'] ?? [])->map(fn ($v, $k) => "{$k}: {$v}")->implode(', ');
+                $vStock = ($variant['stock'] ?? 0) > 0 ? "{$variant['stock']}টি স্টকে" : 'স্টক শেষ';
+                $context .= "  • {$vAttrs} — ৳".number_format($variant['price'] ?? 0, 2)." [{$vStock}]\n";
+            }
+        }
+
+        $context .= "- ম্যাচ স্কোর: {$product['match_score']}%\n\n";
 
         $context .= 'উপরের তথ্য ব্যবহার করে কাস্টমারকে উত্তর দিন। নিচের নিয়মগুলো মেনে চলুন:
 - কাস্টমার ছবি পাঠালে প্রোডাক্টের নাম এবং দাম বলুন।
-- ভ্যারিয়েন্ট রুল (গুরুত্বপূর্ণ): যদি উপলব্ধ বিকল্পসমূহ বা variants থাকে (Size, Color, Weight ইত্যাদি), তাহলে প্রোডাক্টের নাম, দাম এবং বিকল্পগুলো লিস্ট করে শুধু জিজ্ঞাসা করো — "আপনি কোনটি নিতে চান?"। "আমাদের কাছে available আছে" এরকম অতিরিক্ত কথা বলো না। কিন্তু যদি প্রোডাক্টের কোনো variant না থাকে (শুধু একটাই অপশন), তাহলে শুধু দাম বলো — variant সম্পর্কে কিছু জিজ্ঞাসা করো না।
-- একাধিক প্রোডাক্ট ম্যাচ হলে প্রতিটির নাম ও দাম সংক্ষেপে বলুন। প্রতিটি প্রোডাক্টের variant থাকলে সেগুলোও উল্লেখ করো।
+- ভ্যারিয়েন্ট রুল (গুরুত্বপূর্ণ): যদি উপলব্ধ বিকল্পসমূহ বা variants থাকে (Size, Color, Weight ইত্যাদি), তাহলে প্রোডাক্টের নাম, দাম এবং প্রতিটি variant-এর বিকল্পসহ দাম লিস্ট আকারে দেখাও — যেমন "Size: XL, Color: Blue — ৳356.00 (স্টক: ৫টি)"। শেষে শুধু জিজ্ঞাসা করো — "আপনি কোনটি নিতে চান?"। "আমাদের কাছে available আছে" এরকম অতিরিক্ত কথা বলো না। কিন্তু যদি প্রোডাক্টের কোনো variant না থাকে (শুধু একটাই অপশন), তাহলে শুধু দাম বলো — variant সম্পর্কে কিছু জিজ্ঞাসা করো না।
 - কাস্টমার আরো জানতে চাইলে (দাম, স্টক, ফিচার, ডেলিভারি ইত্যাদি) তাহলে বিস্তারিত জানাবে।
 - স্টক না থাকলে জানাবে এবং বিকল্প সুপারিশ করবে।
 - মূল্য নিশ্চিত না হলে বলুন অফিসিয়াল পেজে যোগাযোগ করুন।
@@ -1989,16 +2060,43 @@ class SendAiReplyJob implements ShouldQueue
         });
     }
 
-    private function sendFacebookMessage(string $text): ?string
+    private function sendFacebookMessage(string $text, ?string $imageUrl = null): ?string
     {
         // If connected via Zernio, use Zernio API
         if ($this->zernioAccountId && $this->zernioApiKey) {
-            $this->sendZernioMessage($text);
+            $this->sendZernioMessage($text, $imageUrl);
 
             return null;
         }
 
-        // Otherwise, use Facebook Graph API directly
+        // Otherwise, use Facebook Graph API directly. Send the image as its own
+        // bubble first, then the details text below it.
+        $lastMid = null;
+
+        if ($imageUrl) {
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json',
+            ])->post('https://graph.facebook.com/v21.0/me/messages', [
+                'access_token' => $this->pageAccessToken,
+                'recipient' => ['id' => $this->senderId],
+                'message' => [
+                    'attachment' => [
+                        'type' => 'image',
+                        'payload' => ['url' => $imageUrl],
+                    ],
+                ],
+            ]);
+
+            if ($response->successful()) {
+                $lastMid = $response->json('message_id');
+            } else {
+                Log::warning('Facebook: image send failed, sending text only', [
+                    'sender_id' => $this->senderId,
+                    'image_url' => substr($imageUrl, 0, 80),
+                ]);
+            }
+        }
+
         $response = Http::withHeaders([
             'Content-Type' => 'application/json',
         ])->post('https://graph.facebook.com/v21.0/me/messages', [
@@ -2011,13 +2109,13 @@ class SendAiReplyJob implements ShouldQueue
             throw new \Exception('Facebook send message failed: '.$response->body());
         }
 
-        return $response->json('message_id');
+        return $response->json('message_id') ?? $lastMid;
     }
 
     /**
      * Send message via Zernio API.
      */
-    private function sendZernioMessage(string $text): void
+    private function sendZernioMessage(string $text, ?string $imageUrl = null): void
     {
         $zernio = new ZernioService($this->zernioApiKey);
 
@@ -2025,6 +2123,25 @@ class SendAiReplyJob implements ShouldQueue
 
         if (! $conversationId) {
             throw new \Exception('Zernio: No conversation ID for sender '.$this->senderId);
+        }
+
+        // Send the image as its own bubble first, then the details text below it.
+        // Zernio delivers image + text as ONE platform message (text often dropped),
+        // so splitting into two messages gives the customer image-then-details.
+        if ($imageUrl) {
+            $imageResult = $zernio->sendInboxMessage(
+                $conversationId,
+                $this->zernioAccountId,
+                null,
+                $imageUrl
+            );
+
+            if (! $imageResult) {
+                Log::warning('Zernio: image send failed, sending text only', [
+                    'conversation_id' => $conversationId,
+                    'image_url' => substr($imageUrl, 0, 80),
+                ]);
+            }
         }
 
         $result = $zernio->sendInboxMessage(

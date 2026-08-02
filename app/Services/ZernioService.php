@@ -308,15 +308,25 @@ class ZernioService
     /**
      * Send a message in an inbox conversation (reply to customer).
      */
-    public function sendInboxMessage(string $conversationId, string $accountId, string $message): ?array
+    public function sendInboxMessage(string $conversationId, string $accountId, ?string $message = null, ?string $attachmentUrl = null, ?string $attachmentType = null): ?array
     {
         try {
+            $payload = [
+                'accountId' => $accountId,
+            ];
+
+            if ($message !== null) {
+                $payload['message'] = $message;
+            }
+
+            if ($attachmentUrl) {
+                $payload['attachmentUrl'] = $attachmentUrl;
+                $payload['attachmentType'] = $attachmentType ?? 'image';
+            }
+
             $response = Http::withHeaders($this->headers())
                 ->timeout(30)
-                ->post("{$this->baseUrl}/inbox/conversations/{$conversationId}/messages", [
-                    'accountId' => $accountId,
-                    'message' => $message,
-                ]);
+                ->post("{$this->baseUrl}/inbox/conversations/{$conversationId}/messages", $payload);
 
             if ($response->successful()) {
                 return $response->json();
