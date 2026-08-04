@@ -255,7 +255,8 @@ class ToolExecutor
             if ($variantId) {
                 $variant = ProductVariant::find($variantId);
                 if ($variant && $variant->image_path) {
-                    $image = asset('storage/'.$variant->image_path);
+                    $mediaUrl = config('services.media_url', config('app.url'));
+                    $image = $mediaUrl.'/storage/'.$variant->image_path;
                 }
             }
 
@@ -305,7 +306,8 @@ class ToolExecutor
             if ($variantId) {
                 $variant = ProductVariant::find($variantId);
                 if ($variant && $variant->image_path) {
-                    $image = asset('storage/'.$variant->image_path);
+                    $mediaUrl = config('services.media_url', config('app.url'));
+                    $image = $mediaUrl.'/storage/'.$variant->image_path;
                 }
             }
 

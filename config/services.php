@@ -28,4 +28,9 @@ return [
         'threshold' => env('CLIP_THRESHOLD', 0.8),
         'timeout' => env('CLIP_TIMEOUT', 30),
     ],
+
+    // Public URL for product images sent to Facebook/Zernio.
+    // Set to Ngrok tunnel or public domain for local dev (e.g. https://abc123.ngrok.io).
+    // Defaults to APP_URL which works in production with a real domain.
+    'media_url' => env('MEDIA_URL', config('app.url')),
 ];

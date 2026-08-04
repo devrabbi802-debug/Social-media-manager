@@ -685,7 +685,7 @@ class SendAiReplyJob implements ShouldQueue
                 // Use tool-calling for reply-to context as well
                 $result = $this->callAiWithTools($messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting);
 
-                return $result ? ['reply' => $result['reply'], 'text_product_matches' => $textProductMatches, 'tool_calls_used' => $result['tool_calls_used'] ?? []] : null;
+                return $result ? ['reply' => $result['reply'], 'text_product_matches' => $textProductMatches, 'tool_calls_used' => $result['tool_calls_used'] ?? [], 'pending_images' => $result['pending_images'] ?? []] : null;
             }
 
             Log::info('SendAiReplyJob: reply_to_mid found but no product context in original message', [
@@ -719,7 +719,15 @@ class SendAiReplyJob implements ShouldQueue
         // AI autonomously decides what to do: search products, get details, send images, etc.
         $result = $this->callAiWithTools($this->messageText, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting);
 
-        return $result ? ['reply' => $result['reply'], 'text_product_matches' => null, 'tool_calls_used' => $result['tool_calls_used'] ?? []] : null;
+        if (! $result) {
+            return null;
+        }
+
+        // Extract product matches from tool calls for conversation history context.
+        // This lets the AI know what products were discussed in previous turns.
+        $textProductMatches = $this->extractProductMatchesFromTools($result['tool_calls_used'] ?? []);
+
+        return ['reply' => $result['reply'], 'text_product_matches' => $textProductMatches, 'tool_calls_used' => $result['tool_calls_used'] ?? [], 'pending_images' => $result['pending_images'] ?? []];
     }
 
     /**
@@ -1153,6 +1161,48 @@ class SendAiReplyJob implements ShouldQueue
     }
 
     /**
+     * Extract product matches from tool_calls_used so they get stored in
+     * image_analysis of the outgoing message. This gives the AI context
+     * about what products were discussed in previous turns.
+     */
+    private function extractProductMatchesFromTools(array $toolCallsUsed): ?array
+    {
+        $matches = [];
+
+        foreach ($toolCallsUsed as $toolCall) {
+            $toolName = $toolCall['tool'] ?? '';
+            $result = $toolCall['result'] ?? [];
+
+            if ($toolName === 'search_products' && ! empty($result['products'])) {
+                foreach ($result['products'] as $product) {
+                    $matches[] = [
+                        'metadata' => [
+                            'product_name' => $product['name'] ?? 'Unknown',
+                            'product_price' => $product['price'] ?? 0,
+                            'stock_quantity' => $product['stock'] ?? null,
+                            'product_id' => $product['product_id'] ?? null,
+                            'variant_id' => $product['variant_id'] ?? null,
+                            'variant_attributes' => $product['variant_attributes'] ?? null,
+                        ],
+                    ];
+                }
+            } elseif ($toolName === 'get_product_details' && ! empty($result['product_id'])) {
+                $matches[] = [
+                    'metadata' => [
+                        'product_name' => $result['name'] ?? 'Unknown',
+                        'product_price' => $result['price'] ?? 0,
+                        'stock_quantity' => $result['stock'] ?? null,
+                        'product_id' => $result['product_id'] ?? null,
+                        'variant_id' => $result['variant_id'] ?? null,
+                    ],
+                ];
+            }
+        }
+
+        return ! empty($matches) ? $matches : null;
+    }
+
+    /**
      * Run the AI fallback chain: Groq → Cerebras → Gemini.
      */
     private function chatWithAiChain(string $systemPrompt, string $messageToSend, array $history, $groqKeys, $cerebrasKeys, $geminiKeys): ?string
@@ -1398,8 +1448,30 @@ class SendAiReplyJob implements ShouldQueue
             );
         }
 
-        // Step 2: Generate a SEPARATE reply per matched product, each with the
+        // Step 2: Deduplicate matched products by product_id — if the same product
+        // is matched from multiple images, only reply once (with the best match).
+        $seenProductIds = [];
+        $deduplicatedProducts = [];
+        foreach ($matchedProducts as $matched) {
+            $pid = $matched['product_id'];
+            if ($pid && isset($seenProductIds[$pid])) {
+                // Same product already added — keep the one with higher score
+                if ($matched['match_score'] > $deduplicatedProducts[$seenProductIds[$pid]]['match_score']) {
+                    $deduplicatedProducts[$seenProductIds[$pid]] = $matched;
+                }
+
+                continue;
+            }
+            $seenProductIds[$pid] = count($deduplicatedProducts);
+            $deduplicatedProducts[] = $matched;
+        }
+        $matchedProducts = $deduplicatedProducts;
+
+        // Generate a SEPARATE reply per matched product, each with the
         // customer's own matched image attached, so one image gets one clear answer.
+        // Cap at 3 to avoid flooding the customer with too many messages.
+        $matchedProducts = array_slice($matchedProducts, 0, 3);
+
         $imageCount = count($processedImages);
         $matchedCount = count($matchedProducts);
 

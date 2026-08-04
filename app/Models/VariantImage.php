@@ -28,24 +28,26 @@ class VariantImage extends Model
 
     public function getImageUrlAttribute(): string
     {
-        return asset('storage/' . $this->image_path);
+        $baseUrl = config('services.media_url', config('app.url'));
+
+        return $baseUrl.'/storage/'.$this->image_path;
     }
 
     public function hasAnalysis(): bool
     {
-        return !empty($this->image_analysis);
+        return ! empty($this->image_analysis);
     }
 
     public function getAnalysisSummaryAttribute(): ?string
     {
-        if (!$this->image_analysis) {
+        if (! $this->image_analysis) {
             return null;
         }
 
         $parts = [];
         foreach ($this->image_analysis as $key => $value) {
             if ($value && $key !== 'raw_analysis') {
-                $parts[] = ucfirst(str_replace('_', ' ', $key)) . ': ' . $value;
+                $parts[] = ucfirst(str_replace('_', ' ', $key)).': '.$value;
             }
         }
 

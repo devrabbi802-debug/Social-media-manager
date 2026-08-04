@@ -606,6 +606,40 @@ class AiChatService
                 }
             }
 
+            // If Cerebras returned text-only (no tool calls), try Gemini as fallback
+            // before accepting the text. Cerebras models often don't support tool
+            // calling and return plain text, so Gemini must get a chance.
+            if ($response !== null && empty($response['tool_calls']) && $fallbackProvider !== 'cerebras') {
+                Log::info('AiChatService: Cerebras returned no tool calls, trying Gemini fallback', [
+                    'iteration' => $iteration,
+                    'content_preview' => mb_substr($response['content'] ?? '', 0, 80),
+                ]);
+                $geminiResponse = null;
+                if ($fallbackKeys) {
+                    foreach ($fallbackKeys as $key) {
+                        try {
+                            $geminiResponse = $this->chatWithGeminiTools($allMessages, $key->api_key, $tools);
+                            if ($geminiResponse !== null) {
+                                break;
+                            }
+                        } catch (\Exception $e) {
+                            if (str_contains($e->getMessage(), '429')) {
+                                continue;
+                            }
+                            Log::warning('Gemini tool call failed (fallback)', ['error' => $e->getMessage()]);
+                        }
+                    }
+                }
+                // If Gemini returned tool calls, use Gemini's response instead
+                if ($geminiResponse !== null && ! empty($geminiResponse['tool_calls'])) {
+                    Log::info('AiChatService: Gemini fallback produced tool calls, using Gemini', [
+                        'iteration' => $iteration,
+                    ]);
+                    $response = $geminiResponse;
+                    $provider = 'gemini';
+                }
+            }
+
             if ($response === null && $fallbackProvider === 'gemini' && $fallbackKeys) {
                 foreach ($fallbackKeys as $key) {
                     try {
@@ -814,7 +848,7 @@ class AiChatService
                 // Extract tool name from tool_call_id (format: call_xxx)
                 $toolName = $msg['tool_call_id'] ?? 'unknown';
                 // Find the tool call in history to get the actual name
-                foreach ($allMessages as $prevMsg) {
+                foreach ($messages as $prevMsg) {
                     if ($prevMsg['role'] === 'assistant' && ! empty($prevMsg['tool_calls'])) {
                         foreach ($prevMsg['tool_calls'] as $tc) {
                             if ($tc['id'] === $msg['tool_call_id']) {
