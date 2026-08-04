@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -538,5 +539,370 @@ class AiChatService
         } catch (\Exception $e) {
             return ['success' => false, 'message' => 'Error: '.$e->getMessage()];
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // FUNCTION CALLING SUPPORT (Agentic Loop)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Run the agentic loop: call AI with tools, execute tool calls, repeat until
+     * the AI produces a final text reply or max iterations reached.
+     *
+     * @return array{reply: string, tool_calls_used: array}
+     */
+    public function chatWithToolsAndExecution(
+        string $message,
+        $keys,
+        array $history,
+        array $tools,
+        \Closure $toolExecutor,
+        ?string $fallbackProvider = null,
+        $fallbackKeys = null,
+        ?string $secondFallbackProvider = null,
+        $secondFallbackKeys = null,
+        int $maxIterations = 5,
+    ): array {
+        $keys = $keys instanceof Collection ? $keys->all() : (array) $keys;
+        $fallbackKeys = $fallbackKeys instanceof Collection ? $fallbackKeys->all() : (array) $fallbackKeys;
+        $secondFallbackKeys = $secondFallbackKeys instanceof Collection ? $secondFallbackKeys->all() : (array) $secondFallbackKeys;
+        $allMessages = [
+            ['role' => 'system', 'content' => $this->systemPrompt],
+        ];
+
+        foreach ($history as $msg) {
+            $allMessages[] = [
+                'role' => $msg['role'],
+                'content' => $msg['content'],
+            ];
+        }
+
+        $allMessages[] = ['role' => 'user', 'content' => $message];
+
+        $toolCallsUsed = [];
+        $iteration = 0;
+
+        while ($iteration < $maxIterations) {
+            $iteration++;
+
+            // Try Cerebras first (Groq llama-3.3 doesn't support OpenAI tool format), then Gemini
+            $response = null;
+            $provider = null;
+
+            if ($fallbackProvider === 'cerebras' && $fallbackKeys) {
+                foreach ($fallbackKeys as $key) {
+                    try {
+                        $response = $this->chatWithCerebrasTools($allMessages, $key->api_key, $tools);
+                        if ($response !== null) {
+                            $provider = 'cerebras';
+                            break;
+                        }
+                    } catch (\Exception $e) {
+                        if (str_contains($e->getMessage(), '429')) {
+                            continue;
+                        }
+                        Log::warning('Cerebras tool call failed', ['error' => $e->getMessage()]);
+                    }
+                }
+            }
+
+            if ($response === null && $fallbackProvider === 'gemini' && $fallbackKeys) {
+                foreach ($fallbackKeys as $key) {
+                    try {
+                        $response = $this->chatWithGeminiTools($allMessages, $key->api_key, $tools);
+                        if ($response !== null) {
+                            $provider = 'gemini';
+                            break;
+                        }
+                    } catch (\Exception $e) {
+                        if (str_contains($e->getMessage(), '429')) {
+                            continue;
+                        }
+                        Log::warning('Gemini tool call failed', ['error' => $e->getMessage()]);
+                    }
+                }
+            }
+
+            if ($response === null) {
+                Log::error('All providers failed for tool call', ['iteration' => $iteration]);
+                break;
+            }
+
+            // Check if response has tool calls
+            if (! empty($response['tool_calls'])) {
+                // Add assistant message with tool calls to history
+                $assistantMsg = ['role' => 'assistant', 'content' => $response['content'] ?? ''];
+                if (! empty($response['tool_calls'])) {
+                    $assistantMsg['tool_calls'] = $response['tool_calls'];
+                }
+                $allMessages[] = $assistantMsg;
+
+                // Execute each tool call
+                foreach ($response['tool_calls'] as $toolCall) {
+                    $toolName = $toolCall['function']['name'] ?? '';
+                    $toolArgs = json_decode($toolCall['function']['arguments'] ?? '{}', true) ?? [];
+
+                    Log::info('AiChatService: executing tool call', [
+                        'tool' => $toolName,
+                        'args' => $toolArgs,
+                        'provider' => $provider,
+                        'iteration' => $iteration,
+                    ]);
+
+                    $toolResult = $toolExecutor($toolName, $toolArgs);
+                    $toolCallsUsed[] = ['tool' => $toolName, 'args' => $toolArgs, 'result' => $toolResult];
+
+                    // Add tool result to messages
+                    $allMessages[] = [
+                        'role' => 'tool',
+                        'tool_call_id' => $toolCall['id'] ?? 'call_'.uniqid(),
+                        'content' => json_encode($toolResult, JSON_UNESCAPED_UNICODE),
+                    ];
+                }
+
+                // Continue loop — AI will process tool results
+                continue;
+            }
+
+            // No tool calls — this is the final text reply
+            return [
+                'reply' => $response['content'] ?? '',
+                'tool_calls_used' => $toolCallsUsed,
+            ];
+        }
+
+        // Max iterations reached or all providers failed
+        return [
+            'reply' => 'দুঃখিত, এই মুহূর্তে আমি সঠিকভাবে উত্তর দিতে পারছি না। আবার চেষ্টা করুন।',
+            'tool_calls_used' => $toolCallsUsed,
+        ];
+    }
+
+    /**
+     * Call Groq API with tools (OpenAI-compatible format).
+     */
+    private function chatWithGroqTools(array $messages, string $apiKey, array $tools): ?array
+    {
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer '.$apiKey,
+            'Content-Type' => 'application/json',
+        ])->timeout(30)->post('https://api.groq.com/openai/v1/chat/completions', [
+            'model' => config('services.groq.model', 'llama-3.3-70b-versatile'),
+            'messages' => $messages,
+            'tools' => $tools,
+            'tool_choice' => 'auto',
+            'temperature' => 0.7,
+            'max_tokens' => 1024,
+            'top_p' => 0.9,
+        ]);
+
+        if ($response->status() === 429) {
+            throw new \Exception('Groq API rate limited (429)');
+        }
+
+        if ($response->failed()) {
+            Log::error('Groq tools API error', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            return null;
+        }
+
+        $body = $response->json();
+        $message = $body['choices'][0]['message'] ?? [];
+
+        // Check for tool calls
+        if (! empty($message['tool_calls'])) {
+            return [
+                'content' => $message['content'] ?? null,
+                'tool_calls' => $message['tool_calls'],
+            ];
+        }
+
+        return [
+            'content' => $message['content'] ?? null,
+            'tool_calls' => [],
+        ];
+    }
+
+    /**
+     * Call Cerebras API with tools (OpenAI-compatible format).
+     */
+    private function chatWithCerebrasTools(array $messages, string $apiKey, array $tools): ?array
+    {
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer '.$apiKey,
+            'Content-Type' => 'application/json',
+        ])->timeout(30)->post('https://api.cerebras.ai/v1/chat/completions', [
+            'model' => config('services.cerebras.model', 'gpt-oss-120b'),
+            'messages' => $messages,
+            'tools' => $tools,
+            'tool_choice' => 'auto',
+            'temperature' => 0.7,
+            'max_tokens' => 1024,
+            'top_p' => 0.9,
+        ]);
+
+        if ($response->status() === 429) {
+            throw new \Exception('Cerebras API rate limited (429)');
+        }
+
+        if ($response->failed()) {
+            Log::error('Cerebras tools API error', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            return null;
+        }
+
+        $body = $response->json();
+        $message = $body['choices'][0]['message'] ?? [];
+
+        if (! empty($message['tool_calls'])) {
+            return [
+                'content' => $message['content'] ?? null,
+                'tool_calls' => $message['tool_calls'],
+            ];
+        }
+
+        return [
+            'content' => $message['content'] ?? null,
+            'tool_calls' => [],
+        ];
+    }
+
+    /**
+     * Call Gemini API with tools (Google-native format).
+     */
+    private function chatWithGeminiTools(array $messages, string $apiKey, array $tools): ?array
+    {
+        $contents = [];
+        $systemParts = [];
+
+        foreach ($messages as $msg) {
+            if ($msg['role'] === 'system') {
+                $systemParts[] = ['text' => $msg['content']];
+            } elseif ($msg['role'] === 'user') {
+                $contents[] = [
+                    'role' => 'user',
+                    'parts' => [['text' => $msg['content']]],
+                ];
+            } elseif ($msg['role'] === 'assistant') {
+                $parts = [];
+                if (! empty($msg['content'])) {
+                    $parts[] = ['text' => $msg['content']];
+                }
+                // Add function calls if present
+                if (! empty($msg['tool_calls'])) {
+                    foreach ($msg['tool_calls'] as $tc) {
+                        $parts[] = [
+                            'functionCall' => [
+                                'name' => $tc['function']['name'],
+                                'args' => json_decode($tc['function']['arguments'] ?? '{}', true),
+                            ],
+                        ];
+                    }
+                }
+                if (! empty($parts)) {
+                    $contents[] = ['role' => 'model', 'parts' => $parts];
+                }
+            } elseif ($msg['role'] === 'tool') {
+                $result = json_decode($msg['content'], true) ?? ['error' => 'Invalid tool result'];
+                // For Gemini, we need the tool name, not the tool_call_id
+                // Extract tool name from tool_call_id (format: call_xxx)
+                $toolName = $msg['tool_call_id'] ?? 'unknown';
+                // Find the tool call in history to get the actual name
+                foreach ($allMessages as $prevMsg) {
+                    if ($prevMsg['role'] === 'assistant' && ! empty($prevMsg['tool_calls'])) {
+                        foreach ($prevMsg['tool_calls'] as $tc) {
+                            if ($tc['id'] === $msg['tool_call_id']) {
+                                $toolName = $tc['function']['name'];
+                                break 2;
+                            }
+                        }
+                    }
+                }
+                $contents[] = [
+                    'role' => 'user',
+                    'parts' => [
+                        [
+                            'functionResponse' => [
+                                'name' => $toolName,
+                                'response' => $result,
+                            ],
+                        ],
+                    ],
+                ];
+            }
+        }
+
+        $model = config('services.gemini.model', 'gemini-3.1-flash-lite');
+
+        $payload = [
+            'contents' => $contents,
+            'tools' => $tools,
+            'generationConfig' => [
+                'temperature' => 0.7,
+                'maxOutputTokens' => 1024,
+                'topP' => 0.9,
+            ],
+        ];
+
+        if (! empty($systemParts)) {
+            $payload['systemInstruction'] = ['parts' => $systemParts];
+        }
+
+        $response = Http::withHeaders([
+            'Content-Type' => 'application/json',
+        ])->timeout(30)->post(
+            "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}",
+            $payload
+        );
+
+        if ($response->status() === 429) {
+            throw new \Exception('Gemini API rate limited (429)');
+        }
+
+        if ($response->failed()) {
+            Log::error('Gemini tools API error', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            return null;
+        }
+
+        $body = $response->json();
+        $candidates = $body['candidates'] ?? [];
+
+        if (empty($candidates)) {
+            return null;
+        }
+
+        $parts = $candidates[0]['content']['parts'] ?? [];
+        $content = null;
+        $toolCalls = [];
+
+        foreach ($parts as $part) {
+            if (isset($part['text'])) {
+                $content = $part['text'];
+            } elseif (isset($part['functionCall'])) {
+                $toolCalls[] = [
+                    'id' => 'call_'.uniqid(),
+                    'type' => 'function',
+                    'function' => [
+                        'name' => $part['functionCall']['name'],
+                        'arguments' => json_encode($part['functionCall']['args'] ?? []),
+                    ],
+                ];
+            }
+        }
+
+        return [
+            'content' => $content,
+            'tool_calls' => $toolCalls,
+        ];
     }
 }

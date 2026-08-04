@@ -300,7 +300,9 @@ class FacebookWebhookController extends Controller
             }
 
             // Debounce: skip if already dispatched recently
-            $dispatchKey = "zernio_job_dispatched:{$senderId}";
+            // Uses shared key with Facebook webhook path to prevent both paths
+            // from dispatching jobs for the same sender's message
+            $dispatchKey = "ai_reply_dispatched:{$senderId}";
             if (Cache::get($dispatchKey)) {
                 Log::info('Zernio webhook debounce: skipping duplicate dispatch', ['sender_id' => $senderId]);
                 $this->queueDebouncedMessage($senderId, $imageUrls, $messageText);
@@ -680,7 +682,7 @@ class FacebookWebhookController extends Controller
             $finalText = $text;
             $delay = 0;
 
-            $dispatchKey = "job_dispatched:{$senderId}";
+            $dispatchKey = "ai_reply_dispatched:{$senderId}";
             $alreadyDispatched = Cache::get($dispatchKey);
 
             if ($alreadyDispatched) {

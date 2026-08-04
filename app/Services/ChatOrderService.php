@@ -82,6 +82,14 @@ class ChatOrderService
     }
 
     /**
+     * Check if reply contains ORDER_DATA block markers.
+     */
+    public function containsOrderDataBlock(string $reply): bool
+    {
+        return str_contains($reply, self::ORDER_DATA_START) && str_contains($reply, self::ORDER_DATA_END);
+    }
+
+    /**
      * Chat order create koro — Customer + Address + Order + OrderItems.
      */
     public function createChatOrder(array $data, int $userId): ?Order

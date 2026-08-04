@@ -12,8 +12,11 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Tenant;
 use App\Services\AiChatService;
+use App\Services\AiTools\ToolExecutor;
+use App\Services\AiTools\ToolRegistry;
 use App\Services\AudioTranscriptionService;
 use App\Services\ChatOrderService;
+use App\Services\ChatSelectionService;
 use App\Services\ClipService;
 use App\Services\ProductContextService;
 use App\Services\TextSearchService;
@@ -138,6 +141,30 @@ class SendAiReplyJob implements ShouldQueue
             return;
         }
 
+        // Acquire an atomic lock for this sender to prevent concurrent jobs from
+        // processing the same message simultaneously (race condition between
+        // Facebook and Zernio webhooks, or job retries).
+        // Lock expires in 120 seconds — long enough for one AI reply cycle.
+        $lockKey = "ai_reply_lock:{$this->senderId}";
+        $lock = Cache::lock($lockKey, 120);
+
+        if (! $lock->get()) {
+            Log::info('SendAiReplyJob: SKIPPED - lock held by another job for this sender', [
+                'sender_id' => $this->senderId,
+            ]);
+
+            return;
+        }
+
+        try {
+            $this->processReplyLocked($tenant);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function processReplyLocked(Tenant $tenant): void
+    {
         $tenant->run(function () use ($tenant) {
             $conversation = Conversation::where('sender_id', $this->senderId)->first();
 
@@ -163,8 +190,8 @@ class SendAiReplyJob implements ShouldQueue
                 if ($alreadyAnswered && ! $this->isDrainImageJob()) {
                     Log::info('SendAiReplyJob: SKIPPED - latest incoming message already answered', [
                         'sender_id' => $this->senderId,
-                        'last_incoming_at' => $lastIncomingAt?->toDateTimeString(),
-                        'last_outgoing_at' => $lastOutgoingAt?->toDateTimeString(),
+                        'last_incoming_at' => $lastIncomingAt ? Carbon::parse($lastIncomingAt)->toDateTimeString() : null,
+                        'last_outgoing_at' => $lastOutgoingAt ? Carbon::parse($lastOutgoingAt)->toDateTimeString() : null,
                     ]);
 
                     return;
@@ -268,6 +295,19 @@ class SendAiReplyJob implements ShouldQueue
                     $conversation,
                     $facebookSetting
                 );
+
+                // Send any images the AI requested via send_product_image tool
+                $pendingImages = $result['pending_images'] ?? [];
+                foreach ($pendingImages as $pendingImage) {
+                    $this->sendFacebookMessage(
+                        "📸 {$pendingImage['product_name']}",
+                        $pendingImage['image_url']
+                    );
+                    Log::info('SendAiReplyJob: sent pending image from tool call', [
+                        'product' => $pendingImage['product_name'],
+                        'image_url' => substr($pendingImage['image_url'], 0, 80),
+                    ]);
+                }
             } else {
                 // One separate reply per matched product, each with its image attached
                 foreach ($replies as $item) {
@@ -331,6 +371,56 @@ class SendAiReplyJob implements ShouldQueue
                     'sender_id' => $this->senderId,
                 ]);
             }
+        } elseif ($chatOrderService->containsOrderDataBlock($replyText)) {
+            // Markers present but JSON invalid/incomplete (AI output truncated) —
+            // raw markers customer ke dekhabe na. Strip kore di, order create hoy na.
+            $replyText = $chatOrderService->removeOrderDataBlock($replyText);
+
+            if (trim($replyText) === '') {
+                $replyText = 'দুঃখিত, অর্ডারের তথ্যটি সম্পূর্ণ হয়নি। আপনি কি আবার আপনার অর্ডারের বিবরণ পাঠাবেন?';
+            }
+
+            Log::warning('SendAiReplyJob: order markers present but JSON invalid, stripped', [
+                'sender_id' => $this->senderId,
+            ]);
+        }
+
+        // ─── Chat Selection (multi-product cart) ────────────
+        $selectionService = new ChatSelectionService;
+        $selectionData = $selectionService->extractSelectionData($replyText);
+
+        if ($selectionData) {
+            $replyText = $selectionService->removeSelectionDataBlock($replyText);
+
+            // AI shudhu JSON block diyeche — customer er jonno fallback text di, noile
+            // empty message send fail kore job retry hoye selection double save hobe.
+            if (trim($replyText) === '') {
+                $replyText = 'ঠিক আছে, আপনার পছন্দের প্রোডাক্টটি নোট করলাম। আর কী কী নিতে চান বলুন।';
+            }
+
+            if (! $conversation) {
+                $conversation = Conversation::where('sender_id', $this->senderId)->first();
+            }
+
+            if ($conversation) {
+                $selectionService->applySelection($conversation, $selectionData);
+                Log::info('SendAiReplyJob: chat selection saved', [
+                    'sender_id' => $this->senderId,
+                    'item_count' => count($selectionData['items'] ?? []),
+                ]);
+            }
+        } elseif ($selectionService->containsSelectionDataBlock($replyText)) {
+            // Markers present but JSON invalid/incomplete — raw markers customer ke
+            // dekhabe na, selection save-o hobe na.
+            $replyText = $selectionService->removeSelectionDataBlock($replyText);
+
+            if (trim($replyText) === '') {
+                $replyText = 'দুঃখিত, আপনার পছন্দের তথ্যটি সম্পূর্ণ হয়নি। আবার বলুন কী নিতে চান।';
+            }
+
+            Log::warning('SendAiReplyJob: selection markers present but JSON invalid, stripped', [
+                'sender_id' => $this->senderId,
+            ]);
         }
 
         $sentMids = $this->sendFacebookMessage($replyText, $imageUrl);
@@ -592,7 +682,10 @@ class SendAiReplyJob implements ShouldQueue
                     $productContextService->saveCurrentProduct($conversation, $replyContext['product_id'], $replyContext['variant_id']);
                 }
 
-                return $this->callAi($messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting, $textProductMatches);
+                // Use tool-calling for reply-to context as well
+                $result = $this->callAiWithTools($messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting);
+
+                return $result ? ['reply' => $result['reply'], 'text_product_matches' => $textProductMatches, 'tool_calls_used' => $result['tool_calls_used'] ?? []] : null;
             }
 
             Log::info('SendAiReplyJob: reply_to_mid found but no product context in original message', [
@@ -621,143 +714,12 @@ class SendAiReplyJob implements ShouldQueue
         }
 
         $history = $this->getConversationHistory();
-        $textProductMatches = null;
-        $messageToSend = $this->messageText;
 
-        // FAST PATH: Greeting detection — skip all product searches, call AI directly
-        $greetingPatterns = '/^\s*(hello|hi|hey|assalamu[\s-]*alaikum|আসসালামু[\s-]*আলাইকুম|হ্যালো|নমস্কার|শুভ\s*(সকাল|সন্ধ্যা|রাত্রি)|good\s*(morning|evening|night)|sup|yo|kemon\s*aso|kemon\s*achen|কেমন\s*আছ[েন]*)\s*[!?.]*$/iu';
-        if (preg_match($greetingPatterns, $this->messageText)) {
-            Log::info('SendAiReplyJob: greeting detected, skipping product search', [
-                'message' => mb_substr($this->messageText, 0, 30),
-            ]);
+        // ─── FUNCTION CALLING PATH ────────────────────────────
+        // AI autonomously decides what to do: search products, get details, send images, etc.
+        $result = $this->callAiWithTools($this->messageText, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting);
 
-            return $this->callAi($messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting, null);
-        }
-
-        // PRIORITY 2: Follow-up question about current product context
-        if ($conversation) {
-            $followUpContext = $this->resolveFollowUpContext($conversation);
-            if ($followUpContext) {
-                $messageToSend = "{$this->messageText}\n\n{$followUpContext}";
-
-                return $this->callAi($messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting, $textProductMatches);
-            }
-        }
-
-        // PRIORITY 3: Text product search
-        $searchResult = $this->searchProductsByText($this->messageText);
-
-        if ($searchResult) {
-            $textProductMatches = $searchResult['matches'];
-            $bestScore = $textProductMatches[0]['score'] ?? 0;
-
-            if ($bestScore >= 0.50) {
-                $messageToSend = "{$this->messageText}\n\nকাস্টমারের প্রশ্নের সাথে সম্পর্কিত প্রোডাক্ট:\n{$searchResult['context']}";
-                Log::info('SendAiReplyJob: text product search found good results', [
-                    'query' => mb_substr($this->messageText, 0, 50),
-                    'best_score' => round($bestScore * 100).'%',
-                ]);
-
-                // Save first matched product to conversation context
-                if ($conversation && ! empty($textProductMatches[0])) {
-                    $topMatch = $textProductMatches[0];
-                    $metadata = $topMatch['metadata'] ?? [];
-                    $pid = $metadata['product_id'] ?? $topMatch['product_id'] ?? null;
-                    if ($pid) {
-                        $productContextService = new ProductContextService;
-                        $productContextService->saveCurrentProduct($conversation, $pid);
-                    }
-                }
-
-                return $this->callAi($messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting, $textProductMatches);
-            }
-
-            Log::info('SendAiReplyJob: text search score too low, trying history', [
-                'query' => mb_substr($this->messageText, 0, 50),
-                'best_score' => round($bestScore * 100).'%',
-            ]);
-            $textProductMatches = null;
-        }
-
-        // PRIORITY 4: Direct DB keyword search
-        $dbProduct = $this->searchProductByKeyword($this->messageText);
-
-        if ($dbProduct) {
-            $context = "কাস্টমারের প্রশ্ন: {$this->messageText}\n\nসম্পর্কিত প্রোডাক্ট:\n";
-            $context .= "- {$dbProduct['name']}";
-            if ($dbProduct['price']) {
-                $context .= ' — দাম: ৳'.number_format($dbProduct['price'], 2);
-            }
-            if ($dbProduct['stock'] !== null) {
-                $context .= ", স্টক: {$dbProduct['stock']}টি";
-            }
-            if ($dbProduct['description']) {
-                $context .= ", বিবরণ: {$dbProduct['description']}";
-            }
-            if (! empty($dbProduct['all_variants'])) {
-                $context .= "\n\nউপলব্ধ বিকল্পসমূহ:\n";
-                foreach ($dbProduct['all_variants'] as $v) {
-                    $vAttrs = collect($v['attributes'] ?? [])->map(fn ($val, $k) => "{$k}: {$val}")->implode(', ');
-                    $vStock = ($v['stock'] ?? 0) > 0 ? "{$v['stock']}টি স্টকে" : 'স্টক শেষ';
-                    $context .= "• {$vAttrs} — ৳".number_format($v['price'] ?? 0, 2)." [{$vStock}]\n";
-                }
-            }
-            $context .= "\n\nউপরের প্রোডাক্টটি নিয়ে কাস্টমার জিজ্ঞাসা করছে। এই তথ্য ব্যবহার করে উত্তর দিন।";
-
-            $messageToSend = $context;
-            Log::info('SendAiReplyJob: found product via DB keyword search', [
-                'product' => $dbProduct['name'],
-            ]);
-
-            if ($conversation && ! empty($dbProduct['product_id'])) {
-                $productContextService = new ProductContextService;
-                $productContextService->saveCurrentProduct($conversation, $dbProduct['product_id']);
-            }
-
-            return $this->callAi($messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting, $textProductMatches);
-        }
-
-        // PRIORITY 5: Last discussed product from history
-        $lastProduct = $this->getLastDiscussedProduct();
-
-        if ($lastProduct && $lastProduct['name']) {
-            $context = "কাস্টমারের প্রশ্ন: {$this->messageText}\n\nগত কথোপকথনে আলোচিত প্রোডাক্ট:\n";
-            $context .= "- {$lastProduct['name']}";
-            if ($lastProduct['price']) {
-                $context .= ' — দাম: ৳'.number_format($lastProduct['price'], 2);
-            }
-            if ($lastProduct['stock'] !== null) {
-                $context .= ", স্টক: {$lastProduct['stock']}টি";
-            }
-            if ($lastProduct['description']) {
-                $context .= ", বিবরণ: {$lastProduct['description']}";
-            }
-            if (! empty($lastProduct['variant_attributes'])) {
-                $attrs = collect($lastProduct['variant_attributes'])->map(fn ($v, $k) => "{$k}: {$v}")->implode(', ');
-                $context .= ", বৈশিষ্ট্য: {$attrs}";
-            }
-            if (! empty($lastProduct['all_variants'])) {
-                $context .= "\n\nউপলব্ধ বিকল্পসমূহ:\n";
-                foreach ($lastProduct['all_variants'] as $v) {
-                    $vAttrs = collect($v['attributes'] ?? [])->map(fn ($val, $k) => "{$k}: {$val}")->implode(', ');
-                    $vStock = ($v['stock'] ?? 0) > 0 ? "{$v['stock']}টি স্টকে" : 'স্টক শেষ';
-                    $context .= "• {$vAttrs} — ৳".number_format($v['price'] ?? 0, 2)." [{$vStock}]\n";
-                }
-            }
-            $context .= "\n\nউপরের প্রোডাক্টটি নিয়ে কাস্টমার জিজ্ঞাসা করছে বলে মনে হচ্ছে। এই তথ্য ব্যবহার করে উত্তর দিন।";
-
-            $messageToSend = $context;
-            Log::info('SendAiReplyJob: using last discussed product from history', [
-                'product' => $lastProduct['name'],
-            ]);
-
-            if ($conversation && ! empty($lastProduct['product_id'])) {
-                $productContextService = new ProductContextService;
-                $productContextService->saveCurrentProduct($conversation, $lastProduct['product_id']);
-            }
-        }
-
-        return $this->callAi($messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting, $textProductMatches);
+        return $result ? ['reply' => $result['reply'], 'text_product_matches' => null, 'tool_calls_used' => $result['tool_calls_used'] ?? []] : null;
     }
 
     /**
@@ -1003,7 +965,26 @@ class SendAiReplyJob implements ShouldQueue
             }
         }
 
-        // 2. Follow-up question patterns (short, no new product keyword)
+        // 2. Customer pointing back to the current product ("aitar", "eta", "ওইটা" etc.)
+        //    — treat as follow-up about the current product, NOT a new inquiry.
+        //    Without this, "aitar red color..." runs a fresh search that can match a
+        //    DIFFERENT product and silently override the current context.
+        if (! $isFollowUp) {
+            $referencePatterns = [
+                '/\b(aitar|eitar|aita|eita|eta|etar|oita|oitake|oitar|ota|otake|otar)\b/i',
+                '/(এটার|এইটার|ওইটার|ওইটা|সেইটা|এইটা|এটা|ওটা|ওটার|এগুল|ওগুলো|সেইগুলো)/iu',
+                '/\b(this one|that one|the same)\b/i',
+            ];
+
+            foreach ($referencePatterns as $pattern) {
+                if (preg_match($pattern, $msgLower)) {
+                    $isFollowUp = true;
+                    break;
+                }
+            }
+        }
+
+        // 3. Follow-up question patterns (short, no new product keyword)
         if (! $isFollowUp) {
             $followUpPatterns = [
                 '/\b(price|dam|dama|daam|taka|kit|koto)\b/i',
@@ -1026,7 +1007,7 @@ class SendAiReplyJob implements ShouldQueue
             }
         }
 
-        // 3. If message asks about a DIFFERENT product → NOT follow-up
+        // 4. If message asks about a DIFFERENT product → NOT follow-up
         if ($isFollowUp && mb_strlen($this->messageText) > 5) {
             $productWords = ['pant', 'shirt', 't-shirt', 'tshirt', 'shoe', 'bag', 'watch',
                 'hat', 'cap', 'jacket', 'coat', 'dress', 'skirt', 'shorts', 'hoodie',
@@ -1078,9 +1059,97 @@ class SendAiReplyJob implements ShouldQueue
         FacebookSetting $facebookSetting,
         ?array $textProductMatches = null
     ): ?array {
+        $messageToSend = $this->appendSelectionContext($messageToSend);
+
         $reply = $this->chatWithAiChain($systemPrompt, $messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys);
 
         return $reply ? ['reply' => $reply, 'text_product_matches' => $textProductMatches] : null;
+    }
+
+    /**
+     * Call AI with function calling (agentic loop).
+     * AI autonomously decides which tools to call based on customer message.
+     */
+    private function callAiWithTools(
+        string $messageToSend,
+        array $history,
+        $aiKeys,
+        $cerebrasKeys,
+        $geminiKeys,
+        string $systemPrompt,
+        FacebookSetting $facebookSetting,
+    ): ?array {
+        $messageToSend = $this->appendSelectionContext($messageToSend);
+
+        $tools = ToolRegistry::getOpenAiTools();
+
+        $conversation = Conversation::where('sender_id', $this->senderId)->first();
+        $toolExecutor = new ToolExecutor(
+            $this->senderId,
+            $conversation,
+            $conversation->sender_name ?? null,
+            $this->pageAccessToken,
+        );
+
+        $aiService = new AiChatService($systemPrompt);
+
+        $result = $aiService->chatWithToolsAndExecution(
+            message: $messageToSend,
+            keys: $aiKeys,
+            history: $history,
+            tools: $tools,
+            toolExecutor: fn (string $toolName, array $args) => $toolExecutor->execute($toolName, $args),
+            fallbackProvider: $cerebrasKeys->isNotEmpty() ? 'cerebras' : ($geminiKeys->isNotEmpty() ? 'gemini' : null),
+            fallbackKeys: $cerebrasKeys->isNotEmpty() ? $cerebrasKeys : $geminiKeys,
+        );
+
+        if (! $result || empty($result['reply'])) {
+            return null;
+        }
+
+        // Extract pending images from tool executor
+        $pendingImages = $toolExecutor->getPendingImages();
+
+        Log::info('SendAiReplyJob: callAiWithTools completed', [
+            'sender_id' => $this->senderId,
+            'tools_used' => count($result['tool_calls_used']),
+            'tool_names' => array_column($result['tool_calls_used'], 'tool'),
+            'pending_images' => count($pendingImages),
+        ]);
+
+        return [
+            'reply' => $result['reply'],
+            'tool_calls_used' => $result['tool_calls_used'],
+            'pending_images' => $pendingImages,
+        ];
+    }
+
+    /**
+     * Customer er current selection (multi-product cart) er context AI er message e
+     * append koro — jate AI jane kon kon product/variant kon quantity te bachai hoyeche.
+     */
+    private function appendSelectionContext(string $messageToSend): string
+    {
+        try {
+            $conversation = Conversation::where('sender_id', $this->senderId)->first();
+
+            if (! $conversation) {
+                return $messageToSend;
+            }
+
+            $selectionContext = (new ChatSelectionService)->buildContextString($conversation);
+
+            if ($selectionContext) {
+                $messageToSend .= "\n\n{$selectionContext}";
+            }
+        } catch (\Throwable $e) {
+            Log::warning('SendAiReplyJob: failed to append selection context', [
+                'sender_id' => $this->senderId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $messageToSend;
     }
 
     /**
@@ -1701,6 +1770,28 @@ class SendAiReplyJob implements ShouldQueue
                     'content' => $msg->content,
                 ];
             }
+        }
+
+        // Total size cap — boro conversation e history (sob variant list soho) request er
+        // limit chole gele AI API 413 (request too large) dey. Agey (purano) message gulo
+        // drop koro, sobcheye recent kichu rakho.
+        $historyBudget = 50000;
+        $totalLength = 0;
+        $cappedHistory = [];
+
+        foreach (array_reverse($history) as $entry) {
+            $entryLength = mb_strlen($entry['content']);
+
+            if ($totalLength + $entryLength > $historyBudget && $totalLength > 0) {
+                break;
+            }
+
+            $totalLength += $entryLength;
+            $cappedHistory[] = $entry;
+        }
+
+        if (! empty($cappedHistory)) {
+            $history = array_reverse($cappedHistory);
         }
 
         return $history;
