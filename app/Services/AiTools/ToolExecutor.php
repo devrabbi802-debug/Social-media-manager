@@ -40,7 +40,25 @@ class ToolExecutor
      */
     public function getPendingImages(): array
     {
-        return $this->pendingImages;
+        // Deduplicate by product_id — prevents same image being sent twice
+        // when search_products auto-queues AND send_product_image is also called.
+        $seen = [];
+        $deduplicated = [];
+
+        foreach ($this->pendingImages as $image) {
+            $pid = $image['product_id'] ?? null;
+            if ($pid && isset($seen[$pid])) {
+                continue;
+            }
+
+            if ($pid) {
+                $seen[$pid] = true;
+            }
+
+            $deduplicated[] = $image;
+        }
+
+        return $deduplicated;
     }
 
     /**
