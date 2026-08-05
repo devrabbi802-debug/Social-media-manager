@@ -20,6 +20,7 @@ class Product extends Model
         'description',
         'base_price',
         'discount_price',
+        'cost_price',
         'stock_quantity',
         'unit',
         'weight_kg',
@@ -35,6 +36,7 @@ class Product extends Model
     protected $casts = [
         'base_price' => 'decimal:2',
         'discount_price' => 'decimal:2',
+        'cost_price' => 'decimal:2',
         'weight_kg' => 'decimal:2',
         'stock_quantity' => 'integer',
         'is_featured' => 'boolean',

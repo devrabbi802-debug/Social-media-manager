@@ -13,6 +13,7 @@ class ProductVariant extends Model
         'sku',
         'name',
         'price',
+        'cost_price',
         'stock_quantity',
         'attributes',
         'barcode',
@@ -23,6 +24,7 @@ class ProductVariant extends Model
     protected $casts = [
         'attributes' => 'array',
         'price' => 'decimal:2',
+        'cost_price' => 'decimal:2',
         'stock_quantity' => 'integer',
         'is_active' => 'boolean',
         'text_embedding' => 'array',

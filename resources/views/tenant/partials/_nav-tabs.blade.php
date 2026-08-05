@@ -19,6 +19,9 @@
         <a href="{{ route('inventory.index') }}" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition {{ $activePage === 'inventory' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
             @lang('nav.inventory')
         </a>
+        <a href="{{ route('pos.index') }}" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition {{ $activePage === 'pos' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
+            POS
+        </a>
         <a href="{{ route('orders.index') }}" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition {{ $activePage === 'orders' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
             @lang('nav.orders')
         </a>

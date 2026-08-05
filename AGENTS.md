@@ -113,6 +113,15 @@ docker exec laravel-app php artisan <command>
 | `ProductContextService` | Manages product context during conversations |
 | `AiTools/` | AI tool registry + executor (searched by `ToolRegistry`/`ToolExecutor`) |
 
+## POS System (`app/Http/Controllers/Dashboard/Pos*Controller`, `resources/views/tenant/pos/`)
+
+Separate `pos_*` tables (NOT the e-commerce `orders` table). Tenant-scoped under the admin prefix at `/pos/*`. Scope: terminal (`pos.index`, Alpine.js cart + product grid from `GET /pos/products` JSON), register sessions (`pos.sessions.*`, cash in/out + X-report on close), sales (`pos.sales.*`, receipt print + partial/full refund with stock restore), reports (`pos.reports`, cost-based profit), settings (`pos.settings`).
+
+- **Stock deducted** on checkout via `StockMovement` (type `out`, requires `warehouse_id` — POS falls back to `pos_settings.default_warehouse_id` then first active warehouse). Refunds restore stock (`type` `in`).
+- Checkout/hold post `items_json`/`payments_json` JSON strings (not array inputs). Split payments → `pos_payments` rows; underpaid → `payment_status=partial` (credit sale).
+- Register session optional: checkout works without one but terminal shows an "open register" banner.
+- `cost_price` added to `products` + `product_variants` (nullable) for profit reporting.
+
 ## Inventory (`app/Http/Controllers/Dashboard/`)
 
 Products, variants, categories, brands, attribute templates, warehouses, stock movements, transfers. **No FormRequest classes** — validation inline in controllers.

@@ -257,6 +257,38 @@ Route::middleware([
                 Route::post('/upload-favicon', [StorefrontSettingsController::class, 'uploadFavicon'])->name('upload-favicon');
             });
 
+            // POS System
+            Route::prefix('pos')->name('pos.')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Dashboard\PosController::class, 'index'])->name('index');
+                Route::get('/products', [\App\Http\Controllers\Dashboard\PosController::class, 'products'])->name('products');
+                Route::post('/checkout', [\App\Http\Controllers\Dashboard\PosController::class, 'checkout'])->name('checkout');
+                Route::post('/hold', [\App\Http\Controllers\Dashboard\PosController::class, 'hold'])->name('hold');
+                Route::get('/resume/{order}', [\App\Http\Controllers\Dashboard\PosController::class, 'resume'])->name('resume');
+                Route::delete('/hold/{order}', [\App\Http\Controllers\Dashboard\PosController::class, 'cancelHold'])->name('hold.cancel');
+
+                // Sales
+                Route::prefix('sales')->name('sales.')->group(function () {
+                    Route::get('/', [\App\Http\Controllers\Dashboard\PosSaleController::class, 'index'])->name('index');
+                    Route::get('/{order}', [\App\Http\Controllers\Dashboard\PosSaleController::class, 'show'])->name('show');
+                    Route::get('/{order}/receipt', [\App\Http\Controllers\Dashboard\PosSaleController::class, 'receipt'])->name('receipt');
+                    Route::post('/{order}/refund', [\App\Http\Controllers\Dashboard\PosSaleController::class, 'refund'])->name('refund');
+                });
+
+                // Register Sessions
+                Route::prefix('sessions')->name('sessions.')->group(function () {
+                    Route::get('/', [\App\Http\Controllers\Dashboard\PosSessionController::class, 'index'])->name('index');
+                    Route::post('/', [\App\Http\Controllers\Dashboard\PosSessionController::class, 'store'])->name('store');
+                    Route::get('/{session}', [\App\Http\Controllers\Dashboard\PosSessionController::class, 'show'])->name('show');
+                    Route::post('/{session}/close', [\App\Http\Controllers\Dashboard\PosSessionController::class, 'close'])->name('close');
+                    Route::post('/{session}/cash', [\App\Http\Controllers\Dashboard\PosSessionController::class, 'cashEvent'])->name('cash');
+                });
+
+                // Reports & Settings
+                Route::get('/reports', [\App\Http\Controllers\Dashboard\PosReportController::class, 'index'])->name('reports');
+                Route::get('/settings', [\App\Http\Controllers\Dashboard\PosSettingsController::class, 'index'])->name('settings');
+                Route::put('/settings', [\App\Http\Controllers\Dashboard\PosSettingsController::class, 'update'])->name('settings.update');
+            });
+
         });
     });
 

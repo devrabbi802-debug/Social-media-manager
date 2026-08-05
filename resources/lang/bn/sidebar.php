@@ -22,4 +22,10 @@ return [
     'banner_management' => 'ব্যানার ম্যানেজমেন্ট',
     'order_management' => 'অর্ডার ম্যানেজমেন্ট',
     'orders' => 'অর্ডার সমূহ',
+    'pos' => 'POS',
+    'pos_terminal' => 'POS টার্মিনাল',
+    'pos_sales' => 'POS বিক্রয়',
+    'pos_sessions' => 'রেজিস্টার সেশন',
+    'pos_reports' => 'POS রিপোর্ট',
+    'pos_settings' => 'POS সেটিংস',
 ];

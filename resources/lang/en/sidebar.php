@@ -22,4 +22,10 @@ return [
     'banner_management' => 'Banner Management',
     'order_management' => 'Order Management',
     'orders' => 'Orders',
+    'pos' => 'POS',
+    'pos_terminal' => 'POS Terminal',
+    'pos_sales' => 'POS Sales',
+    'pos_sessions' => 'Register Sessions',
+    'pos_reports' => 'POS Reports',
+    'pos_settings' => 'POS Settings',
 ];
