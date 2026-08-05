@@ -109,7 +109,9 @@ docker exec laravel-app php artisan <command>
 | `ZernioService` | Zernio social media API v1 |
 | `AudioTranscriptionService` | Audio→text for voice messages |
 | `ChatOrderService` | Order creation from chat conversations |
+| `ChatSelectionService` | Chat routing/mode selection (manual/AI) |
 | `ProductContextService` | Manages product context during conversations |
+| `AiTools/` | AI tool registry + executor (searched by `ToolRegistry`/`ToolExecutor`) |
 
 ## Inventory (`app/Http/Controllers/Dashboard/`)
 
@@ -119,7 +121,7 @@ Products, variants, categories, brands, attribute templates, warehouses, stock m
 
 ## Tests
 
-Minimal — 2 Laravel examples (`tests/Feature/ExampleTest.php`, `tests/Unit/ExampleTest.php`). No tenant-specific tests. Run with `composer test` (SQLite :memory:, `QUEUE_CONNECTION=sync`). `config:clear` required first (composer test handles it).
+Minimal — 3 files: `tests/Feature/ExampleTest.php`, `tests/Unit/ExampleTest.php`, `tests/Unit/AiToolCallingTest.php`. `AiToolCallingTest` covers `app/Services/AiTools/` (ToolRegistry/ToolExecutor) without network. No tenant-specific tests. Run with `composer test` (SQLite :memory:, `QUEUE_CONNECTION=sync`). `config:clear` required first (composer test handles it).
 
 ## Formatting
 
