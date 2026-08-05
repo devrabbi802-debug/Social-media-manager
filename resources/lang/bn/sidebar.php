@@ -8,6 +8,7 @@ return [
     'inventory' => 'ইনভেন্টরি',
     'inventory_dashboard' => 'ইনভেন্টরি ড্যাশবোর্ড',
     'products' => 'প্রোডাক্ট',
+    'product_create' => 'নতুন প্রোডাক্ট',
     'categories' => 'ক্যাটাগরি',
     'brands' => 'ব্র্যান্ড',
     'warehouses' => 'গুদম',

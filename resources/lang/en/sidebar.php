@@ -8,6 +8,7 @@ return [
     'inventory' => 'Inventory',
     'inventory_dashboard' => 'Inventory Dashboard',
     'products' => 'Products',
+    'product_create' => 'Create Product',
     'categories' => 'Categories',
     'brands' => 'Brands',
     'warehouses' => 'Warehouses',
