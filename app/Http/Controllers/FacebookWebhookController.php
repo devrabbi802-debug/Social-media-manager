@@ -240,6 +240,51 @@ class FacebookWebhookController extends Controller
                 'message_data_keys' => is_array($messageData) ? array_keys($messageData) : 'not_array',
             ]);
 
+            // Dedup: skip if same facebook_mid already saved (Zernio may retry webhooks)
+            if ($facebookMid) {
+                $existingType = Message::where('facebook_mid', $facebookMid)->value('type');
+                $hasImages = ! empty($imageUrls);
+                $isDuplicate = $existingType !== null && (
+                    ($existingType === 'text' && ! $hasImages)
+                    || ($existingType === 'image' && $hasImages)
+                    || ($existingType !== 'text' && $existingType !== 'image')
+                );
+                if ($isDuplicate) {
+                    Log::info('Zernio: Duplicate message ignored', [
+                        'account_id' => $accountId,
+                        'sender_id' => $senderId,
+                        'facebook_mid' => $facebookMid,
+                        'existing_type' => $existingType,
+                    ]);
+
+                    return;
+                }
+            }
+
+            // Content-based dedup: skip if same conversation already has this exact
+            // incoming message within 10 seconds. Catches duplicates from both
+            // Facebook direct and Zernio webhooks.
+            $recentDuplicate = Message::where('conversation_id', $conversation->id)
+                ->where('direction', 'incoming')
+                ->where('created_at', '>=', now()->subSeconds(10))
+                ->where(function ($q) use ($messageText, $imageUrls) {
+                    if (! empty($imageUrls)) {
+                        $q->where('type', 'image')->whereIn('image_path', $imageUrls);
+                    } elseif ($messageText) {
+                        $q->where('type', 'text')->where('content', $messageText);
+                    }
+                })
+                ->exists();
+
+            if ($recentDuplicate) {
+                Log::info('Zernio: Duplicate message ignored (content-based dedup)', [
+                    'sender_id' => $senderId,
+                    'facebook_mid' => $facebookMid,
+                ]);
+
+                return;
+            }
+
             if (! empty($imageUrls)) {
                 foreach ($imageUrls as $imageUrl) {
                     try {
@@ -607,6 +652,30 @@ class FacebookWebhookController extends Controller
             if ($name) {
                 $conversation->update(['sender_name' => $name]);
             }
+        }
+
+        // Content-based dedup: skip if same conversation already has this exact
+        // incoming message within 10 seconds. Catches duplicates from both Facebook
+        // direct and Zernio webhooks (which may use different facebook_mid values).
+        $recentDuplicate = Message::where('conversation_id', $conversation->id)
+            ->where('direction', 'incoming')
+            ->where('created_at', '>=', now()->subSeconds(10))
+            ->where(function ($q) use ($text, $imageUrls) {
+                if (! empty($imageUrls)) {
+                    $q->where('type', 'image')->whereIn('image_path', $imageUrls);
+                } elseif ($text) {
+                    $q->where('type', 'text')->where('content', $text);
+                }
+            })
+            ->exists();
+
+        if ($recentDuplicate) {
+            Log::info('Facebook: Duplicate message ignored (content-based dedup)', [
+                'sender_id' => $senderId,
+                'mid' => $mid,
+            ]);
+
+            return;
         }
 
         if (! empty($imageUrls)) {

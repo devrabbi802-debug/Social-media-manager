@@ -299,10 +299,35 @@ class SendAiReplyJob implements ShouldQueue
                 // Send any images the AI requested via send_product_image tool
                 $pendingImages = $result['pending_images'] ?? [];
                 foreach ($pendingImages as $pendingImage) {
-                    $this->sendFacebookMessage(
+                    $sentMids = $this->sendFacebookMessage(
                         "📸 {$pendingImage['product_name']}",
                         $pendingImage['image_url']
                     );
+
+                    // Save outgoing image to conversation so it shows in dashboard
+                    if ($conversation) {
+                        try {
+                            Message::create([
+                                'conversation_id' => $conversation->id,
+                                'direction' => 'outgoing',
+                                'type' => 'image',
+                                'content' => "📸 {$pendingImage['product_name']}",
+                                'image_path' => $pendingImage['image_url'],
+                                'facebook_mid' => $sentMids['image_mid'] ?? $sentMids['text_mid'] ?? null,
+                                'image_analysis' => [
+                                    'product_id' => $pendingImage['product_id'] ?? null,
+                                    'product_name' => $pendingImage['product_name'] ?? null,
+                                ],
+                            ]);
+                            $conversation->update(['last_message_at' => now()]);
+                        } catch (\Throwable $e) {
+                            Log::error('SendAiReplyJob: failed to save pending image to conversation', [
+                                'product' => $pendingImage['product_name'],
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
+                    }
+
                     Log::info('SendAiReplyJob: sent pending image from tool call', [
                         'product' => $pendingImage['product_name'],
                         'image_url' => substr($pendingImage['image_url'], 0, 80),
@@ -469,6 +494,7 @@ class SendAiReplyJob implements ShouldQueue
                     'direction' => 'outgoing',
                     'type' => $messageType,
                     'content' => $replyText,
+                    'image_path' => $imageUrl,
                     'facebook_mid' => $textMid,
                     'image_analysis' => $extra !== [] ? $extra : null,
                 ]);
