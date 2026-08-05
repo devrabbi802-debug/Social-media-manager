@@ -609,50 +609,69 @@ class AiChatService
             // If Cerebras returned text-only (no tool calls), try Gemini as fallback
             // before accepting the text. Cerebras models often don't support tool
             // calling and return plain text, so Gemini must get a chance.
-            if ($response !== null && empty($response['tool_calls']) && $fallbackProvider !== 'cerebras') {
+            if ($response !== null && empty($response['tool_calls']) && $secondFallbackProvider === 'gemini' && $secondFallbackKeys) {
                 Log::info('AiChatService: Cerebras returned no tool calls, trying Gemini fallback', [
                     'iteration' => $iteration,
                     'content_preview' => mb_substr($response['content'] ?? '', 0, 80),
                 ]);
                 $geminiResponse = null;
-                if ($fallbackKeys) {
-                    foreach ($fallbackKeys as $key) {
-                        try {
-                            $geminiResponse = $this->chatWithGeminiTools($allMessages, $key->api_key, $tools);
-                            if ($geminiResponse !== null) {
-                                break;
-                            }
-                        } catch (\Exception $e) {
-                            if (str_contains($e->getMessage(), '429')) {
-                                continue;
-                            }
-                            Log::warning('Gemini tool call failed (fallback)', ['error' => $e->getMessage()]);
-                        }
-                    }
-                }
-                // If Gemini returned tool calls, use Gemini's response instead
-                if ($geminiResponse !== null && ! empty($geminiResponse['tool_calls'])) {
-                    Log::info('AiChatService: Gemini fallback produced tool calls, using Gemini', [
-                        'iteration' => $iteration,
-                    ]);
-                    $response = $geminiResponse;
-                    $provider = 'gemini';
-                }
-            }
-
-            if ($response === null && $fallbackProvider === 'gemini' && $fallbackKeys) {
-                foreach ($fallbackKeys as $key) {
+                foreach ($secondFallbackKeys as $key) {
                     try {
-                        $response = $this->chatWithGeminiTools($allMessages, $key->api_key, $tools);
-                        if ($response !== null) {
-                            $provider = 'gemini';
+                        $geminiResponse = $this->chatWithGeminiTools($allMessages, $key->api_key, $tools);
+                        if ($geminiResponse !== null) {
                             break;
                         }
                     } catch (\Exception $e) {
                         if (str_contains($e->getMessage(), '429')) {
                             continue;
                         }
-                        Log::warning('Gemini tool call failed', ['error' => $e->getMessage()]);
+                        Log::warning('Gemini tool call failed (fallback)', ['error' => $e->getMessage()]);
+                    }
+                }
+                // If Gemini returned tool calls, use Gemini's response instead.
+                // Even if Gemini returned text-only, prefer it over Cerebras
+                // text (Cerebras often returns generic fallback like "contact us").
+                if ($geminiResponse !== null) {
+                    if (! empty($geminiResponse['tool_calls'])) {
+                        Log::info('AiChatService: Gemini fallback produced tool calls, using Gemini', [
+                            'iteration' => $iteration,
+                        ]);
+                    } else {
+                        Log::info('AiChatService: Gemini fallback returned text (no tools), preferring over Cerebras text', [
+                            'iteration' => $iteration,
+                            'content_preview' => mb_substr($geminiResponse['content'] ?? '', 0, 80),
+                        ]);
+                    }
+                    $response = $geminiResponse;
+                    $provider = 'gemini';
+                }
+            }
+
+            // If response is still null (Cerebras failed or returned nothing), try Gemini directly
+            if ($response === null) {
+                $geminiProvider = null;
+                $geminiFallbackKeys = null;
+                if ($fallbackProvider === 'gemini' && $fallbackKeys) {
+                    $geminiProvider = 'gemini';
+                    $geminiFallbackKeys = $fallbackKeys;
+                } elseif ($secondFallbackProvider === 'gemini' && $secondFallbackKeys) {
+                    $geminiProvider = 'gemini';
+                    $geminiFallbackKeys = $secondFallbackKeys;
+                }
+                if ($geminiProvider && $geminiFallbackKeys) {
+                    foreach ($geminiFallbackKeys as $key) {
+                        try {
+                            $response = $this->chatWithGeminiTools($allMessages, $key->api_key, $tools);
+                            if ($response !== null) {
+                                $provider = $geminiProvider;
+                                break;
+                            }
+                        } catch (\Exception $e) {
+                            if (str_contains($e->getMessage(), '429')) {
+                                continue;
+                            }
+                            Log::warning('Gemini tool call failed', ['error' => $e->getMessage()]);
+                        }
                     }
                 }
             }
@@ -874,9 +893,21 @@ class AiChatService
 
         $model = config('services.gemini.model', 'gemini-3.1-flash-lite');
 
+        // Convert OpenAI-format tools to Gemini functionDeclarations format
+        $geminiTools = [];
+        foreach ($tools as $tool) {
+            if (isset($tool['function'])) {
+                $geminiTools[] = [
+                    'name' => $tool['function']['name'],
+                    'description' => $tool['function']['description'] ?? '',
+                    'parameters' => $tool['function']['parameters'] ?? new \stdClass(),
+                ];
+            }
+        }
+
         $payload = [
             'contents' => $contents,
-            'tools' => $tools,
+            'tools' => ['functionDeclarations' => $geminiTools],
             'generationConfig' => [
                 'temperature' => 0.7,
                 'maxOutputTokens' => 1024,
@@ -912,6 +943,7 @@ class AiChatService
         $candidates = $body['candidates'] ?? [];
 
         if (empty($candidates)) {
+            Log::warning('Gemini: empty candidates', ['body' => $body]);
             return null;
         }
 
@@ -933,6 +965,12 @@ class AiChatService
                 ];
             }
         }
+
+        Log::info('Gemini: response parsed', [
+            'content_preview' => mb_substr($content ?? '', 0, 80),
+            'tool_calls_count' => count($toolCalls),
+            'tool_names' => array_column(array_column($toolCalls, 'function'), 'name'),
+        ]);
 
         return [
             'content' => $content,

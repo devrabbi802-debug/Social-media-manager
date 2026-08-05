@@ -662,6 +662,84 @@ class SendAiReplyJob implements ShouldQueue
             }
         }
 
+        // PRIORITY 0.5: Heuristic swipe-reply fallback for Zernio
+        // Zernio strips reply_to data, so replyToMid is always null.
+        // Match short follow-up questions ("aitar price?", "eta koto?", "dame koto?")
+        // against the most recent outgoing message that has product context.
+        if (empty($this->replyToMid) && $conversation) {
+            $text = strtolower(trim($this->messageText));
+            $isShortFollowUp = mb_strlen($text) < 100 && preg_match('/(aitar|eta|ekhane|ekta|dami?|price|koto|taka|rate|cost|sizar?|colou?r|available|stock|delivery|shipping|discount|offer|emi|ase|nai|kina|khabo|lagbo|dibo|nibo|chAi| lagbe|dAm|mong?sho|pocha|panjabi|kurta|shirt|t[- ]?shirt|polo|jean|pant|salwar|kameez|saree|sari|ganji|vest|under|shorts|lungi|fatua|topi|hat|shoe|boot|sneaker|bag|wallet|belt|watch|ring|chain|necklace|earring|bangle|bracelet|spec|goggl|sunglass|cap|scarf|tie|sock|inner)/ui', $text);
+
+            Log::info('SendAiReplyJob: heuristic check', [
+                'text' => $text,
+                'is_short_follow_up' => $isShortFollowUp,
+                'conversation_id' => $conversation->id,
+                'reply_to_mid' => $this->replyToMid ?? 'null',
+            ]);
+
+            if ($isShortFollowUp) {
+                $recentOutgoing = Message::where('conversation_id', $conversation->id)
+                    ->where('direction', 'outgoing')
+                    ->where(function ($q) {
+                        $q->whereNotNull('image_analysis')
+                            ->orWhere('type', 'image');
+                    })
+                    ->where('created_at', '>=', now()->subMinutes(10))
+                    ->latest()
+                    ->first();
+
+                Log::info('SendAiReplyJob: heuristic outgoing search', [
+                    'found' => $recentOutgoing ? $recentOutgoing->id : null,
+                    'has_analysis' => $recentOutgoing && $recentOutgoing->image_analysis ? true : false,
+                    'analysis_keys' => $recentOutgoing && is_array($recentOutgoing->image_analysis) ? array_keys($recentOutgoing->image_analysis) : null,
+                ]);
+
+                if ($recentOutgoing && ! empty($recentOutgoing->image_analysis)) {
+                    $analysis = is_string($recentOutgoing->image_analysis)
+                        ? json_decode($recentOutgoing->image_analysis, true)
+                        : $recentOutgoing->image_analysis;
+                    // Check both image messages (matched_products) and text messages (text_product_matches)
+                    $productMatches = $analysis['matched_products']
+                        ?? $analysis['text_product_matches']
+                        ?? $analysis['image_analysis']['matched_products']
+                        ?? $analysis['image_analysis']['text_product_matches']
+                        ?? [];
+                    $bestMatch = $productMatches[0] ?? null;
+
+                    if ($bestMatch && ! empty($bestMatch['metadata']['product_id'])) {
+                        $productId = $bestMatch['metadata']['product_id'];
+                        $productName = $bestMatch['metadata']['product_name'] ?? 'Product';
+
+                        try {
+                            $product = Product::with(['variants', 'images'])->find($productId);
+                            if ($product) {
+                                $currentPrice = $product->discount_price ?? $product->base_price ?? 'N/A';
+                                $context = "Customer is asking about this product: {$productName} (ID: {$productId}, Price: {$currentPrice})";
+
+                                Log::info('SendAiReplyJob: heuristic swipe-reply matched recent product', [
+                                    'product_id' => $productId,
+                                    'product_name' => $productName,
+                                    'price' => $currentPrice,
+                                    'outgoing_message_id' => $recentOutgoing->id,
+                                ]);
+
+                                $productContextService = new ProductContextService;
+                                $productContextService->saveCurrentProduct($conversation, $productId, $bestMatch['metadata']['variant_id'] ?? null);
+
+                                $history = $this->getConversationHistory();
+                                $messageToSend = "{$this->messageText}\n\n[Context: Customer is asking about {$productName}. Price: {$currentPrice} BDT]";
+                                $result = $this->callAiWithTools($messageToSend, $history, $aiKeys, $cerebrasKeys, $geminiKeys, $systemPrompt, $facebookSetting);
+
+                                return $result ? ['reply' => $result['reply'], 'text_product_matches' => $productMatches, 'tool_calls_used' => $result['tool_calls_used'] ?? [], 'pending_images' => $result['pending_images'] ?? []] : null;
+                            }
+                        } catch (\Throwable $e) {
+                            Log::warning('SendAiReplyJob: heuristic swipe-reply failed', ['error' => $e->getMessage()]);
+                        }
+                    }
+                }
+            }
+        }
+
         // PRIORITY 1: Reply-to specific message product context
         if (! empty($this->replyToMid) && $conversation) {
             $replyContext = $this->resolveReplyToProductContext($conversation);
@@ -1109,6 +1187,8 @@ class SendAiReplyJob implements ShouldQueue
             toolExecutor: fn (string $toolName, array $args) => $toolExecutor->execute($toolName, $args),
             fallbackProvider: $cerebrasKeys->isNotEmpty() ? 'cerebras' : ($geminiKeys->isNotEmpty() ? 'gemini' : null),
             fallbackKeys: $cerebrasKeys->isNotEmpty() ? $cerebrasKeys : $geminiKeys,
+            secondFallbackProvider: $cerebrasKeys->isNotEmpty() && $geminiKeys->isNotEmpty() ? 'gemini' : null,
+            secondFallbackKeys: $cerebrasKeys->isNotEmpty() ? $geminiKeys : null,
         );
 
         if (! $result || empty($result['reply'])) {
@@ -1294,6 +1374,19 @@ class SendAiReplyJob implements ShouldQueue
 
         // If the customer replied to a specific message (swipe reply), prioritize THAT image's
         // product over a fresh re-analysis — the reply may reference an earlier image.
+        // If replyToMid not available (Zernio strips it), try DB recovery.
+        if (empty($this->replyToMid) && $conversation) {
+            $sameTextMessage = Message::where('direction', 'incoming')
+                ->where('type', 'image')
+                ->where('conversation_id', $conversation->id)
+                ->whereNotNull('reply_to_mid')
+                ->where('created_at', '>=', now()->subSeconds(10))
+                ->latest()
+                ->first();
+            if ($sameTextMessage && $sameTextMessage->reply_to_mid) {
+                $this->replyToMid = $sameTextMessage->reply_to_mid;
+            }
+        }
         if (! empty($this->replyToMid) && $conversation) {
             $replyContext = $this->resolveReplyToProductContext($conversation);
             if ($replyContext && $replyContext['product_id']) {
