@@ -28,8 +28,16 @@ class ProductImage extends Model
 
     public function getImageUrlAttribute(): string
     {
-        // Use MEDIA_URL if set (e.g. Ngrok tunnel or public domain) so
-        // Facebook/Zernio can fetch the image from outside local network.
+        // Relative path so the browser loads images from the storefront's own
+        // origin (e.g. noyan.smm.test) — ngrok would block subresource loads
+        // with an interstitial page for browser user agents.
+        return '/storage/'.$this->image_path;
+    }
+
+    public function getExternalUrlAttribute(): string
+    {
+        // Absolute URL for external consumers (CLIP server, Facebook/Zernio)
+        // that must fetch the image from outside the local network.
         $baseUrl = config('services.media_url', config('app.url'));
 
         return $baseUrl.'/storage/'.$this->image_path;

@@ -143,7 +143,7 @@ class ToolExecutor
                     if ($fullProduct) {
                         $product['base_price'] = $fullProduct->base_price;
                         $product['discount_price'] = $fullProduct->discount_price;
-                        $product['image_url'] = $fullProduct->images->first()?->image_url ?? null;
+                        $product['image_url'] = $fullProduct->images->first()?->external_url ?? null;
                         $product['category'] = $fullProduct->category->name ?? null;
                         $product['brand'] = $fullProduct->brand->name ?? null;
 
@@ -220,7 +220,7 @@ class ToolExecutor
                     'category' => $product->category->name ?? null,
                     'brand' => $product->brand->name ?? null,
                     'attributes' => $variant->attributes,
-                    'image_url' => $variant->image_url ?? $product->images->first()?->image_url ?? null,
+                    'image_url' => $variant->external_url ?? $product->images->first()?->external_url ?? null,
                 ];
 
                 // Get sibling variants
@@ -251,7 +251,7 @@ class ToolExecutor
                     'description' => $product->description,
                     'category' => $product->category->name ?? null,
                     'brand' => $product->brand->name ?? null,
-                    'image_url' => $product->images->first()?->image_url ?? null,
+                    'image_url' => $product->images->first()?->external_url ?? null,
                 ];
 
                 $activeVariants = $product->variants->where('is_active', true);
@@ -302,7 +302,7 @@ class ToolExecutor
             }
 
             if (! $image) {
-                $image = $product->images->first()?->image_url;
+                $image = $product->images->first()?->external_url;
             }
 
             if (! $image) {
@@ -353,7 +353,7 @@ class ToolExecutor
             }
 
             if (! $image) {
-                $image = $product->images->first()?->image_url;
+                $image = $product->images->first()?->external_url;
             }
 
             if (! $image) {
@@ -626,7 +626,7 @@ class ToolExecutor
                     $this->pendingImages[] = [
                         'product_id' => $bestRelatedProduct->id,
                         'product_name' => $bestRelatedProduct->name,
-                        'image_url' => $bestRelatedProduct->images->first()->image_url,
+                        'image_url' => $bestRelatedProduct->images->first()->external_url,
                     ];
                 }
             }
@@ -637,7 +637,7 @@ class ToolExecutor
                 'price' => $p->discount_price ?? $p->base_price ?? $p['discount_price'] ?? $p['base_price'] ?? 0,
                 'category' => $p->category->name ?? $p['category'] ?? null,
                 'brand' => $p->brand->name ?? $p['brand'] ?? null,
-                'image_url' => $p->images->first()?->image_url ?? $p['image_url'] ?? null,
+                'image_url' => $p->images->first()?->external_url ?? $p['image_url'] ?? null,
                 'has_variants' => isset($p->variants) ? $p->variants->where('is_active', true)->count() > 0 : ($p['has_variants'] ?? false),
             ])->values()->toArray();
 
@@ -806,7 +806,7 @@ class ToolExecutor
                     continue;
                 }
 
-                $image = $product->images->first()?->image_url;
+                $image = $product->images->first()?->external_url;
                 if (! $image) {
                     $errors[] = "Product {$product->name} has no image";
 
@@ -1007,7 +1007,7 @@ class ToolExecutor
                         'name' => $p->name,
                         'price' => $price,
                         'reason' => 'একই ক্যাটাগরির প্রোডাক্ট',
-                        'image_url' => $p->images->first()?->image_url ?? null,
+                        'image_url' => $p->images->first()?->external_url ?? null,
                     ];
                 }
             }
@@ -1035,7 +1035,7 @@ class ToolExecutor
                         'name' => $p->name,
                         'price' => $p->discount_price ?? $p->base_price,
                         'reason' => 'জনপ্রিয় প্রোডাক্ট',
-                        'image_url' => $p->images->first()?->image_url ?? null,
+                        'image_url' => $p->images->first()?->external_url ?? null,
                     ];
                 }
             }

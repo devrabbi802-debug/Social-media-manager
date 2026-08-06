@@ -28,6 +28,13 @@ class VariantImage extends Model
 
     public function getImageUrlAttribute(): string
     {
+        // Relative path for browser loading from the storefront's own origin.
+        return '/storage/'.$this->image_path;
+    }
+
+    public function getExternalUrlAttribute(): string
+    {
+        // Absolute URL for external consumers (CLIP server, Facebook/Zernio).
         $baseUrl = config('services.media_url', config('app.url'));
 
         return $baseUrl.'/storage/'.$this->image_path;
