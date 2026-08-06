@@ -29,4 +29,7 @@ return [
     'pos_sessions' => 'Register Sessions',
     'pos_reports' => 'POS Reports',
     'pos_settings' => 'POS Settings',
+    'user_management' => 'User Management',
+    'roles' => 'Roles',
+    'staff' => 'Staff',
 ];

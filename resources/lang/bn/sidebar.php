@@ -29,4 +29,7 @@ return [
     'pos_sessions' => 'রেজিস্টার সেশন',
     'pos_reports' => 'POS রিপোর্ট',
     'pos_settings' => 'POS সেটিংস',
+    'user_management' => 'ইউজার ম্যানেজমেন্ট',
+    'roles' => 'রোলসমূহ',
+    'staff' => 'স্টাফ',
 ];

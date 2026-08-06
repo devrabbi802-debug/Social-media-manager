@@ -128,6 +128,21 @@ Products, variants, categories, brands, attribute templates, warehouses, stock m
 
 **Known bugs** (see `INVENTORY_REVIEW.txt`): variant stock not synced to parent, stock ops lack DB transactions, stale attribute values on edit, low-stock alert ignores variants, subcategory assignment broken on create.
 
+## Tenant RBAC (Roles & Permissions)
+
+Custom role-based access control for the **tenant admin panel** — fully separate from the central `config/menu.php` `Admin` RBAC. Do NOT use spatie here.
+
+- **Registry**: `config/tenant-permissions.php` — `groups` (modules) each with `items` (sub-menu `slug` + `permissions`). The permission matrix in the UI, the sidebar filter, and route middleware all reference these `"slug.action"` strings.
+- **Table**: `tenant_roles` (tenant DB) — `permissions` JSON column holds `["module.action", ...]`. `users.role_id` FK (`nullOnDelete`) added by migration `tenant/2026_08_06_000001_create_tenant_roles_table.php`.
+- **Models**: `App\Models\Role` (`permissionList()`, `hasPermission()`); `App\Models\User` — `role()`, `isSuperAdmin()` (`role_id === null` ⇒ owner/full access ⇒ bypasses all checks), `hasPermission($module,$action)`, `permissionList()`.
+- **Middleware**: `EnsureTenantPermission` registered as alias `permission` in `bootstrap/app.php`. Usage: `Route::middleware('permission:products,edit')`. 403 on deny.
+- **Controllers/Views**: `app/Http/Controllers/Dashboard/{RoleController,UserController}.php`; views `resources/views/tenant/{roles,users,partials/_permission-matrix}.blade.php` (Alpine permission matrix). Routes: `routes/tenant.php` `{adminPrefix}/roles/*` and `/users/*` gated by `permission:user_management,*`.
+- **Sidebar**: `layouts/tenant.blade.php` — each menu item carries a `permission` slug; groups hidden if no accessible child. Dashboard top-link is **not** permission-gated.
+- **Defaults**: first visit to roles page auto-creates `Manager` + `Sales Agent` roles if the `roles` table is empty (`RoleController::ensureDefaults()`).
+- **Dashboard is ALWAYS accessible** to any logged-in tenant user (no `permission:dashboard,list` middleware on the `/dashboard` route) so login never 403s. Most other modules enforce their module `,list` + per-action (`create`/`edit`/`delete`/`view`/`export`/`refund`/`close`/`hold`).
+- **Route scope**: enforcement is sub-menu granular — e.g. `products,create` vs `products,delete`, `pos_sales,refund`, `pos_sessions,close`, `stock_transfers,create`.
+- **NOTE (Octane)**: tenant routes are loaded per-request by `TenancyServiceProvider::mapRoutes()`; Octane (Swoole) keeps workers in memory, so after editing `routes/tenant.php` or tenant views you MUST run `docker exec laravel-app php artisan octane:reload` — otherwise you'll get `RouteNotFoundException`/stale routes.
+
 ## Tests
 
 Minimal — 3 files: `tests/Feature/ExampleTest.php`, `tests/Unit/ExampleTest.php`, `tests/Unit/AiToolCallingTest.php`. `AiToolCallingTest` covers `app/Services/AiTools/` (ToolRegistry/ToolExecutor) without network. No tenant-specific tests. Run with `composer test` (SQLite :memory:, `QUEUE_CONNECTION=sync`). `config:clear` required first (composer test handles it).
