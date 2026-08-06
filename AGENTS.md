@@ -28,7 +28,7 @@ php artisan tenants:seed      # seed tenant DBs
 
 ## Routes (Load Order)
 
-1. `routes/web.php` — landing pages, onboarding, webhooks (CSRF-exempt via `bootstrap/app.php:28-31`)
+1. `routes/web.php` — landing pages, onboarding, webhooks (CSRF-exempt via `bootstrap/app.php:30-33`)
 2. `routes/api.php` — storefront SPA API (tenant-scoped). Groups: `/api/storefront/*` (public), `/api/auth/*` (public + `auth:sanctum` protected), `/api/checkout/*` (public), `/api/customer/*` (`auth:sanctum`), `/api/editor/*` (theme PUT), `/api/themes/*`
 3. `routes/console.php` — Artisan commands
 4. `routes/admin.php` — central admin `/rootadmin/*` (guard `admin`, landlord DB). Loaded via `bootstrap/app.php` `then:` callback.
@@ -45,7 +45,7 @@ php artisan tenants:seed      # seed tenant DBs
 - **`public` disk NOT tenant-aware** — use `tenant_asset()` not `asset()` (`config/tenancy.php:141` `asset_helper_tenancy => false`)
 - **`locale` middleware** on all tenant routes (sets locale from `user.locale` column)
 - **`central` middleware** (`PreventAccessFromNonCentralDomains`) on central-only routes
-- **`TenantCouldNotBeIdentifiedOnDomainException` → 404** (`bootstrap/app.php:38-40`)
+- **`TenantCouldNotBeIdentifiedOnDomainException` → 404** (`bootstrap/app.php:40-42`)
 - **Tenant DB auto-created** on creation via `CreateDatabase` + `MigrateDatabase` job pipeline
 
 ## Storefront SPA
@@ -86,7 +86,7 @@ docker exec laravel-app php artisan <command>
 
 **7 services**: app(8000), mysql(3307), node(5173), redis(6379), phpmyadmin(8080), worker(Horizon via Supervisor), clip-server(8089).
 
-- `docker-entrypoint.sh`: waits for MySQL → `composer install --no-dev` → `npm install` (root only) → `key:generate` → `migrate` → `octane:start --server=swoole --host=0.0.0.0 --port=8000`
+- `docker-entrypoint.sh`: waits for MySQL → `composer install --no-dev` → `npm install` (root only) → `key:generate` → `migrate` → `octane:start --server=swoole --host=0.0.0.0 --port=8000` (install steps are skipped if `vendor/`/`node_modules/` already exist)
 - Node service runs `npm install && npm run dev -- --host 0.0.0.0`
 - **Storefront not auto-built in Docker** — build manually inside container or locally
 - Worker reuses `socialmediamanager-app:latest` image; runs Supervisor + Horizon
@@ -174,6 +174,7 @@ Double-entry ledger (tenant-scoped) with a non-accountant-friendly UI. Routes un
 - `ADMIN_PANEL_PREFIX` in `.env` = `supermaster` (deviates from default `ax7k9m` in `config/app.php`)
 - Root `package.json` Vite = Tailwind v4 (`@tailwindcss/vite`); storefront Vite = Tailwind v3 (PostCSS + `tailwindcss` + `autoprefixer`)
 - `start.sh` orchestrates local dev (Docker + CLIP + dnsmasq + Apache proxy + Ngrok + storefront build)
+- **Public media URLs come from `MEDIA_URL`, NOT `APP_URL`** (`config/services.php:35`, set to current Ngrok URL in `.env`). `ProductImage`/`VariantImage` accessors and `AiTools/ToolExecutor` use it to build absolute URLs for FB/WhatsApp media. When the Ngrok tunnel URL rotates, update `MEDIA_URL` (mirrored in `.ngrok-url` at repo root) or sent media breaks.
 - `setup-domain.sh` configures `smm.test` wildcard via dnsmasq + Apache reverse proxy to port 8000
 - CLIP server has own `venv/` — managed via `clip-server/start.sh` or `start.sh`
 
