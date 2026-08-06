@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Storefront;
 
 use App\Http\Controllers\Controller;
+use App\Models\AccountingSetting;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Services\AccountingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +21,7 @@ class CheckoutController extends Controller
 {
     public function placeOrder(Request $request): JsonResponse
     {
-        $isGuest = !$request->user();
+        $isGuest = ! $request->user();
 
         $rules = [
             'items' => 'required|array|min:1',
@@ -50,7 +52,7 @@ class CheckoutController extends Controller
             $subtotal += $item['unit_price'] * $item['quantity'];
         }
 
-        $orderNumber = 'ORD-' . strtoupper(Str::random(8));
+        $orderNumber = 'ORD-'.strtoupper(Str::random(8));
 
         try {
             DB::beginTransaction();
@@ -98,12 +100,12 @@ class CheckoutController extends Controller
             foreach ($validated['items'] as $item) {
                 $sku = $item['sku'] ?? '';
 
-                if (empty($sku) && !empty($item['variant_id'])) {
+                if (empty($sku) && ! empty($item['variant_id'])) {
                     $variant = ProductVariant::find($item['variant_id']);
                     $sku = $variant?->sku ?? '';
                 }
 
-                if (empty($sku) && !empty($item['product_id'])) {
+                if (empty($sku) && ! empty($item['product_id'])) {
                     $product = Product::find($item['product_id']);
                     $sku = $product?->sku ?? '';
                 }
@@ -118,6 +120,11 @@ class CheckoutController extends Controller
                     'unit_price' => $item['unit_price'],
                     'total_price' => $item['unit_price'] * $item['quantity'],
                 ]);
+            }
+
+            // Record the sale in the accounting ledger (receivable until paid)
+            if (AccountingSetting::current()->post_storefront_orders) {
+                app(AccountingService::class)->postOrder($order);
             }
 
             DB::commit();
@@ -141,7 +148,7 @@ class CheckoutController extends Controller
                         'city' => $order->shippingAddress->city,
                         'district' => $order->shippingAddress->district,
                     ] : null,
-                    'items' => $order->items->map(fn($i) => [
+                    'items' => $order->items->map(fn ($i) => [
                         'name' => $i->name,
                         'sku' => $i->sku,
                         'quantity' => $i->quantity,
@@ -153,6 +160,7 @@ class CheckoutController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json(['message' => 'Order failed. Please try again.'], 500);
         }
     }
@@ -171,12 +179,12 @@ class CheckoutController extends Controller
         $order = Order::where('order_number', $request->order_number)
             ->where(function ($q) use ($request) {
                 $q->where('customer_phone', $request->phone)
-                  ->orWhereHas('customer', fn($c) => $c->where('phone', $request->phone));
+                    ->orWhereHas('customer', fn ($c) => $c->where('phone', $request->phone));
             })
             ->with(['items.product:id,name,slug,image', 'shippingAddress'])
             ->first();
 
-        if (!$order) {
+        if (! $order) {
             return response()->json(['message' => 'Order not found.'], 404);
         }
 

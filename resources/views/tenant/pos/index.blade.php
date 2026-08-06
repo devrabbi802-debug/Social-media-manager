@@ -225,30 +225,32 @@
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-semibold text-gray-500 uppercase">পেমেন্ট</span>
                     <div class="flex gap-2">
-                        <template x-for="m in enabledMethods" :key="m">
+                        <template x-for="m in enabledMethods" :key="m.code">
                             <button
-                                @click="addPaymentRow(m)"
+                                @click="addPaymentRow(m.code)"
                                 class="text-xs px-3 py-1.5 rounded-lg border font-medium transition"
-                                :class="'border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600'"
-                                x-text="m"
+                                :class="methodActive(m.code) ? 'border-purple-600 text-purple-700 bg-purple-50' : 'border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600'"
+                                x-text="m.name"
                             ></button>
                         </template>
                         <button @click="addPaymentRow('')" class="text-xs px-3 py-1.5 rounded-lg border border-purple-300 text-purple-600 hover:bg-purple-50">+</button>
                     </div>
                 </div>
 
-                <template x-for="(pay, idx) in payments" :key="idx">
-                    <div class="flex gap-2 items-center">
-                        <select x-model="pay.method" class="w-28 border border-gray-300 rounded-xl px-2 py-1.5 text-sm">
-                            <template x-for="m in enabledMethods" :key="m">
-                                <option :value="m" x-text="m"></option>
-                            </template>
-                        </select>
-                        <input x-model="pay.amount" type="number" min="0" step="0.01" placeholder="0.00" class="flex-1 border border-gray-300 rounded-xl px-3 py-1.5 text-sm">
-                        <input x-model="pay.reference" type="text" placeholder="ref" class="w-20 border border-gray-300 rounded-xl px-2 py-1.5 text-sm">
-                        <button @click="removePayment(idx)" x-show="payments.length > 1" class="text-red-500 text-sm">✕</button>
-                    </div>
-                </template>
+                <div class="max-h-28 overflow-y-auto space-y-2 pr-1">
+                    <template x-for="(pay, idx) in payments" :key="idx">
+                        <div class="flex gap-2 items-center">
+                            <select x-model="pay.method" class="w-28 border border-gray-300 rounded-xl px-2 py-1.5 text-sm">
+                                @foreach($paymentAccounts as $method)
+                                    <option value="{{ $method->code }}">{{ $method->name }}</option>
+                                @endforeach
+                            </select>
+                            <input x-model="pay.amount" type="number" min="0" step="0.01" placeholder="0.00" class="flex-1 border border-gray-300 rounded-xl px-3 py-1.5 text-sm">
+                            <input x-model="pay.reference" type="text" placeholder="ref" class="w-20 border border-gray-300 rounded-xl px-2 py-1.5 text-sm">
+                            <button @click="removePayment(idx)" x-show="payments.length > 1" class="text-red-500 text-sm">✕</button>
+                        </div>
+                    </template>
+                </div>
 
                 <div x-show="paidDiff > 0.01" class="flex items-center justify-between text-sm text-amber-600">
                     <span>বাকি: <span x-text="formatMoney(paidDiff)"></span></span>
@@ -389,7 +391,8 @@ function posApp() {
         openSession: {!! $openSession ? json_encode($openSession->only(['id', 'opened_at'])) : 'null' !!},
         openSessionModal: false,
         holds: {!! $holds->map(fn($h) => ['id' => $h->id, 'order_number' => $h->order_number, 'items_count' => $h->items->count(), 'customer_phone' => $h->customer_phone])->toJson() !!},
-        enabledMethods: {!! json_encode($settings->methods()) !!},
+        enabledMethods: {!! json_encode($paymentAccounts->map(fn ($a) => ['code' => $a->code, 'name' => $a->name])->values()) !!},
+        cashCode: '1010',
         symbol: {!! json_encode($settings->currency_symbol ?? '৳') !!},
         taxRate: {{ $settings->tax_rate }},
         taxType: {!! json_encode($settings->tax_type) !!},
@@ -437,10 +440,10 @@ function posApp() {
             return Math.round((this.total - this.totalPaid) * 100) / 100;
         },
         get cashTotal() {
-            return this.payments.filter(p => p.method === 'cash').reduce((s, p) => s + (Number(p.amount) || 0), 0);
+            return this.payments.filter(p => p.method === this.cashCode).reduce((s, p) => s + (Number(p.amount) || 0), 0);
         },
         get nonCashTotal() {
-            return this.payments.filter(p => p.method !== 'cash').reduce((s, p) => s + (Number(p.amount) || 0), 0);
+            return this.payments.filter(p => p.method !== this.cashCode).reduce((s, p) => s + (Number(p.amount) || 0), 0);
         },
         get changeDue() {
             const payable = this.total - this.nonCashTotal;
@@ -491,7 +494,7 @@ function posApp() {
         },
 
         resetPayments() {
-            this.payments = [{ method: this.enabledMethods[0] || 'cash', amount: 0, reference: '' }];
+            this.payments = [{ method: this.enabledMethods[0]?.code || this.cashCode, amount: 0, reference: '' }];
         },
 
         async loadProducts(reset) {
@@ -654,7 +657,11 @@ function posApp() {
         },
 
         addPaymentRow(method) {
-            this.payments.push({ method: method || this.enabledMethods[0] || 'cash', amount: this.paidDiff > 0 ? this.paidDiff : 0, reference: '' });
+            this.payments.push({ method: method || this.enabledMethods[0]?.code || this.cashCode, amount: this.paidDiff > 0 ? this.paidDiff : 0, reference: '' });
+        },
+
+        methodActive(m) {
+            return this.payments.some(p => p.method === m);
         },
 
         removePayment(idx) {

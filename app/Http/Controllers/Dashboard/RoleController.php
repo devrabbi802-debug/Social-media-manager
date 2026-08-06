@@ -125,6 +125,11 @@ class RoleController extends Controller
                 'pos_terminal.list', 'pos_terminal.create',
                 'pos_sales.list', 'pos_sales.view',
                 'pos_sessions.list',
+                'accounting.list',
+                'accounting_money.list', 'accounting_money.create',
+                'chart_of_accounts.list', 'chart_of_accounts.create', 'chart_of_accounts.edit',
+                'journal_entries.list', 'journal_entries.create',
+                'accounting_reports.list',
                 'conversations.list', 'conversations.reply',
             ],
         ]);

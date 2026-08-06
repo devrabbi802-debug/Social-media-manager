@@ -13,8 +13,9 @@ class PosSettingsController extends Controller
     {
         $settings = PosSetting::current();
         $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get();
+        $paymentAccounts = $settings->paymentAccounts();
 
-        return view('tenant.pos.settings', compact('settings', 'warehouses'));
+        return view('tenant.pos.settings', compact('settings', 'warehouses', 'paymentAccounts'));
     }
 
     public function update(Request $request)

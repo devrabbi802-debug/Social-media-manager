@@ -167,6 +167,36 @@
                             </dd>
                         </div>
                     </dl>
+
+                    {{-- Receive payment (posts to accounting ledger) --}}
+                    @if(! in_array($order->payment_status, ['paid', 'refunded'], true))
+                        <div class="mt-4 border-t border-gray-100 pt-4" x-data="{ open: false }">
+                            <button @click="open = !open" type="button" class="w-full px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700">
+                                পেমেন্ট নিন (হিসাব হবে)
+                            </button>
+                            <form x-show="open" x-cloak method="POST" action="{{ route('orders.receive-payment', $order) }}" class="mt-3 space-y-3">
+                                @csrf
+                                <div>
+                                    <input type="number" step="0.01" min="0.01" name="amount" placeholder="পরিমাণ (৳)" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm" required>
+                                </div>
+                                <div>
+                                    <select name="payment_method" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm" required>
+                                        <option value="cash">নগদ</option>
+                                        <option value="bkash">বিকাশ</option>
+                                        <option value="nagad">নগদ</option>
+                                        <option value="rocket">রকেট</option>
+                                        <option value="upay">উপায়</option>
+                                        <option value="bank">ব্যাংক</option>
+                                        <option value="card">কার্ড</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <input type="text" name="reference" placeholder="রেফারেন্স (ঐচ্ছিক)" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm">
+                                </div>
+                                <button type="submit" class="w-full px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-medium hover:bg-purple-700">হিসাব করুন</button>
+                            </form>
+                        </div>
+                    @endif
                 </div>
             </div>
         </div>

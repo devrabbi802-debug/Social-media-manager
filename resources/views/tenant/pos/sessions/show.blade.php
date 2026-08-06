@@ -137,7 +137,7 @@
                                     <a href="{{ route('pos.sales.show', $order) }}" class="font-semibold text-purple-600 hover:text-purple-800">{{ $order->order_number }}</a>
                                 </td>
                                 <td class="px-6 py-3 text-sm text-right font-semibold text-gray-900">৳{{ number_format($order->total, 2) }}</td>
-                                <td class="px-6 py-3 text-sm text-gray-600">{{ $order->payment_method }}</td>
+                                <td class="px-6 py-3 text-sm text-gray-600">{{ $order->paymentMethodName() }}</td>
                                 <td class="px-6 py-3 text-sm">{{ $order->status }}</td>
                             </tr>
                         @empty

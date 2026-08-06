@@ -4,11 +4,17 @@ declare(strict_types=1);
 
 use App\Http\Controllers\AiSettingController;
 use App\Http\Controllers\ConversationController;
+use App\Http\Controllers\Dashboard\AccountingController;
+use App\Http\Controllers\Dashboard\AccountingReportController;
+use App\Http\Controllers\Dashboard\AccountingSettingController;
 use App\Http\Controllers\Dashboard\AttributeController;
 use App\Http\Controllers\Dashboard\BrandController;
 use App\Http\Controllers\Dashboard\CategoryController;
+use App\Http\Controllers\Dashboard\ChartOfAccountController;
 use App\Http\Controllers\Dashboard\ImageMatchController;
 use App\Http\Controllers\Dashboard\InventoryController;
+use App\Http\Controllers\Dashboard\JournalEntryController;
+use App\Http\Controllers\Dashboard\MoneyController;
 use App\Http\Controllers\Dashboard\OrderController;
 use App\Http\Controllers\Dashboard\PosController;
 use App\Http\Controllers\Dashboard\PosReportController;
@@ -322,6 +328,7 @@ Route::middleware([
                 });
                 Route::middleware('permission:orders,edit')->group(function () {
                     Route::post('/bulk-update', [OrderController::class, 'bulkUpdate'])->name('bulk-update');
+                    Route::post('/{order}/receive-payment', [OrderController::class, 'receivePayment'])->name('receive-payment');
                     Route::get('/{order}/edit', [OrderController::class, 'edit'])->name('edit');
                     Route::put('/{order}', [OrderController::class, 'update'])->name('update');
                 });
@@ -369,6 +376,66 @@ Route::middleware([
                 Route::get('/image-match', [ImageMatchController::class, 'index'])->name('image-match.index');
                 Route::post('/image-match', [ImageMatchController::class, 'match'])->name('image-match.match');
                 Route::post('/image-match/url', [ImageMatchController::class, 'matchUrl'])->name('image-match.url');
+            });
+
+            // Accounting System
+            Route::middleware('permission:accounting,list')->prefix('accounting')->name('accounting.')->group(function () {
+                Route::get('/', [AccountingController::class, 'index'])->name('index');
+
+                // Chart of Accounts
+                Route::middleware('permission:chart_of_accounts,list')->prefix('chart-of-accounts')->name('chart-of-accounts.')->group(function () {
+                    Route::get('/', [ChartOfAccountController::class, 'index'])->name('index');
+                    Route::middleware('permission:chart_of_accounts,create')->group(function () {
+                        Route::get('/create', [ChartOfAccountController::class, 'create'])->name('create');
+                        Route::post('/', [ChartOfAccountController::class, 'store'])->name('store');
+                    });
+                    Route::middleware('permission:chart_of_accounts,edit')->group(function () {
+                        Route::get('/{account}/edit', [ChartOfAccountController::class, 'edit'])->name('edit');
+                        Route::put('/{account}', [ChartOfAccountController::class, 'update'])->name('update');
+                    });
+                    Route::middleware('permission:chart_of_accounts,delete')->group(function () {
+                        Route::delete('/{account}', [ChartOfAccountController::class, 'destroy'])->name('destroy');
+                    });
+                });
+
+                // Income & Expense (money in/out)
+                Route::middleware('permission:accounting_money,list')->prefix('money')->name('money.')->group(function () {
+                    Route::get('/', [MoneyController::class, 'index'])->name('index');
+                    Route::middleware('permission:accounting_money,create')->group(function () {
+                        Route::get('/create', [MoneyController::class, 'create'])->name('create');
+                        Route::post('/', [MoneyController::class, 'store'])->name('store');
+                    });
+                });
+
+                // Journal Entries
+                Route::middleware('permission:journal_entries,list')->prefix('journal')->name('journal.')->group(function () {
+                    Route::get('/', [JournalEntryController::class, 'index'])->name('index');
+                    Route::middleware('permission:journal_entries,create')->group(function () {
+                        Route::get('/create', [JournalEntryController::class, 'create'])->name('create');
+                        Route::post('/', [JournalEntryController::class, 'store'])->name('store');
+                    });
+                    Route::get('/{entry}', [JournalEntryController::class, 'show'])->name('show');
+                    Route::middleware('permission:journal_entries,reverse')->group(function () {
+                        Route::post('/{entry}/reverse', [JournalEntryController::class, 'reverse'])->name('reverse');
+                    });
+                });
+
+                // Reports
+                Route::middleware('permission:accounting_reports,list')->prefix('reports')->name('reports.')->group(function () {
+                    Route::get('/trial-balance', [AccountingReportController::class, 'trialBalance'])->name('trial-balance');
+                    Route::get('/income-statement', [AccountingReportController::class, 'incomeStatement'])->name('income-statement');
+                    Route::get('/balance-sheet', [AccountingReportController::class, 'balanceSheet'])->name('balance-sheet');
+                    Route::get('/ledger', [AccountingReportController::class, 'ledger'])->name('ledger');
+                    Route::get('/transactions', [AccountingReportController::class, 'transactions'])->name('transactions');
+                });
+
+                // Settings
+                Route::middleware('permission:accounting_settings,list')->prefix('settings')->name('settings.')->group(function () {
+                    Route::get('/', [AccountingSettingController::class, 'index'])->name('index');
+                    Route::middleware('permission:accounting_settings,edit')->group(function () {
+                        Route::put('/', [AccountingSettingController::class, 'update'])->name('update');
+                    });
+                });
             });
 
             // Storefront Settings (Web Setup)

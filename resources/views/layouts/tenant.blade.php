@@ -1,6 +1,7 @@
 @php
     $tenantUser = Auth::user();
     $businessLogo = \App\Models\BusinessSetting::where('user_id', $tenantUser->id ?? 0)->first();
+    $isPosRoute = request()->routeIs('pos.*');
 @endphp
 
 <!DOCTYPE html>
@@ -22,10 +23,16 @@
     </style>
     @stack('styles')
 </head>
-<body class="bg-gray-100" x-data="{ sidebarOpen: true, mobileMenuOpen: false }">
+<body class="bg-gray-100" x-data="{ sidebarOpen: {{ $isPosRoute ? 'false' : 'true' }}, mobileMenuOpen: false }">
     {{-- Top Bar --}}
     <div class="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm h-14 flex items-center px-4 border-b border-gray-200">
         <button @click="mobileMenuOpen = !mobileMenuOpen" class="md:hidden mr-3 text-gray-500 hover:text-gray-700">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+        </button>
+
+        <button @click="sidebarOpen = !sidebarOpen" class="hidden md:flex mr-3 text-gray-500 hover:text-gray-700">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
             </svg>
@@ -44,11 +51,23 @@
                 $isNewProductActive = request()->routeIs('inventory.products.create');
                 $isOrdersActive = request()->routeIs('orders.index');
                 $isPosActive = request()->routeIs('pos.index');
+                $isAccountingActive = request()->routeIs('accounting.*');
             @endphp
             <a href="{{ route('inventory.products.index') }}" class="px-3 py-1.5 text-sm font-medium rounded-lg transition {{ $isProductsActive && !$isNewProductActive ? 'text-purple-600 bg-purple-50' : 'text-gray-600 hover:text-purple-600 hover:bg-purple-50' }}">@lang('sidebar.products')</a>
             <a href="{{ route('inventory.products.create') }}" class="px-3 py-1.5 text-sm font-medium rounded-lg transition {{ $isNewProductActive ? 'text-white bg-purple-600' : 'text-gray-600 border border-gray-200 hover:text-purple-600 hover:border-purple-300 hover:bg-purple-50' }}">@lang('sidebar.product_create')</a>
             <a href="{{ route('orders.index') }}" class="px-3 py-1.5 text-sm font-medium rounded-lg transition {{ $isOrdersActive ? 'text-purple-600 bg-purple-50' : 'text-gray-600 hover:text-purple-600 hover:bg-purple-50' }}">@lang('sidebar.orders')</a>
             <a href="{{ route('pos.index') }}" class="px-3 py-1.5 text-sm font-medium rounded-lg transition {{ $isPosActive ? 'text-purple-600 bg-purple-50' : 'text-gray-600 hover:text-purple-600 hover:bg-purple-50' }}">@lang('sidebar.pos_terminal')</a>
+
+            {{-- Accounting Quick Add --}}
+            @php $canAccounting = auth()->user()?->isSuperAdmin(); @endphp
+            @if(auth()->user()?->hasPermission('accounting_money', 'create') || $canAccounting)
+                <div class="w-px h-5 bg-gray-200"></div>
+                <a href="{{ route('accounting.money.create', ['type' => 'expense']) }}" class="px-3 py-1.5 text-sm font-medium rounded-lg transition text-red-600 border border-red-200 hover:bg-red-50" title="@lang('accounting.add_expense')">@lang('accounting.add_expense')</a>
+                <a href="{{ route('accounting.money.create', ['type' => 'income']) }}" class="px-3 py-1.5 text-sm font-medium rounded-lg transition text-green-600 border border-green-200 hover:bg-green-50" title="@lang('accounting.add_income')">@lang('accounting.add_income')</a>
+            @endif
+            @if(auth()->user()?->hasPermission('journal_entries', 'create') || $canAccounting)
+                <a href="{{ route('accounting.journal.create') }}" class="px-3 py-1.5 text-sm font-medium rounded-lg transition text-purple-600 border border-purple-200 hover:bg-purple-50" title="@lang('accounting.add_journal')">@lang('accounting.add_journal')</a>
+            @endif
         </div>
 
         <div class="flex-1"></div>
@@ -129,7 +148,7 @@
     <div x-show="mobileMenuOpen" @click="mobileMenuOpen = false" x-transition.opacity class="fixed inset-0 bg-black/50 z-40 md:hidden"></div>
 
     {{-- Sidebar --}}
-    <aside :class="mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'" class="fixed left-0 top-14 bottom-0 w-64 bg-white border-r border-gray-200 z-50 transform transition-transform duration-200 overflow-y-auto">
+    <aside :class="[mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0', sidebarOpen ? 'md:w-64' : 'md:w-20']" class="fixed left-0 top-14 bottom-0 w-64 bg-white border-r border-gray-200 z-50 transform transition-all duration-200 overflow-y-auto">
         <nav class="p-4 space-y-1">
 @php
                 $topLinks = [
@@ -178,6 +197,19 @@
                         ],
                     ],
                     [
+                        'key' => 'accounting',
+                        'label' => __('sidebar.accounting'),
+                        'icon' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>',
+                        'items' => [
+                            ['label' => __('sidebar.accounting_dashboard'), 'route' => 'accounting.index', 'permission' => 'accounting', 'icon' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>'],
+                            ['label' => __('sidebar.accounting_money'), 'route' => 'accounting.money.index', 'permission' => 'accounting_money', 'icon' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>'],
+                            ['label' => __('sidebar.chart_of_accounts'), 'route' => 'accounting.chart-of-accounts.index', 'permission' => 'chart_of_accounts', 'icon' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>'],
+                            ['label' => __('sidebar.journal_entries'), 'route' => 'accounting.journal.index', 'permission' => 'journal_entries', 'icon' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>'],
+                            ['label' => __('sidebar.accounting_reports'), 'route' => 'accounting.reports.trial-balance', 'permission' => 'accounting_reports', 'icon' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>'],
+                            ['label' => __('sidebar.accounting_settings'), 'route' => 'accounting.settings.index', 'permission' => 'accounting_settings', 'icon' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>'],
+                        ],
+                    ],
+                    [
                         'key' => 'user_management',
                         'label' => __('sidebar.user_management'),
                         'icon' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>',
@@ -204,9 +236,9 @@
                     if (isset($item['permission']) && !$tenantUser->hasPermission($item['permission'], 'list')) continue;
                     $isActive = request()->routeIs($item['route']);
                 @endphp
-                <a href="{{ route($item['route']) }}" class="flex items-center px-4 py-3 rounded-lg transition text-sm {{ $isActive ? 'bg-purple-50 text-purple-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                <a href="{{ route($item['route']) }}" :title="!sidebarOpen ? '{{ $item['label'] }}' : ''" class="flex items-center px-4 py-3 rounded-lg transition text-sm {{ $isActive ? 'bg-purple-50 text-purple-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
                     <svg class="w-5 h-5 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">{!! $item['icon'] !!}</svg>
-                    {{ $item['label'] }}
+                    <span x-show="sidebarOpen">{{ $item['label'] }}</span>
                 </a>
             @endforeach
 
@@ -225,16 +257,16 @@
                     });
                 @endphp
                 <div x-data="{ open: {{ $groupActive ? 'true' : 'false' }} }">
-                    <button type="button" @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 rounded-lg transition text-sm {{ $groupActive ? 'text-purple-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                    <button type="button" @click="open = !open; if (!sidebarOpen) { sidebarOpen = true; open = true; }" :title="!sidebarOpen ? '{{ $group['label'] }}' : ''" class="w-full flex items-center justify-between px-4 py-2.5 rounded-lg transition text-sm {{ $groupActive ? 'text-purple-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
                         <span class="flex items-center">
                             <svg class="w-5 h-5 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">{!! $group['icon'] !!}</svg>
-                            {{ $group['label'] }}
+                            <span x-show="sidebarOpen">{{ $group['label'] }}</span>
                         </span>
-                        <svg class="w-4 h-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-4 h-4 transition-transform duration-200 shrink-0" x-show="sidebarOpen" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                         </svg>
                     </button>
-                    <div x-show="open" x-transition x-cloak class="pl-4">
+                    <div x-show="sidebarOpen && open" x-transition x-cloak class="pl-4">
                         @foreach($visibleItems as $item)
                             @php
                                 $isActive = isset($item['route']) ? request()->routeIs($item['route']) : false;
@@ -254,7 +286,7 @@
     </aside>
 
     {{-- Main Content --}}
-    <main class="md:ml-64 pt-14 min-h-screen">
+    <main :class="sidebarOpen ? 'md:ml-64' : 'md:ml-20'" class="pt-14 min-h-screen transition-all duration-200">
         @yield('content')
     </main>
 

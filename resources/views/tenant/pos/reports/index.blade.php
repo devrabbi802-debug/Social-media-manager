@@ -73,8 +73,12 @@
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
                         @foreach($paymentBreakdown as $p)
+                            @php
+                                $pmAcct = \App\Models\ChartOfAccount::byCode($p->method);
+                                $pmName = $pmAcct?->name ?? ucfirst(str_replace('_', ' ', $p->method));
+                            @endphp
                             <tr>
-                                <td class="px-6 py-3 text-sm text-gray-900 capitalize">{{ $p->method }}</td>
+                                <td class="px-6 py-3 text-sm text-gray-900">{{ $pmName }}</td>
                                 <td class="px-6 py-3 text-sm text-right text-gray-600">{{ $p->count }}</td>
                                 <td class="px-6 py-3 text-sm text-right font-semibold text-gray-900">৳{{ number_format($p->total, 2) }}</td>
                             </tr>

@@ -73,6 +73,20 @@ return [
             ],
         ],
 
+        // ---- Accounting (sub-menu granular) ----
+        [
+            'id' => 'accounting',
+            'title' => 'Accounting',
+            'items' => [
+                ['slug' => 'accounting',           'label' => 'Accounting Dashboard', 'permissions' => ['list']],
+                ['slug' => 'accounting_money',     'label' => 'Income & Expense',     'permissions' => ['list', 'create']],
+                ['slug' => 'chart_of_accounts',    'label' => 'Chart of Accounts',    'permissions' => ['list', 'create', 'edit', 'delete']],
+                ['slug' => 'journal_entries',      'label' => 'Journal Entries',      'permissions' => ['list', 'create', 'reverse']],
+                ['slug' => 'accounting_reports',   'label' => 'Reports',              'permissions' => ['list']],
+                ['slug' => 'accounting_settings',  'label' => 'Settings',             'permissions' => ['list', 'edit']],
+            ],
+        ],
+
         // ---- Storefront Settings ----
         [
             'id' => 'web_setup',
@@ -139,6 +153,7 @@ return [
         'refund' => 'Refund',
         'hold' => 'Hold Order',
         'close' => 'Close Session',
+        'reverse' => 'Reverse Entry',
     ],
 
 ];

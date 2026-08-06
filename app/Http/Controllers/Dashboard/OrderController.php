@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
-use App\Models\Order;
-use App\Models\OrderItem;
+use App\Models\AccountingSetting;
 use App\Models\Customer;
+use App\Models\JournalEntry;
+use App\Models\Order;
+use App\Models\StorefrontSettings;
+use App\Services\AccountingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -19,8 +22,8 @@ class OrderController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('order_number', 'like', "%{$search}%")
-                  ->orWhere('customer_name', 'like', "%{$search}%")
-                  ->orWhere('customer_phone', 'like', "%{$search}%");
+                    ->orWhere('customer_name', 'like', "%{$search}%")
+                    ->orWhere('customer_phone', 'like', "%{$search}%");
             });
         }
 
@@ -71,6 +74,7 @@ class OrderController extends Controller
     public function show(Request $request, Order $order)
     {
         $order->load(['items.product.primaryImage', 'items.variant', 'customer', 'shippingAddress']);
+
         return view('tenant.orders.show', compact('order'));
     }
 
@@ -79,6 +83,7 @@ class OrderController extends Controller
         $order->load(['items', 'customer', 'shippingAddress']);
         $statuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'];
         $paymentStatuses = ['pending', 'paid', 'failed', 'refunded'];
+
         return view('tenant.orders.edit', compact('order', 'statuses', 'paymentStatuses'));
     }
 
@@ -95,8 +100,53 @@ class OrderController extends Controller
 
         $order->update($validated);
 
+        // Keep the ledger in sync: cancelling/refunding an order reverses its accounting entries
+        if (in_array($order->status, ['cancelled', 'refunded'], true)) {
+            app(AccountingService::class)->reverseOrderEntries($order);
+        }
+
         return redirect()->route('orders.show', $order)
             ->with('success', __('orders.updated'));
+    }
+
+    /**
+     * Record a customer payment against an order (receivable → cash/bank).
+     */
+    public function receivePayment(Request $request, Order $order)
+    {
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+            'payment_method' => 'required|string|max:50',
+            'reference' => 'nullable|string|max:255',
+        ]);
+
+        $service = app(AccountingService::class);
+        $accounting = AccountingSetting::current();
+
+        DB::transaction(function () use ($service, $order, $validated) {
+            // Ensure the sale is on the books even if auto-post was off
+            $saleEntry = JournalEntry::ofReference('order', $order->id)->posted()->latest('id')->first();
+            if (! $saleEntry) {
+                $service->postOrder($order);
+            }
+
+            $received = JournalEntry::ofReference('order_payment', $order->id)
+                ->posted()
+                ->get()
+                ->sum(fn ($e) => (float) $e->lines()->sum('debit'));
+
+            $remaining = round((float) $order->total - $received, 2);
+
+            if ((float) $validated['amount'] > $remaining + 0.01) {
+                throw new \InvalidArgumentException('অর্ডারের বাকি পরিমাণের বেশি পেমেন্ট নেওয়া যাবে না (বাকি: ৳'.$remaining.')।');
+            }
+
+            $service->receiveOrderPayment($order, (float) $validated['amount'], $validated['payment_method'], $validated['reference'] ?? null);
+
+            $order->update(['payment_status' => $remaining - (float) $validated['amount'] < 0.01 ? 'paid' : 'partial']);
+        });
+
+        return back()->with('success', 'পেমেন্ট সফলভাবে হিসাব হয়েছে।');
     }
 
     public function bulkUpdate(Request $request)
@@ -130,7 +180,7 @@ class OrderController extends Controller
 
         $orders = $query->latest()->get();
 
-        $filename = 'orders-export-' . now()->format('Y-m-d-His') . '.csv';
+        $filename = 'orders-export-'.now()->format('Y-m-d-His').'.csv';
         $headers = [
             'Content-Type' => 'text/csv; charset=UTF-8',
             'Content-Disposition' => "attachment; filename=\"$filename\"",
@@ -166,7 +216,8 @@ class OrderController extends Controller
     public function print(Order $order)
     {
         $order->load(['items.product', 'items.variant', 'customer', 'shippingAddress']);
-        $storefront = \App\Models\StorefrontSettings::first();
+        $storefront = StorefrontSettings::first();
+
         return view('tenant.orders.print', compact('order', 'storefront'));
     }
 }

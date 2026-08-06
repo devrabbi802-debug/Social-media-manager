@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Models\AccountingSetting;
 use App\Models\Category;
 use App\Models\Customer;
 use App\Models\PosOrder;
@@ -13,6 +14,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\StockMovement;
 use App\Models\Warehouse;
+use App\Services\AccountingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -29,6 +31,7 @@ class PosController extends Controller
         $holds = PosOrder::where('status', 'hold')->with('items')->latest()->limit(20)->get();
         $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get();
         $defaultWarehouse = Warehouse::find($settings->default_warehouse_id) ?? $warehouses->first();
+        $paymentAccounts = $settings->paymentAccounts()->filter(fn ($a) => $settings->isEnabled($a->code))->values();
 
         return view('tenant.pos.index', compact(
             'settings',
@@ -37,7 +40,8 @@ class PosController extends Controller
             'customers',
             'holds',
             'warehouses',
-            'defaultWarehouse'
+            'defaultWarehouse',
+            'paymentAccounts'
         ));
     }
 
@@ -224,12 +228,16 @@ class PosController extends Controller
                     'notes' => $validated['notes'] ?? null,
                 ]);
 
+                $costOfGoods = 0;
+
                 foreach ($items as $item) {
                     $product = Product::find($item['product_id']);
                     $variant = $item['variant_id'] ? ProductVariant::find($item['variant_id']) : null;
 
                     $cost = $variant ? (float) ($variant->cost_price ?? $product->cost_price ?? 0)
                         : (float) ($product->cost_price ?? 0);
+
+                    $costOfGoods += $cost * (int) $item['quantity'];
 
                     PosOrder::createItem($order, $product, $variant, $item['unit_price'], $cost, $item['quantity']);
 
@@ -246,6 +254,10 @@ class PosController extends Controller
                 }
 
                 $this->updateSession($session, $order, $paid);
+
+                if (AccountingSetting::current()->post_pos_sales) {
+                    app(AccountingService::class)->postPosSale($order, $payments, $costOfGoods);
+                }
 
                 if (! empty($validated['resume_order_id'])) {
                     PosOrder::where('id', $validated['resume_order_id'])

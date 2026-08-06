@@ -85,11 +85,11 @@
                     <div class="flex justify-between"><span>Tax ({{ $order->tax_rate }}% {{ $order->tax_type }})</span><span>{{ number_format($order->tax_amount, 2) }}</span></div>
                 @endif
                 <div class="flex justify-between text-lg font-bold pt-1"><span>TOTAL</span><span>{{ $settings->currency_symbol ?? '৳' }}{{ number_format($order->total, 2) }}</span></div>
-                @if($order->payment_method === 'cash')
+                @if($order->isCashPayment())
                     <div class="flex justify-between"><span>Tendered</span><span>{{ number_format($order->tendered_amount, 2) }}</span></div>
                     <div class="flex justify-between"><span>Change</span><span>{{ number_format($order->change_due, 2) }}</span></div>
                 @endif
-                <div class="flex justify-between"><span>Payment</span><span>{{ $order->payment_method }} ({{ $order->payment_status }})</span></div>
+                <div class="flex justify-between"><span>Payment</span><span>{{ $order->paymentMethodName() }} ({{ $order->payment_status }})</span></div>
             </div>
 
             @if($order->refunds->count())

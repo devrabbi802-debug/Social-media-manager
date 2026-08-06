@@ -81,23 +81,23 @@
 
             <div class="border-t border-gray-200 pt-6">
                 <h3 class="font-bold text-gray-900 mb-4 text-lg">Payment Methods</h3>
+                <p class="text-sm text-gray-500 mb-3">Payment methods আসে <span class="font-medium text-purple-700">Chart of Accounts</span> থেকে। নতুন পেমেন্ট মেথড যোগ করতে Accounting → Chart of Accounts-এ একটি Asset অ্যাকাউন্ট তৈরি করে "POS Payment Method" টিক দিন।</p>
                 <div class="space-y-2">
-                    @php
-                        $methods = $settings->methods();
-                        $allMethods = ['cash', 'card', 'mobile', 'bkash', 'nagad', 'rocket', 'upay'];
-                    @endphp
-                    @foreach($allMethods as $method)
+                    @php $methods = $settings->methods(); @endphp
+                    @forelse($paymentAccounts as $method)
                         <label class="flex items-center gap-2">
-                            <input type="checkbox" name="payment_methods[]" value="{{ $method }}" {{ in_array($method, $methods) ? 'checked' : '' }} class="rounded">
-                            <span class="text-sm capitalize">{{ $method }}</span>
+                            <input type="checkbox" name="payment_methods[]" value="{{ $method->code }}" {{ $settings->isEnabled($method->code) ? 'checked' : '' }} class="rounded">
+                            <span class="text-sm"><span class="font-medium">{{ $method->name }}</span> <span class="text-gray-400">({{ $method->code }})</span></span>
                         </label>
-                    @endforeach
+                    @empty
+                        <p class="text-sm text-gray-400">কোনো POS payment account পাওয়া যায়নি। COA-তে asset অ্যাকাউন্ট তৈরি করুন।</p>
+                    @endforelse
                 </div>
                 <div class="mt-4">
                     <label class="block text-sm font-medium text-gray-600 mb-1">Default Method</label>
                     <select name="default_payment_method" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm">
-                        @foreach($methods as $method)
-                            <option value="{{ $method }}" {{ $settings->default_payment_method === $method ? 'selected' : '' }}>{{ ucfirst($method) }}</option>
+                        @foreach($paymentAccounts as $method)
+                            <option value="{{ $method->code }}" {{ $settings->defaultMethod() === $method->code ? 'selected' : '' }}>{{ $method->name }}</option>
                         @endforeach
                     </select>
                 </div>

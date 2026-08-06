@@ -79,6 +79,31 @@ class PosOrder extends Model
         return $this->hasMany(PosPayment::class);
     }
 
+    public function paymentMethodName(): string
+    {
+        $code = $this->payment_method;
+        $account = $code ? ChartOfAccount::byCode($code) : null;
+
+        return $account?->name ?? ucfirst(str_replace('_', ' ', $code ?? ''));
+    }
+
+    public function isCashPayment(): bool
+    {
+        $code = $this->payment_method;
+
+        if (! $code) {
+            return true;
+        }
+
+        if ($code === 'cash') {
+            return true;
+        }
+
+        $account = ChartOfAccount::byCode($code);
+
+        return $account !== null && (int) $account->code === 1010;
+    }
+
     public function refunds(): HasMany
     {
         return $this->hasMany(PosRefund::class);

@@ -72,7 +72,7 @@
                             @foreach($order->refunds as $refund)
                                 <tr>
                                     <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ $refund->refund_number }}</td>
-                                    <td class="px-6 py-4 text-sm text-gray-600">{{ $refund->method }}</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">{{ $refund->method_name ?? $refund->method }}</td>
                                     <td class="px-6 py-4 text-sm text-right text-red-600 font-semibold">৳{{ number_format($refund->amount, 2) }}</td>
                                     <td class="px-6 py-4 text-sm text-gray-600">{{ $refund->reason ?? '-' }}</td>
                                     <td class="px-6 py-4 text-sm text-gray-500">{{ $refund->created_at->format('d M Y H:i') }}</td>
@@ -100,7 +100,7 @@
                 </div>
                 <div class="mt-4 pt-4 border-t border-gray-200 space-y-2 text-sm text-gray-600">
                     <div class="flex justify-between"><span>Customer</span><span>{{ $order->customer_name ?? '-' }} {{ $order->customer_phone ? '('.$order->customer_phone.')' : '' }}</span></div>
-                    <div class="flex justify-between"><span>Payment</span><span>{{ $order->payment_method }} ({{ $order->payment_status }})</span></div>
+                    <div class="flex justify-between"><span>Payment</span><span>{{ $order->paymentMethodName() }} ({{ $order->payment_status }})</span></div>
                     <div class="flex justify-between"><span>Tendered</span><span>৳{{ number_format($order->tendered_amount, 2) }}</span></div>
                     <div class="flex justify-between"><span>Change</span><span>৳{{ number_format($order->change_due, 2) }}</span></div>
                     @if($order->session)
@@ -124,9 +124,11 @@
                                 <div>
                                     <label class="block text-sm font-medium text-gray-600 mb-1">মেথড</label>
                                     <select name="method" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm">
-                                        <option value="cash">Cash</option>
-                                        <option value="card">Card</option>
-                                        <option value="mobile">Mobile</option>
+                                        @forelse($paymentAccounts as $method)
+                                            <option value="{{ $method->code }}" {{ $order->payment_method === $method->code ? 'selected' : '' }}>{{ $method->name }}</option>
+                                        @empty
+                                            <option value="1010">Cash</option>
+                                        @endforelse
                                     </select>
                                 </div>
                                 <div>

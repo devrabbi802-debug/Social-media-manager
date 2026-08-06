@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Models\AccountingSetting;
 use App\Models\BusinessSetting;
 use App\Models\PosOrder;
 use App\Models\PosRefund;
@@ -10,6 +11,7 @@ use App\Models\PosSetting;
 use App\Models\StockMovement;
 use App\Models\StorefrontSettings;
 use App\Models\Warehouse;
+use App\Services\AccountingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -42,20 +44,25 @@ class PosSaleController extends Controller
 
         $orders = $query->latest()->paginate(20)->withQueryString();
 
+        $settings = PosSetting::current();
+        $paymentAccounts = $settings->paymentAccounts();
+
         $totalSales = (clone $query)->where('status', 'completed')->sum('total');
         $totalOrders = (clone $query)->count();
         $totalRefunds = PosRefund::where('status', 'completed')
             ->whereBetween('created_at', [$request->from ?? now()->startOfMonth(), $request->to ?? now()->endOfMonth()])
             ->sum('amount');
 
-        return view('tenant.pos.sales.index', compact('orders', 'totalSales', 'totalOrders', 'totalRefunds'));
+        return view('tenant.pos.sales.index', compact('orders', 'totalSales', 'totalOrders', 'totalRefunds', 'paymentAccounts'));
     }
 
     public function show(PosOrder $order)
     {
         $order->load(['user', 'customer', 'items', 'payments', 'refunds', 'session']);
+        $settings = PosSetting::current();
+        $paymentAccounts = $settings->paymentAccounts()->filter(fn ($a) => $settings->isEnabled($a->code))->values();
 
-        return view('tenant.pos.sales.show', compact('order'));
+        return view('tenant.pos.sales.show', compact('order', 'paymentAccounts'));
     }
 
     public function receipt(PosOrder $order)
@@ -128,6 +135,7 @@ class PosSaleController extends Controller
                 $order->save();
 
                 // Restore stock for returned quantities
+                $returnedCost = 0;
                 if (! empty($validated['items']) && $warehouse) {
                     foreach ($validated['items'] as $returned) {
                         if (! $returned['quantity']) {
@@ -140,6 +148,7 @@ class PosSaleController extends Controller
                         }
 
                         $qty = min((int) $returned['quantity'], $item->quantity);
+                        $returnedCost += (float) $item->unit_cost * $qty;
 
                         if ($item->variant_id) {
                             $item->variant?->increment('stock_quantity', $qty);
@@ -160,6 +169,10 @@ class PosSaleController extends Controller
                             'created_by' => auth()->id(),
                         ]);
                     }
+                }
+
+                if (AccountingSetting::current()->post_pos_refunds) {
+                    app(AccountingService::class)->postPosRefund($order, $refund, $returnedCost);
                 }
 
                 // Reflect refund on open session

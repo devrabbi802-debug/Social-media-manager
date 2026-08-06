@@ -147,6 +147,18 @@ Custom role-based access control for the **tenant admin panel** — fully separa
 
 Minimal — 3 files: `tests/Feature/ExampleTest.php`, `tests/Unit/ExampleTest.php`, `tests/Unit/AiToolCallingTest.php`. `AiToolCallingTest` covers `app/Services/AiTools/` (ToolRegistry/ToolExecutor) without network. No tenant-specific tests. Run with `composer test` (SQLite :memory:, `QUEUE_CONNECTION=sync`). `config:clear` required first (composer test handles it).
 
+## Accounting System
+
+Double-entry ledger (tenant-scoped) with a non-accountant-friendly UI. Routes under `{adminPrefix}/accounting/*`, views `resources/views/tenant/accounting/`.
+
+- **Tables**: `chart_of_accounts`, `journal_entries` (voucher header, `status` = `posted`/`reversed`), `journal_entry_lines`, `accounting_settings` (singleton id=1, auto-post toggles + payment→account map).
+- **Engine**: `app/Services/AccountingService.php` — `post()` validates debit=credit, `reverse()` creates a **reversing entry** (original stays `posted`; they offset in the ledger — do NOT mark the original reversed in code). `ensureChartOfAccounts()` seeds default COA (codes 1010+ assets, 20xx liabilities, 30xx equity, 4010 sales, 50xx expenses) on first visit. Reports: `trialBalance()`, `incomeStatement()`, `balanceSheet()`, `ledger()`, `netProfit()` (fiscal year = July start by default, configurable).
+- **Auto-posting hooks** (respect `accounting_settings.post_pos_*` / `post_storefront_orders`): `PosController::checkout` → `postPosSale()`, `PosSaleController::refund` → `postPosRefund()` (full = reversing entry, partial = sales-return), `CheckoutController::placeOrder` → `postOrder()` (receivable until paid), `OrderController::receivePayment` (AR→cash) + `reverseOrderEntries()` on cancel/refund.
+- **Opening balances**: entered on the Accounting Settings page → `syncOpeningBalances()` deletes prior `opening` reference entries then posts a balanced entry, net parked in `3100 Opening Balance Equity`.
+- **Payments**: `paymentAccount($method)` maps cash/bkash/nagad/rocket/upay/card to COA via settings `payment_account_map` (defaults: 1010 cash, 1020 bank, 1030 mobile wallet).
+- **Permissions**: `accounting` group in `config/tenant-permissions.php` (dashboard, money, chart_of_accounts, journal_entries incl. `reverse`, reports, settings). Manager default role has view-level access.
+- Balance columns are `decimal(14,2)`; all report math uses `round(...,2)`.
+
 ## Formatting
 
 - `.editorconfig`: 4-space indent, LF endings (2-space `.yml`/`.yaml`, 4-space `docker-compose.*.yml`)
@@ -168,6 +180,10 @@ Minimal — 3 files: `tests/Feature/ExampleTest.php`, `tests/Unit/ExampleTest.ph
 ## Planning Documents
 
 `INVENTORY_REVIEW.txt` (bug list + architecture plan), `STOREFRONT_PLAN.txt`, `PRODUCT_CATEGORY_FIELDS_PLAN.txt`. Consult before modifying inventory or storefront — they capture known gaps and future work.
+
+## User Documentation
+
+`docs/ACCOUNTING_USER_GUIDE.md` (EN) + `docs/ACCOUNTING_USER_GUIDE_BN.md` (Bangla) — complete end-user guide for the accounting module (setup, journal, reports, reversal, FAQ). Update these when accounting behavior/views change.
 
 
 ## Language / Communication Style

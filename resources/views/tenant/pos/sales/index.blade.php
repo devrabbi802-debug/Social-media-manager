@@ -54,9 +54,9 @@
                 <div>
                     <select name="payment_method" class="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-purple-500">
                         <option value="">সব পেমেন্ট</option>
-                        <option value="cash" {{ request('payment_method') === 'cash' ? 'selected' : '' }}>Cash</option>
-                        <option value="card" {{ request('payment_method') === 'card' ? 'selected' : '' }}>Card</option>
-                        <option value="mobile" {{ request('payment_method') === 'mobile' ? 'selected' : '' }}>Mobile</option>
+                        @foreach($paymentAccounts as $method)
+                            <option value="{{ $method->code }}" {{ request('payment_method') === $method->code ? 'selected' : '' }}>{{ $method->name }}</option>
+                        @endforeach
                     </select>
                 </div>
                 <div>
@@ -95,7 +95,7 @@
                                     @endif
                                 </td>
                                 <td class="px-6 py-4 text-sm text-gray-600">{{ $order->user->name ?? '-' }}</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">{{ $order->payment_method }}</td>
+                                <td class="px-6 py-4 text-sm text-gray-600">{{ $order->paymentMethodName() }}</td>
                                 <td class="px-6 py-4 text-sm font-bold text-gray-900">৳{{ number_format($order->total, 2) }}</td>
                                 <td class="px-6 py-4">
                                     @php

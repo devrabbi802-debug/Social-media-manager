@@ -46,4 +46,11 @@ class PosRefund extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function getMethodNameAttribute(): string
+    {
+        $account = $this->method ? ChartOfAccount::byCode($this->method) : null;
+
+        return $account?->name ?? ucfirst(str_replace('_', ' ', $this->method ?? ''));
+    }
 }
