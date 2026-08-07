@@ -9,6 +9,10 @@ use App\Models\JournalEntryLine;
 use App\Models\Order;
 use App\Models\PosOrder;
 use App\Models\PosRefund;
+use App\Models\PurchaseInvoice;
+use App\Models\PurchaseReturn;
+use App\Models\PurchaseSetting;
+use App\Models\SupplierPayment;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -361,6 +365,136 @@ class AccountingService
             ['account_id' => $paymentAccount->id, 'debit' => $amount, 'credit' => 0],
             ['account_id' => $incomeAccountId, 'debit' => 0, 'credit' => $amount],
         ], $narration ?? 'Income', 'income', null, $entryDate);
+    }
+
+    /**
+     * Post a purchase invoice (bill) from a supplier.
+     *
+     * Debits the purchase account (Inventory by default) and credits
+     * Accounts Payable. Payments posted afterwards reduce the AP balance,
+     * so cash purchases simply create the invoice + a matching payment.
+     */
+    public function postPurchaseInvoice(PurchaseInvoice $invoice): JournalEntry
+    {
+        $settings = AccountingSetting::current();
+        $purchaseAccount = PurchaseSetting::current()->purchaseAccount()
+            ?? ChartOfAccount::byCode('1200');
+        $payable = ChartOfAccount::byCode('2010')
+            ?? ChartOfAccount::active()->ofType('liability')->first();
+        $total = (float) $invoice->total;
+
+        if (! $purchaseAccount || ! $payable) {
+            throw new \RuntimeException('Chart of accounts not ready. Open Accounting first.');
+        }
+
+        return $this->post([
+            ['account_id' => $purchaseAccount->id, 'debit' => $total, 'credit' => 0, 'memo' => 'Goods/Services purchased'],
+            ['account_id' => $payable->id, 'debit' => 0, 'credit' => $total, 'memo' => 'Supplier '.$invoice->supplier?->name],
+        ], "Purchase Invoice #{$invoice->invoice_number}", 'purchase_invoice', $invoice->id, $invoice->invoice_date->toDateString());
+    }
+
+    /**
+     * Post a payment made to a supplier (AP → cash/bank).
+     *
+     * Split payments (cash + card, etc.) are posted as one entry that credits
+     * each method account, all against the single payable amount.
+     */
+    public function postSupplierPayment(SupplierPayment $payment): JournalEntry
+    {
+        $payable = ChartOfAccount::byCode('2010')
+            ?? ChartOfAccount::active()->ofType('liability')->first();
+
+        if (! $payable) {
+            throw new \RuntimeException('Chart of accounts not ready. Open Accounting first.');
+        }
+
+        $methodLines = $payment->methods->isNotEmpty()
+            ? $payment->methods
+            : collect([(object) ['method' => $payment->method, 'amount' => $payment->amount, 'reference' => $payment->reference]]);
+
+        $lines = [];
+        foreach ($methodLines as $line) {
+            $paymentAccount = $this->paymentAccount($line->method);
+
+            $lines[] = [
+                'account_id' => $paymentAccount->id,
+                'debit' => 0,
+                'credit' => (float) $line->amount,
+                'memo' => 'Payment via '.$this->paymentAccount($line->method)->name,
+            ];
+        }
+
+        $lines[] = [
+            'account_id' => $payable->id,
+            'debit' => (float) $payment->amount,
+            'credit' => 0,
+            'memo' => 'Supplier '.$payment->supplier?->name,
+        ];
+
+        return $this->post($lines, "Supplier Payment #{$payment->payment_number}", 'supplier_payment', $payment->id, $payment->payment_date->toDateString());
+    }
+
+    /**
+     * Post an advance payment made to a supplier on a purchase order
+     * (Debit advance/AP, credit each method account).
+     */
+    public function postSupplierAdvance(SupplierPayment $payment): JournalEntry
+    {
+        $advanceAccount = ChartOfAccount::byCode('2010')
+            ?? ChartOfAccount::active()->ofType('liability')->first();
+
+        if (! $advanceAccount) {
+            throw new \RuntimeException('Chart of accounts not ready. Open Accounting first.');
+        }
+
+        $methodLines = $payment->methods->isNotEmpty()
+            ? $payment->methods
+            : collect([(object) ['method' => $payment->method, 'amount' => $payment->amount, 'reference' => $payment->reference]]);
+
+        $lines = [];
+        foreach ($methodLines as $line) {
+            $paymentAccount = $this->paymentAccount($line->method);
+
+            $lines[] = [
+                'account_id' => $paymentAccount->id,
+                'debit' => 0,
+                'credit' => (float) $line->amount,
+                'memo' => 'Advance via '.$this->paymentAccount($line->method)->name,
+            ];
+        }
+
+        $lines[] = [
+            'account_id' => $advanceAccount->id,
+            'debit' => (float) $payment->amount,
+            'credit' => 0,
+            'memo' => 'Advance to supplier '.$payment->supplier?->name,
+        ];
+
+        return $this->post($lines, "Supplier Advance #{$payment->payment_number}", 'supplier_advance', $payment->id, $payment->payment_date->toDateString());
+    }
+
+    /**
+     * Post a purchase return (credit note).
+     *
+     * Goods returned to the supplier reduce what we owe (AP) and the
+     * inventory value. References the original invoice so AP nets correctly.
+     */
+    public function postPurchaseReturn(PurchaseReturn $return, float $returnedCost): JournalEntry
+    {
+        $purchaseAccount = PurchaseSetting::current()->purchaseAccount()
+            ?? ChartOfAccount::byCode('1200');
+        $payable = ChartOfAccount::byCode('2010')
+            ?? ChartOfAccount::active()->ofType('liability')->first();
+        $amount = max((float) $return->total, $returnedCost);
+
+        if (! $purchaseAccount || ! $payable) {
+            throw new \RuntimeException('Chart of accounts not ready. Open Accounting first.');
+        }
+
+        return $this->post([
+            ['account_id' => $payable->id, 'debit' => $amount, 'credit' => 0, 'memo' => 'Goods returned to supplier'],
+            ['account_id' => $purchaseAccount->id, 'debit' => 0, 'credit' => $amount, 'memo' => 'Purchase return '.$return->return_number],
+        ], "Purchase Return #{$return->return_number}", 'purchase_return', $return->id, $return->return_date->toDateString());
     }
 
     /**

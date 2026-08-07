@@ -68,7 +68,7 @@ return [
     'create_account' => 'Create New Account',
     'account_form_subtitle' => 'e.g. "Bkash account", "Supplier credit", "Salary expense"',
     'is_pos_payment' => 'Use as POS payment method',
-    'pos_system_note' => 'System account — shown as a POS payment method',
+    'pos_system_note' => 'System account — shown as a payment method in POS & purchase payments',
     'account_type' => 'Account Type',
     'code' => 'Code',
     'name' => 'Name',

@@ -87,6 +87,23 @@ return [
             ],
         ],
 
+        // ---- Purchase (sub-menu granular) ----
+        [
+            'id' => 'purchase',
+            'title' => 'Purchase',
+            'items' => [
+                ['slug' => 'purchase_dashboard',  'label' => 'Purchase Dashboard',   'permissions' => ['list']],
+                ['slug' => 'suppliers',           'label' => 'Suppliers',            'permissions' => ['list', 'create', 'edit', 'delete']],
+                ['slug' => 'purchase_orders',     'label' => 'Purchase Orders',      'permissions' => ['list', 'create', 'edit', 'delete']],
+                ['slug' => 'purchase_receipts',   'label' => 'Receipts (GRN)',       'permissions' => ['list', 'create', 'delete']],
+                ['slug' => 'purchase_invoices',   'label' => 'Bills (Invoices)',     'permissions' => ['list', 'create', 'edit', 'pay', 'delete']],
+                ['slug' => 'supplier_payments',   'label' => 'Supplier Payments',    'permissions' => ['list', 'create', 'delete']],
+                ['slug' => 'purchase_returns',    'label' => 'Purchase Returns',     'permissions' => ['list', 'create', 'edit']],
+                ['slug' => 'purchase_reports',    'label' => 'Purchase Reports',     'permissions' => ['list']],
+                ['slug' => 'purchase_settings',   'label' => 'Purchase Settings',    'permissions' => ['list', 'edit']],
+            ],
+        ],
+
         // ---- Storefront Settings ----
         [
             'id' => 'web_setup',
@@ -151,6 +168,7 @@ return [
         'export' => 'Export',
         'reply' => 'Reply',
         'refund' => 'Refund',
+        'pay' => 'Receive Payment',
         'hold' => 'Hold Order',
         'close' => 'Close Session',
         'reverse' => 'Reverse Entry',

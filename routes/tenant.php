@@ -22,8 +22,17 @@ use App\Http\Controllers\Dashboard\PosSaleController;
 use App\Http\Controllers\Dashboard\PosSessionController;
 use App\Http\Controllers\Dashboard\PosSettingsController;
 use App\Http\Controllers\Dashboard\ProductController;
+use App\Http\Controllers\Dashboard\PurchaseController;
+use App\Http\Controllers\Dashboard\PurchaseInvoiceController;
+use App\Http\Controllers\Dashboard\PurchaseOrderController;
+use App\Http\Controllers\Dashboard\PurchaseReceiptController;
+use App\Http\Controllers\Dashboard\PurchaseReportController;
+use App\Http\Controllers\Dashboard\PurchaseReturnController;
+use App\Http\Controllers\Dashboard\PurchaseSettingController;
 use App\Http\Controllers\Dashboard\RoleController;
 use App\Http\Controllers\Dashboard\StockTransferController;
+use App\Http\Controllers\Dashboard\SupplierController;
+use App\Http\Controllers\Dashboard\SupplierPaymentController;
 use App\Http\Controllers\Dashboard\UserController as TenantUserController;
 use App\Http\Controllers\Dashboard\WarehouseController;
 use App\Http\Controllers\DashboardController;
@@ -493,6 +502,136 @@ Route::middleware([
                     Route::get('/settings', [PosSettingsController::class, 'index'])->name('settings');
                     Route::middleware('permission:pos_settings,edit')->group(function () {
                         Route::put('/settings', [PosSettingsController::class, 'update'])->name('settings.update');
+                    });
+                });
+            });
+
+            // Purchase System
+            Route::middleware('permission:purchase_dashboard,list')->prefix('purchase')->name('purchase.')->group(function () {
+                Route::get('/', [PurchaseController::class, 'index'])->name('index');
+                Route::get('/products', [PurchaseController::class, 'products'])->name('products');
+                Route::get('/suppliers-search', [PurchaseController::class, 'suppliers'])->name('suppliers-search');
+
+                // Suppliers
+                Route::prefix('suppliers')->name('suppliers.')->group(function () {
+                    Route::middleware('permission:suppliers,create')->group(function () {
+                        Route::get('/create', [SupplierController::class, 'create'])->name('create');
+                        Route::post('/', [SupplierController::class, 'store'])->name('store');
+                    });
+                    Route::middleware('permission:suppliers,list')->group(function () {
+                        Route::get('/', [SupplierController::class, 'index'])->name('index');
+                        Route::get('/{supplier}', [SupplierController::class, 'show'])->name('show');
+                    });
+                    Route::middleware('permission:suppliers,edit')->group(function () {
+                        Route::get('/{supplier}/edit', [SupplierController::class, 'edit'])->name('edit');
+                        Route::put('/{supplier}', [SupplierController::class, 'update'])->name('update');
+                    });
+                    Route::middleware('permission:suppliers,delete')->group(function () {
+                        Route::delete('/{supplier}', [SupplierController::class, 'destroy'])->name('destroy');
+                    });
+                });
+
+                // Purchase Orders
+                Route::prefix('orders')->name('orders.')->group(function () {
+                    Route::middleware('permission:purchase_orders,create')->group(function () {
+                        Route::get('/create', [PurchaseOrderController::class, 'create'])->name('create');
+                        Route::post('/', [PurchaseOrderController::class, 'store'])->name('store');
+                    });
+                    Route::middleware('permission:purchase_orders,list')->group(function () {
+                        Route::get('/', [PurchaseOrderController::class, 'index'])->name('index');
+                        Route::get('/{order}', [PurchaseOrderController::class, 'show'])->name('show');
+                        Route::get('/{order}/print', [PurchaseOrderController::class, 'print'])->name('print');
+                    });
+                    Route::middleware('permission:purchase_orders,edit')->group(function () {
+                        Route::get('/{order}/edit', [PurchaseOrderController::class, 'edit'])->name('edit');
+                        Route::put('/{order}', [PurchaseOrderController::class, 'update'])->name('update');
+                        Route::post('/{order}/mark-ordered', [PurchaseOrderController::class, 'markOrdered'])->name('mark-ordered');
+                        Route::post('/{order}/pay-advance', [PurchaseOrderController::class, 'payAdvance'])->name('pay-advance');
+                        Route::post('/{order}/cancel', [PurchaseOrderController::class, 'cancel'])->name('cancel');
+                    });
+                    Route::middleware('permission:purchase_orders,delete')->group(function () {
+                        Route::delete('/{order}', [PurchaseOrderController::class, 'destroy'])->name('destroy');
+                    });
+                });
+
+                // Purchase Receipts (GRN)
+                Route::prefix('receipts')->name('receipts.')->group(function () {
+                    Route::middleware('permission:purchase_receipts,create')->group(function () {
+                        Route::get('/create', [PurchaseReceiptController::class, 'create'])->name('create');
+                        Route::post('/', [PurchaseReceiptController::class, 'store'])->name('store');
+                    });
+                    Route::middleware('permission:purchase_receipts,list')->group(function () {
+                        Route::get('/', [PurchaseReceiptController::class, 'index'])->name('index');
+                        Route::get('/{receipt}', [PurchaseReceiptController::class, 'show'])->name('show');
+                        Route::get('/{receipt}/print', [PurchaseReceiptController::class, 'print'])->name('print');
+                    });
+                    Route::middleware('permission:purchase_receipts,delete')->group(function () {
+                        Route::delete('/{receipt}', [PurchaseReceiptController::class, 'destroy'])->name('destroy');
+                    });
+                });
+
+                // Purchase Invoices (Bills)
+                Route::prefix('invoices')->name('invoices.')->group(function () {
+                    Route::middleware('permission:purchase_invoices,create')->group(function () {
+                        Route::get('/create', [PurchaseInvoiceController::class, 'create'])->name('create');
+                        Route::post('/', [PurchaseInvoiceController::class, 'store'])->name('store');
+                    });
+                    Route::middleware('permission:purchase_invoices,list')->group(function () {
+                        Route::get('/', [PurchaseInvoiceController::class, 'index'])->name('index');
+                        Route::get('/{invoice}', [PurchaseInvoiceController::class, 'show'])->name('show');
+                        Route::get('/{invoice}/print', [PurchaseInvoiceController::class, 'print'])->name('print');
+                    });
+                    Route::middleware('permission:purchase_invoices,edit')->group(function () {
+                        Route::get('/{invoice}/edit', [PurchaseInvoiceController::class, 'edit'])->name('edit');
+                        Route::put('/{invoice}', [PurchaseInvoiceController::class, 'update'])->name('update');
+                    });
+                    Route::middleware('permission:purchase_invoices,pay')->group(function () {
+                        Route::post('/{invoice}/pay', [PurchaseInvoiceController::class, 'pay'])->name('pay');
+                        Route::post('/{invoice}/cancel', [PurchaseInvoiceController::class, 'cancel'])->name('cancel');
+                    });
+                    Route::middleware('permission:purchase_invoices,delete')->group(function () {
+                        Route::delete('/{invoice}', [PurchaseInvoiceController::class, 'destroy'])->name('destroy');
+                    });
+                });
+
+                // Supplier Payments
+                Route::prefix('payments')->name('payments.')->group(function () {
+                    Route::middleware('permission:supplier_payments,create')->group(function () {
+                        Route::get('/create', [SupplierPaymentController::class, 'create'])->name('create');
+                        Route::post('/', [SupplierPaymentController::class, 'store'])->name('store');
+                        Route::get('/open-invoices', [SupplierPaymentController::class, 'openInvoices'])->name('open-invoices');
+                    });
+                    Route::middleware('permission:supplier_payments,list')->group(function () {
+                        Route::get('/', [SupplierPaymentController::class, 'index'])->name('index');
+                    });
+                    Route::middleware('permission:supplier_payments,delete')->group(function () {
+                        Route::delete('/{payment}', [SupplierPaymentController::class, 'destroy'])->name('destroy');
+                    });
+                });
+
+                // Purchase Returns
+                Route::prefix('returns')->name('returns.')->group(function () {
+                    Route::middleware('permission:purchase_returns,create')->group(function () {
+                        Route::get('/create', [PurchaseReturnController::class, 'create'])->name('create');
+                        Route::post('/', [PurchaseReturnController::class, 'store'])->name('store');
+                    });
+                    Route::middleware('permission:purchase_returns,list')->group(function () {
+                        Route::get('/', [PurchaseReturnController::class, 'index'])->name('index');
+                        Route::get('/{return}', [PurchaseReturnController::class, 'show'])->name('show');
+                    });
+                    Route::middleware('permission:purchase_returns,edit')->group(function () {
+                        Route::post('/{return}/cancel', [PurchaseReturnController::class, 'cancel'])->name('cancel');
+                    });
+                });
+
+                // Reports & Settings
+                Route::middleware('permission:purchase_reports,list')->group(function () {
+                    Route::get('/reports', [PurchaseReportController::class, 'index'])->name('reports');
+                });
+                Route::middleware('permission:purchase_settings,list')->group(function () {
+                    Route::get('/settings', [PurchaseSettingController::class, 'index'])->name('settings');
+                    Route::middleware('permission:purchase_settings,edit')->group(function () {
+                        Route::put('/settings', [PurchaseSettingController::class, 'update'])->name('settings.update');
                     });
                 });
             });
