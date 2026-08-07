@@ -2,6 +2,7 @@
     $current = $current ?? 'dashboard';
     $tabs = [
         ['key' => 'dashboard', 'label' => __('sidebar.purchase_dashboard'), 'route' => 'purchase.index'],
+        ['key' => 'direct', 'label' => __('sidebar.purchase_direct'), 'route' => 'purchase.direct.create'],
         ['key' => 'suppliers', 'label' => __('sidebar.suppliers'), 'route' => 'purchase.suppliers.index'],
         ['key' => 'orders', 'label' => __('sidebar.purchase_orders'), 'route' => 'purchase.orders.index'],
         ['key' => 'receipts', 'label' => __('sidebar.purchase_receipts'), 'route' => 'purchase.receipts.index'],

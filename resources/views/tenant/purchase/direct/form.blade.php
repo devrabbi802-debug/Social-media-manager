@@ -1,38 +1,6 @@
 @extends('layouts.tenant')
 
-@php
-    $isEdit = ! is_null($invoice);
-    $hasReceipt = ! is_null($receipt);
-    $initialSupplier = ($invoice && $invoice->supplier) ? ['id' => $invoice->supplier_id, 'name' => $invoice->supplier->name] : null;
-    $initialItems = $invoice
-        ? collect($invoice->items)->map(fn ($i) => [
-            'product_id' => $i->product_id,
-            'variant_id' => $i->variant_id,
-            'purchase_order_item_id' => $i->purchase_order_item_id,
-            'name' => $i->name,
-            'sku' => $i->sku,
-            'quantity' => (int) $i->quantity,
-            'unit_cost' => (float) $i->unit_cost,
-            'discount' => (float) $i->discount,
-            'variants' => [],
-        ])->values()
-        : collect($receipt?->items ?? [])->map(fn ($i) => [
-            'product_id' => $i->product_id,
-            'variant_id' => $i->variant_id,
-            'purchase_order_item_id' => $i->purchase_order_item_id,
-            'name' => $i->name,
-            'sku' => $i->sku,
-            'quantity' => (int) $i->quantity,
-            'unit_cost' => (float) $i->unit_cost,
-            'discount' => (float) $i->discount,
-            'variants' => [],
-        ])->values();
-    $defaultDueDate = $receipt
-        ? $receipt->receipt_date->copy()->addDays((int) $defaultDueDays)->format('Y-m-d')
-        : ($invoice?->due_date?->format('Y-m-d') ?? now()->addDays((int) $defaultDueDays)->format('Y-m-d'));
-@endphp
-
-@section('title', ($isEdit ? __('sidebar.purchase_invoices').' - Edit' : __('sidebar.purchase_invoices').' - Create').' - SocialBoost AI')
+@section('title', 'ডাইরেক্ট পারচেজ - SocialBoost AI')
 
 @section('content')
 <div class="min-h-screen bg-gray-50">
@@ -40,23 +8,20 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-2xl font-bold text-gray-900">{{ $isEdit ? 'বিল সম্পাদনা' : 'নতুন বিল (Invoice)' }}</h1>
-                    @if($isEdit)
-                        <p class="text-gray-600">{{ $invoice->invoice_number }} • {{ $invoice->statusLabel() }}</p>
-                    @endif
+                    <h1 class="text-2xl font-bold text-gray-900">ডাইরেক্ট পারচেজ</h1>
+                    <p class="text-gray-600">এক ইনপুটেই পারচেজ অর্ডার + মাল রিসিভ (GRN) — স্টক ও অ্যাকাউন্টিং অটো আপডেট হবে</p>
                 </div>
-                <a href="{{ route('purchase.invoices.index') }}" class="px-4 py-2 border rounded-xl text-gray-600 hover:bg-gray-50 transition">← Back</a>
+                <a href="{{ route('purchase.index') }}" class="px-4 py-2 border rounded-xl text-gray-600 hover:bg-gray-50 transition">← Back</a>
             </div>
         </div>
     </div>
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        @include('tenant.purchase.partials._nav', ['current' => 'invoices'])
+        @include('tenant.purchase.partials._nav', ['current' => 'direct'])
 
-        @if($hasReceipt)
-        <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6 flex items-center gap-3">
-            <svg class="w-6 h-6 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            <p class="text-blue-800 text-sm font-medium">রিসিপ্ট <a href="{{ route('purchase.receipts.show', $receipt) }}" class="underline">{{ $receipt->receipt_number }}</a> থেকে বিল তৈরি হচ্ছে — আইটেম প্রি-লোড করা আছে।</p>
+        @if(session('error'))
+        <div class="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6">
+            <p class="text-red-700 text-sm">• {{ session('error') }}</p>
         </div>
         @endif
 
@@ -70,30 +35,21 @@
         </div>
         @endif
 
-        <form method="POST" action="{{ $isEdit ? route('purchase.invoices.update', $invoice) : route('purchase.invoices.store') }}"
-              x-data="invoiceForm({
-                  items: @js($initialItems),
-                  headerDiscount: @js((float) ($invoice->discount_amount ?? 0)),
-                  taxRate: @js((float) ($invoice->tax_rate ?? $defaultTaxRate)),
-                  status: @js($invoice->status ?? 'awaiting_payment'),
-              })"
+        <form method="POST" action="{{ route('purchase.direct.store') }}"
+              x-data="purchaseForm({ items: [], discountType: '', discountValue: 0, taxRate: @js((float) $defaultTaxRate) })"
               class="space-y-6">
             @csrf
-            @if($isEdit) @method('PUT') @endif
-
-            <input type="hidden" name="purchase_receipt_id" value="{{ $receipt?->id ?? $invoice?->purchase_receipt_id }}">
-            <input type="hidden" name="purchase_order_id" value="{{ $receipt?->purchase_order_id ?? $invoice?->purchase_order_id }}">
 
             <div class="bg-white rounded-2xl p-6 shadow-sm">
-                <h2 class="text-lg font-bold text-gray-900 mb-4">বিল তথ্য</h2>
+                <h2 class="text-lg font-bold text-gray-900 mb-4">ক্রয় তথ্য</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div class="relative">
                         <label class="block text-sm font-medium text-gray-700 mb-1">সাপ্লায়ার *</label>
-                        <div x-data="supplierPicker(@js($initialSupplier))" @click.outside="open=false" class="relative z-50">
+                        <div x-data="supplierPicker(null)" @click.outside="open=false" class="relative z-50">
                             <input type="hidden" name="supplier_id" :value="selectedId">
                             <input type="text" x-model="query" @input="search()" @focus="open=true; search()" @keydown.escape="open=false"
                                    placeholder="সাপ্লায়ার খুঁজুন..." required
-                                   class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                                   class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
                             <div x-show="open && (results.length || loading)" x-cloak
                                  class="absolute z-50 mt-1 w-72 bg-white rounded-xl shadow-lg border max-h-64 overflow-y-auto">
                                 <template x-if="loading"><div class="p-3 text-sm text-gray-500">অনুসন্ধান হচ্ছে...</div></template>
@@ -103,44 +59,45 @@
                                         <p class="text-xs text-gray-500" x-text="(s.company||'') + (s.phone ? ' • '+s.phone : '')"></p>
                                     </div>
                                 </template>
-                                <template x-if="!loading && results.length === 0 && query.length">
-                                    <div class="p-3 text-sm text-gray-500">কোনো সাপ্লায়ার পাওয়া যায়নি</div>
-                                </template>
                             </div>
                         </div>
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">বিল তারিখ *</label>
-                        <input type="date" name="invoice_date" value="{{ old('invoice_date', $invoice?->invoice_date?->format('Y-m-d') ?? $receipt?->receipt_date?->format('Y-m-d') ?? now()->format('Y-m-d')) }}" required
-                               class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">ডিউ তারিখ</label>
-                        <input type="date" name="due_date" value="{{ old('due_date', $defaultDueDate) }}"
-                               class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">স্ট্যাটাস</label>
-                        <select name="status" x-model="status" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                            <option value="draft">Draft (খসড়া)</option>
-                            <option value="awaiting_payment">Awaiting Payment</option>
-                            <option value="paid">Paid (তৈরির সময়ই পরিশোধ)</option>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">গুদাম *</label>
+                        <select name="warehouse_id" required class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                            <option value="">গুদাম বাছাই করুন...</option>
+                            @foreach($warehouses as $wh)
+                                <option value="{{ $wh->id }}" {{ (int) old('warehouse_id', $defaultWarehouseId) === (int) $wh->id ? 'selected' : '' }}>{{ $wh->name }}</option>
+                            @endforeach
                         </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ক্রয়ের তারিখ *</label>
+                        <input type="date" name="purchase_date" value="{{ old('purchase_date', now()->format('Y-m-d')) }}" required
+                               class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ট্যাক্স হার (%)</label>
+                        <input type="number" step="0.01" min="0" max="100" name="tax_rate" x-model="taxRate"
+                               class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
                     </div>
                 </div>
 
-                <div x-show="status === 'paid'" x-cloak class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">পেমেন্ট মাধ্যম *</label>
-                        <input type="text" name="payment_method" value="{{ old('payment_method', 'cash') }}" placeholder="যেমন: cash, bank, bKash"
-                               class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ডিসকাউন্ট টাইপ</label>
+                        <select name="discount_type" x-model="discountType" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                            <option value="">কোনো ডিসকাউন্ট নেই</option>
+                            <option value="fixed">ফ্ল্যাট (৳)</option>
+                            <option value="percent">শতাংশ (%)</option>
+                        </select>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">রেফারেন্স</label>
-                        <input type="text" name="payment_reference" value="{{ old('payment_reference') }}"
+                    <div x-show="discountType" x-cloak>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ডিসকাউন্ট</label>
+                        <input type="number" step="0.01" min="0" name="discount_value" x-model="discountValue"
                                class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
                     </div>
                 </div>
@@ -189,13 +146,6 @@
                                                     <div class="p-3 text-sm text-gray-500">কোনো পণ্য পাওয়া যায়নি</div>
                                                 </template>
                                             </div>
-                                            <select x-show="row.variants && row.variants.length" x-model="row.variant_id" @change="selectVariant()"
-                                                    class="mt-1 w-full border border-gray-300 rounded-xl px-3 py-2 text-sm">
-                                                <option value="">ভেরিয়েন্ট বাছাই করুন...</option>
-                                                <template x-for="v in row.variants" :key="v.id">
-                                                    <option :value="v.id" x-text="v.name + ' (স্টক: '+v.stock+')'"></option>
-                                                </template>
-                                            </select>
                                         </div>
                                     </td>
                                     <td class="px-4 py-3">
@@ -205,7 +155,8 @@
                                         <input type="number" step="0.01" min="0" x-model="row.unit_cost" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">
                                     </td>
                                     <td class="px-4 py-3">
-                                        <input type="number" step="0.01" min="0" x-model="row.discount" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">
+                                        <input type="number" step="0.01" min="0" x-model="row.discount" placeholder="ছাড়"
+                                               class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">
                                     </td>
                                     <td class="px-4 py-3 text-right font-semibold text-gray-900 whitespace-nowrap" x-text="'৳' + fmt((row.quantity||0) * ((row.unit_cost||0) - (row.discount||0)))"></td>
                                     <td class="px-4 py-3 text-right">
@@ -220,22 +171,9 @@
                     </table>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">হেডার ডিসকাউন্ট (৳)</label>
-                        <input type="number" step="0.01" min="0" name="discount_amount" x-model="headerDiscount"
-                               class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">ট্যাক্স হার (%)</label>
-                        <input type="number" step="0.01" min="0" max="100" name="tax_rate" x-model="taxRate"
-                               class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">
-                    </div>
-                </div>
-
                 <input type="hidden" name="items_json" :value="itemsJson()">
 
-                <div class="mt-6 bg-gray-50 rounded-xl p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div class="mt-6 bg-gray-50 rounded-xl p-4 grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
                     <div class="text-gray-600">সাবটোটাল <span class="font-semibold text-gray-900 float-right" x-text="'৳'+fmt(subtotal)"></span></div>
                     <div class="text-gray-600">ডিসকাউন্ট <span class="font-semibold text-gray-900 float-right" x-text="'- ৳'+fmt(discountAmount)"></span></div>
                     <div class="text-gray-600">ট্যাক্স <span class="font-semibold text-gray-900 float-right" x-text="'+ ৳'+fmt(taxAmount)"></span></div>
@@ -244,15 +182,50 @@
             </div>
 
             <div class="bg-white rounded-2xl p-6 shadow-sm">
-                <label class="block text-sm font-medium text-gray-700 mb-1">নোট</label>
-                <textarea name="notes" rows="3" class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500">{{ old('notes', $invoice->notes ?? '') }}</textarea>
+                <h2 class="text-lg font-bold text-gray-900 mb-1">অগ্রিম পেমেন্ট (ঐচ্ছিক)</h2>
+                <p class="text-sm text-gray-500 mb-4">সাপ্লায়ারকে অগ্রিম দিলে এখানে দিন। একাধিক মাধ্যম (নগদ + বিকাশ) একসাথে ব্যবহার করা যাবে।</p>
+                <div x-data="splitPayment({ methods: @js($paymentAccounts->pluck('code')->all() ?: ['cash']), amount: 0, currencySymbol: '৳' })">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">পেমেন্ট তারিখ</label>
+                        <input type="date" name="advance_date" value="{{ old('advance_date', now()->format('Y-m-d')) }}"
+                               class="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500 md:max-w-xs">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">পেমেন্ট মাধ্যম ও পরিমাণ</label>
+                        <input type="hidden" name="advance_methods_json" :value="methodsJson()">
+                        <template x-for="(row, index) in rows" :key="index">
+                            <div class="flex items-center gap-2 mb-2">
+                                <select x-model="row.method" class="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">
+                                    @foreach($paymentAccounts as $account)
+                                        <option value="{{ $account->code }}">{{ $account->name }}</option>
+                                    @endforeach
+                                    @if($paymentAccounts->isEmpty())
+                                        <option value="cash">Cash</option>
+                                    @endif
+                                </select>
+                                <input type="number" step="0.01" min="0" x-model="row.amount" placeholder="টাকা"
+                                       class="w-32 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">
+                                <input type="text" x-model="row.reference" placeholder="রেফারেন্স"
+                                       class="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">
+                                <button type="button" @click="removeRow(row)" class="text-red-500 hover:text-red-700 text-lg leading-none px-1" x-show="rows.length > 1">✕</button>
+                            </div>
+                        </template>
+                        <button type="button" @click="addRow()" class="mt-1 text-sm text-purple-600 hover:text-purple-800 font-medium">+ আরেকটি মাধ্যম যোগ করুন</button>
+                        <p class="text-sm mt-2 text-gray-500">মোট অগ্রিম: <span class="font-semibold text-gray-900" x-text="'৳' + fmt(total)"></span></p>
+                    </div>
+                </div>
             </div>
 
-            <div class="flex justify-end gap-3">
-                <a href="{{ route('purchase.invoices.index') }}" class="px-6 py-2 border rounded-xl text-gray-600 hover:bg-gray-50 transition">বাতিল</a>
-                <button type="submit" class="px-6 py-2 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition">
-                    {{ $isEdit ? 'আপডেট করুন' : 'বিল তৈরি করুন' }}
-                </button>
+            <div class="flex items-center justify-between">
+                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input type="checkbox" name="create_invoice" value="1" {{ old('create_invoice', $autoInvoice) ? 'checked' : '' }}
+                           class="w-4 h-4 text-purple-600 rounded focus:ring-purple-500">
+                    রিসিভের সাথে সাথে বিল (Invoice) তৈরি করুন
+                </label>
+                <div class="flex justify-end gap-3">
+                    <a href="{{ route('purchase.index') }}" class="px-6 py-2 border rounded-xl text-gray-600 hover:bg-gray-50 transition">বাতিল</a>
+                    <button type="submit" class="px-6 py-2 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition">ডাইরেক্ট পারচেজ সম্পন্ন করুন</button>
+                </div>
             </div>
 
             {{-- Variant Selection Modal (POS-style) --}}

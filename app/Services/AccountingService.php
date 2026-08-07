@@ -586,11 +586,18 @@ class AccountingService
 
     /**
      * Balance of a single account (respects normal balance + posted entries only).
+     *
+     * When the account has sub-accounts (children), their balances are rolled
+     * up into the parent's balance so a summary like "Mobile Wallet" reflects
+     * the full amount even when money was posted to a child (e.g. Bkash).
      */
     public function accountBalance(ChartOfAccount $account, ?Carbon $asOf = null): float
     {
+        $ids = collect([$account->id]);
+        $ids = $ids->merge($account->children()->pluck('id'));
+
         $query = JournalEntryLine::query()
-            ->where('account_id', $account->id)
+            ->whereIn('account_id', $ids)
             ->whereHas('entry', fn ($q) => $q->where('status', 'posted'));
 
         if ($asOf) {
@@ -610,7 +617,10 @@ class AccountingService
      */
     public function balances(?Carbon $asOf = null, ?array $types = null): array
     {
-        $accounts = ChartOfAccount::active()->orderBy('code')->get();
+        $accounts = ChartOfAccount::active()
+            ->whereNull('parent_id')
+            ->orderBy('code')
+            ->get();
 
         if ($types) {
             $accounts = $accounts->filter(fn ($a) => in_array($a->account_type, $types, true));

@@ -23,6 +23,7 @@ use App\Http\Controllers\Dashboard\PosSessionController;
 use App\Http\Controllers\Dashboard\PosSettingsController;
 use App\Http\Controllers\Dashboard\ProductController;
 use App\Http\Controllers\Dashboard\PurchaseController;
+use App\Http\Controllers\Dashboard\PurchaseDirectController;
 use App\Http\Controllers\Dashboard\PurchaseInvoiceController;
 use App\Http\Controllers\Dashboard\PurchaseOrderController;
 use App\Http\Controllers\Dashboard\PurchaseReceiptController;
@@ -511,6 +512,12 @@ Route::middleware([
                 Route::get('/', [PurchaseController::class, 'index'])->name('index');
                 Route::get('/products', [PurchaseController::class, 'products'])->name('products');
                 Route::get('/suppliers-search', [PurchaseController::class, 'suppliers'])->name('suppliers-search');
+
+                // Direct Purchase (PO + GRN combined)
+                Route::middleware('permission:purchase_orders,create')->prefix('direct')->name('direct.')->group(function () {
+                    Route::get('/create', [PurchaseDirectController::class, 'create'])->name('create');
+                    Route::post('/', [PurchaseDirectController::class, 'store'])->name('store');
+                });
 
                 // Suppliers
                 Route::prefix('suppliers')->name('suppliers.')->group(function () {

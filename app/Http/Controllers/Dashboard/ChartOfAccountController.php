@@ -29,7 +29,9 @@ class ChartOfAccountController extends Controller
             foreach ($group['accounts'] as $account) {
                 $account->setAttribute('balance', $accounting->accountBalance($account));
             }
-            $group['total'] = collect($group['accounts'])->sum(fn ($a) => $a->balance);
+            $group['total'] = collect($group['accounts'])
+                ->whereNull('parent_id')
+                ->sum(fn ($a) => $a->balance);
         }
 
         return view('tenant.accounting.chart-of-accounts', compact('groups', 'accounts'));

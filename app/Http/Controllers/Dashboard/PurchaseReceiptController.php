@@ -178,7 +178,7 @@ class PurchaseReceiptController extends Controller
 
     public function show(PurchaseReceipt $receipt)
     {
-        $receipt->load(['supplier', 'warehouse', 'purchaseOrder', 'items.product', 'items.variant', 'creator', 'invoice']);
+        $receipt->load(['supplier', 'warehouse', 'purchaseOrder.advancePayments.methods', 'items.product', 'items.variant', 'creator', 'invoice']);
 
         return view('tenant.purchase.receipts.show', compact('receipt'));
     }

@@ -38,6 +38,7 @@ return [
     'accounting_settings' => 'Accounting Settings',
     'purchase' => 'Purchase',
     'purchase_dashboard' => 'Purchase Dashboard',
+    'purchase_direct' => 'Direct Purchase',
     'suppliers' => 'Suppliers',
     'purchase_orders' => 'Purchase Orders',
     'purchase_receipts' => 'Receipts (GRN)',

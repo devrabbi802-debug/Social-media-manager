@@ -182,11 +182,17 @@
             taxAmount: 0,
             total: 0,
 
+            variantModalOpen: false,
+            variantProduct: null,
+            variantSelections: [],
+
             init() {
                 this.calc();
                 this.$watch('items', () => this.calc(), { deep: true });
                 this.$watch('headerDiscount', () => this.calc());
                 this.$watch('taxRate', () => this.calc());
+
+                window.addEventListener('purchase-variant-open', (e) => this.openVariantModal(e.detail?.product));
             },
 
             calc() {
@@ -204,6 +210,51 @@
             removeItem(row) {
                 const i = this.items.indexOf(row);
                 if (i > -1) this.items.splice(i, 1);
+            },
+
+            openVariantModal(product) {
+                if (!product || !product.variants?.length) return;
+                this.variantProduct = product;
+                this.variantSelections = product.variants.map(v => ({ variant: v, qty: 0 }));
+                this.variantModalOpen = true;
+            },
+
+            changeVariantQty(index, delta) {
+                const s = this.variantSelections[index];
+                const next = s.qty + delta;
+                if (next < 0) return;
+                s.qty = next;
+            },
+
+            addVariantSelections() {
+                const p = this.variantProduct;
+                if (!p) return;
+                this.variantSelections.forEach(s => {
+                    if (s.qty > 0) {
+                        this.items.push({
+                            product_id: p.id,
+                            variant_id: s.variant.id,
+                            purchase_order_item_id: null,
+                            name: p.name + ' — ' + s.variant.name,
+                            sku: s.variant.sku || p.sku || '',
+                            quantity: s.qty,
+                            unit_cost: s.variant.cost ?? p.cost ?? 0,
+                            discount: 0,
+                            variants: [],
+                        });
+                    }
+                });
+                this.variantModalOpen = false;
+                this.variantProduct = null;
+                this.variantSelections = [];
+            },
+
+            variantSelectionTotal() {
+                return this.variantSelections.reduce((sum, s) => sum + s.qty * (s.variant.cost ?? 0), 0);
+            },
+
+            variantSelectionCount() {
+                return this.variantSelections.reduce((sum, s) => sum + s.qty, 0);
             },
 
             itemsJson() {

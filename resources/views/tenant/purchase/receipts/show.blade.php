@@ -118,6 +118,51 @@
             </table>
         </div>
 
+        @if($receipt->purchaseOrder && ($receipt->purchaseOrder->advancePayments->isNotEmpty() || $linkedInvoice))
+        <div class="bg-white rounded-2xl shadow-sm p-6">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase mb-3">পেমেন্ট সারাংশ</h2>
+            <div class="space-y-3 text-sm">
+                @if($receipt->purchaseOrder->advancePayments->isNotEmpty())
+                <div class="space-y-3">
+                @foreach($receipt->purchaseOrder->advancePayments as $adv)
+                <div class="bg-blue-50 border border-blue-100 rounded-xl p-3">
+                    <div class="flex justify-between items-center mb-2">
+                        <div>
+                            <span class="text-sm font-semibold text-gray-900">{{ $adv->payment_number }}</span>
+                            <span class="text-gray-400 text-xs block">{{ $adv->payment_date->format('d M Y') }}</span>
+                        </div>
+                        <span class="text-base font-bold text-blue-700">৳{{ number_format($adv->amount, 2) }}</span>
+                    </div>
+                    <div class="space-y-1">
+                        @forelse($adv->methods as $m)
+                            <div class="flex justify-between text-xs text-gray-600">
+                                <span>{{ $m->methodName() }}{{ $m->reference ? ' ('.$m->reference.')' : '' }}</span>
+                                <span class="font-medium text-gray-900">৳{{ number_format($m->amount, 2) }}</span>
+                            </div>
+                        @empty
+                            <div class="text-xs text-gray-500">{{ $adv->methodName() }}: ৳{{ number_format($adv->amount, 2) }}</div>
+                        @endforelse
+                    </div>
+                </div>
+                @endforeach
+                </div>
+                @endif
+
+                @if($linkedInvoice)
+                <div class="bg-gray-50 rounded-xl p-3 space-y-1">
+                    <a href="{{ route('purchase.invoices.show', $linkedInvoice) }}" class="text-sm font-semibold text-purple-600 hover:underline">{{ $linkedInvoice->invoice_number }}</a>
+                    <div class="flex justify-between text-xs text-gray-600"><span>বিলের মোট</span><span class="font-semibold text-gray-900">৳{{ number_format($linkedInvoice->total, 2) }}</span></div>
+                    <div class="flex justify-between text-xs text-gray-600"><span>অগ্রিম প্রয়োগ</span><span class="text-blue-700">- ৳{{ number_format($linkedInvoice->advance_applied, 2) }}</span></div>
+                    @if($linkedInvoice->paid_amount > 0)
+                        <div class="flex justify-between text-xs text-gray-600"><span>জমা</span><span class="text-green-600">- ৳{{ number_format($linkedInvoice->paid_amount, 2) }}</span></div>
+                    @endif
+                    <div class="flex justify-between text-sm font-bold text-gray-900 pt-1 border-t border-gray-200"><span>বাকি (Due)</span><span class="{{ $linkedInvoice->due() > 0 ? 'text-red-600' : 'text-green-600' }}">৳{{ number_format($linkedInvoice->due(), 2) }}</span></div>
+                </div>
+                @endif
+            </div>
+        </div>
+        @endif
+
         @if($receipt->notes)
         <div class="bg-white rounded-2xl shadow-sm p-6">
             <h2 class="text-sm font-semibold text-gray-500 uppercase mb-2">নোট</h2>

@@ -119,7 +119,7 @@
                         </thead>
                         <tbody class="divide-y">
                             <template x-for="(row, index) in items" :key="index">
-                                <tr x-data="productPicker(row, removeItem)" @click.outside="open=false" class="relative z-50 align-top">
+                                <tr x-data="productPicker(row, removeItem, true)" @click.outside="open=false" class="relative z-50 align-top">
                                     <td class="px-4 py-3">
                                         <div class="relative">
                                             <input type="text" x-model="query" @input="search()" @focus="open=true; search()" @keydown.escape="open=false"
@@ -186,6 +186,46 @@
             <div class="flex justify-end gap-3">
                 <a href="{{ route('purchase.returns.index') }}" class="px-6 py-2 border rounded-xl text-gray-600 hover:bg-gray-50 transition">বাতিল</a>
                 <button type="submit" class="px-6 py-2 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition">রিটার্ন সম্পন্ন করুন</button>
+            </div>
+
+            {{-- Variant Selection Modal (POS-style) --}}
+            <div x-show="variantModalOpen" x-cloak x-transition.opacity class="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" @keydown.escape.window="variantModalOpen = false">
+                <div class="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden" @click.outside="variantModalOpen = false">
+                    <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
+                        <div class="min-w-0">
+                            <h3 class="text-lg font-bold text-gray-900 truncate" x-text="variantProduct ? variantProduct.name : ''"></h3>
+                            <p class="text-xs text-gray-500 mt-0.5">ভেরিয়েন্ট নির্বাচন করুন — একাধিক যোগ করা যাবে</p>
+                        </div>
+                        <button type="button" @click="variantModalOpen = false" class="shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100">✕</button>
+                    </div>
+                    <div class="p-4 space-y-2 max-h-[50vh] overflow-y-auto">
+                        <template x-for="(s, i) in variantSelections" :key="s.variant.id">
+                            <div class="flex items-center gap-3 bg-gray-50 rounded-xl p-3" :class="s.qty > 0 ? 'ring-2 ring-purple-400' : ''">
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-semibold text-gray-800 truncate" x-text="s.variant.name"></p>
+                                    <p class="text-xs text-gray-500 mt-0.5" x-text="'কস্ট: ৳' + fmt(s.variant.cost) + ' • স্টক: ' + s.variant.stock"></p>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <button type="button" @click="changeVariantQty(i, -1)" class="w-8 h-8 rounded-lg bg-white border border-gray-300 text-gray-600 font-bold hover:bg-gray-100">−</button>
+                                    <span class="w-8 text-center text-sm font-semibold" x-text="s.qty"></span>
+                                    <button type="button" @click="changeVariantQty(i, 1)" class="w-8 h-8 rounded-lg bg-white border border-gray-300 text-gray-600 font-bold hover:bg-gray-100">+</button>
+                                </div>
+                                <span class="w-20 text-right text-sm font-bold text-gray-900" x-text="s.qty > 0 ? '৳' + fmt(s.variant.cost * s.qty) : ''"></span>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="px-5 py-4 border-t border-gray-100 flex items-center justify-between gap-3">
+                        <div class="text-sm">
+                            <span class="text-gray-500">মোট:</span>
+                            <span class="font-bold text-gray-900 ml-1" x-text="'৳' + fmt(variantSelectionTotal())"></span>
+                            <span class="ml-2 text-xs text-gray-400" x-text="variantSelectionCount() > 0 ? (variantSelectionCount() + ' pcs') : ''"></span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button type="button" @click="variantModalOpen = false" class="px-4 py-2 border border-gray-300 rounded-xl text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+                            <button type="button" @click="addVariantSelections()" :disabled="variantSelectionCount() === 0" class="px-5 py-2 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700 disabled:opacity-40">আইটেমে যোগ করুন</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </form>
     </div>

@@ -38,6 +38,7 @@ return [
     'accounting_settings' => 'হিসাব সেটিংস',
     'purchase' => 'পারচেজ',
     'purchase_dashboard' => 'পারচেজ ড্যাশবোর্ড',
+    'purchase_direct' => 'ডাইরেক্ট পারচেজ',
     'suppliers' => 'সাপ্লায়ার',
     'purchase_orders' => 'পারচেজ অর্ডার',
     'purchase_receipts' => 'মাল রিসিভ (GRN)',
