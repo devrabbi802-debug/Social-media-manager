@@ -456,6 +456,7 @@ function posApp() {
         holds: {!! $holds->map(fn($h) => ['id' => $h->id, 'order_number' => $h->order_number, 'items_count' => $h->items->count(), 'customer_phone' => $h->customer_phone])->toJson() !!},
         enabledMethods: {!! json_encode($paymentAccounts->map(fn ($a) => ['code' => $a->code, 'name' => $a->name])->values()) !!},
         cashCode: '1010',
+        defaultMethod: {!! json_encode($settings->defaultMethod()) !!},
         symbol: {!! json_encode($settings->currency_symbol ?? '৳') !!},
         taxRate: {{ $settings->tax_rate }},
         taxType: {!! json_encode($settings->tax_type) !!},
@@ -557,7 +558,7 @@ function posApp() {
         },
 
         resetPayments() {
-            this.payments = [{ method: this.enabledMethods[0]?.code || this.cashCode, amount: 0, reference: '' }];
+            this.payments = [{ method: this.defaultMethod || this.enabledMethods[0]?.code || this.cashCode, amount: this.total, reference: '' }];
         },
 
         async loadProducts(reset) {
@@ -708,6 +709,7 @@ function posApp() {
             const next = item.quantity + delta;
             if (next < 1) { this.cart.splice(index, 1); return; }
             if (next <= item.stock) item.quantity = next;
+            this.syncDefaultPayment();
         },
 
         removeItem(index) {
@@ -730,6 +732,13 @@ function posApp() {
 
         removePayment(idx) {
             this.payments.splice(idx, 1);
+            if (this.payments.length === 1) this.payments[0].amount = this.total;
+        },
+
+        syncDefaultPayment() {
+            if (this.payments.length === 1) {
+                this.payments[0].amount = this.total;
+            }
         },
 
         holdCart() {
