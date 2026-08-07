@@ -19,7 +19,7 @@
     {{-- Register banner --}}
     <div x-show="!openSession" class="bg-amber-50 border-b border-amber-200">
         <div class="max-w-full mx-auto px-4 py-2 flex items-center justify-between">
-            <p class="text-sm text-amber-800 font-medium">⚠️ কোনো রেজিস্টার সেশন খোলা নেই — সেল করার আগে রেজিস্টার খুলুন।</p>
+            <p class="text-sm text-amber-800 font-medium">ℹ️ কোনো রেজিস্টার সেশন খোলা নেই — সেল করা যাবে, তবে ক্যাশ কার্যক্রম ট্র্যাক করতে সেশন খোলার পরামর্শ দেওয়া হয়।</p>
             <button @click="openSessionModal = true" class="text-sm px-3 py-1 bg-amber-600 text-white rounded-lg hover:bg-amber-700">রেজিস্টার খুলুন</button>
         </div>
     </div>
@@ -27,9 +27,13 @@
         <div class="max-w-full mx-auto px-4 py-2 flex items-center justify-between">
             <p class="text-sm text-green-800 font-medium">
                 ✅ রেজিস্টার চালু — সেশন #<span x-text="openSession ? openSession.id : ''"></span>
+                <span class="text-gray-600">· গুদাম: <span x-text="openSession && openSession.warehouse_name ? openSession.warehouse_name : 'All/Default'"></span></span>
                 <span class="text-gray-600">(খোলা: <span x-text="openSession ? openSession.opened_at_formatted : ''"></span>)</span>
             </p>
-            <a href="{{ route('pos.sessions.index') }}" class="text-sm text-green-700 underline">সেশন ম্যানেজ করুন</a>
+            <div class="flex items-center gap-2">
+                <a href="{{ route('pos.sessions.index') }}" class="text-sm text-green-700 underline">সেশন ম্যানেজ করুন</a>
+                <button @click="openCloseSessionModal = true" x-show="canCloseSession" class="text-sm px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700">সেশন বন্ধ করুন</button>
+            </div>
         </div>
     </div>
 
@@ -46,6 +50,23 @@
         <div class="flex-1 flex flex-col bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
             {{-- Search + categories --}}
             <div class="p-4 border-b border-gray-200 space-y-3">
+                <div class="flex items-center justify-between gap-3">
+                    <label class="text-xs font-semibold text-gray-500 uppercase">ওয়ারহাউস</label>
+                    <div class="relative" x-cloak>
+                        <select
+                            x-model="activeWarehouseId"
+                            @change="loadProducts(true)"
+                            :disabled="openSession ? true : false"
+                            class="w-56 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100 disabled:text-gray-500"
+                        >
+                            <option value="">সব ওয়ারহাউজ / ডিফল্ট</option>
+                            <template x-for="wh in warehouseOptions" :key="wh.id">
+                                <option :value="wh.id" x-text="wh.name"></option>
+                            </template>
+                        </select>
+                        <p x-show="openSession" class="text-[10px] text-gray-400 mt-0.5">সেশন খোলার সময় গুদাম সিলেক্ট করা হয়েছে</p>
+                    </div>
+                </div>
                 <div class="flex gap-2">
                     <div class="relative flex-1">
                         <input
@@ -120,14 +141,15 @@
         </div>
 
         {{-- ============ RIGHT: Cart ============ --}}
-        <div class="w-full lg:w-[420px] flex flex-col bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden lg:sticky lg:top-16 lg:self-start lg:max-h-[calc(100vh-4rem)]">
+        <div class="w-full lg:w-[560px] flex flex-col bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden lg:sticky lg:top-16 lg:self-start lg:max-h-[calc(100vh-4rem)]">
             <div class="p-4 border-b border-gray-200 flex items-center justify-between bg-purple-50 shrink-0">
                 <h2 class="text-lg font-bold text-gray-900">🧾 বিক্রয় কার্ট</h2>
                 <span class="text-sm text-gray-500" x-text="cart.length + ' item'"></span>
             </div>
 
-            {{-- Cart items + holds (scrollable) --}}
-            <div x-ref="cartScroll" class="flex-1 overflow-y-auto pos-scroll p-4 space-y-3 min-h-[120px]">
+            {{-- Middle: cart + customer + discount + totals + payments (all scrollable) --}}
+            <div class="flex-1 overflow-y-auto pos-scroll">
+                <div x-ref="cartScroll" class="p-4 space-y-3 min-h-[120px]">
                 <div x-show="!cart.length && !holds.length" class="flex items-center justify-center text-gray-400 text-sm py-10">
                     কার্টে কোনো পণ্য নেই — বাম পাশ থেকে পণ্য যুক্ত করুন
                 </div>
@@ -224,17 +246,17 @@
             <div class="px-4 pb-3 space-y-2 shrink-0">
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-semibold text-gray-500 uppercase">পেমেন্ট</span>
-                    <div class="flex gap-2">
-                        <template x-for="m in enabledMethods" :key="m.code">
-                            <button
-                                @click="addPaymentRow(m.code)"
-                                class="text-xs px-3 py-1.5 rounded-lg border font-medium transition"
-                                :class="methodActive(m.code) ? 'border-purple-600 text-purple-700 bg-purple-50' : 'border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600'"
-                                x-text="m.name"
-                            ></button>
-                        </template>
-                        <button @click="addPaymentRow('')" class="text-xs px-3 py-1.5 rounded-lg border border-purple-300 text-purple-600 hover:bg-purple-50">+</button>
-                    </div>
+                    <button @click="addPaymentRow('')" class="text-xs px-3 py-1.5 rounded-lg border border-purple-300 text-purple-600 hover:bg-purple-50">+ আরো পদ্ধতি</button>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <template x-for="m in enabledMethods" :key="m.code">
+                        <button
+                            @click="addPaymentRow(m.code)"
+                            class="text-xs px-3 py-1.5 rounded-lg border font-medium transition"
+                            :class="methodActive(m.code) ? 'border-purple-600 text-purple-700 bg-purple-50' : 'border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600'"
+                            x-text="m.name"
+                        ></button>
+                    </template>
                 </div>
 
                 <div class="max-h-28 overflow-y-auto space-y-2 pr-1">
@@ -266,9 +288,10 @@
                     </div>
                 </template>
             </div>
+            </div>
 
             {{-- Actions --}}
-            <div class="p-4 border-t border-gray-200 grid grid-cols-2 gap-2">
+            <div class="p-4 border-t border-gray-200 grid grid-cols-2 gap-2 shrink-0">
                 <button
                     @click="holdCart()"
                     :disabled="!cart.length"
@@ -290,6 +313,16 @@
             <form method="POST" action="{{ route('pos.sessions.store') }}" class="space-y-4">
                 @csrf
                 <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">ওয়ারহাউস</label>
+                    <select name="warehouse_id" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm">
+                        <option value="">ডিফল্ট / প্রথম সক্রিয় গুদাম</option>
+                        @foreach($warehouses as $wh)
+                            <option value="{{ $wh->id }}" {{ $defaultWarehouse && $wh->id === $defaultWarehouse->id ? 'selected' : '' }}>{{ $wh->name }}</option>
+                        @endforeach
+                    </select>
+                    <p class="text-[10px] text-gray-400 mt-1">এই সেশনে শুধু এই গুদামের স্টক দেখানো হবে এবং স্টক আউট এখান থেকে হবে।</p>
+                </div>
+                <div>
                     <label class="block text-sm font-medium text-gray-600 mb-1">প্রারম্ভিক ক্যাশ (opening cash)</label>
                     <input type="number" name="opening_cash" min="0" step="0.01" value="0" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm">
                 </div>
@@ -300,6 +333,25 @@
                 <div class="flex gap-2">
                     <button type="submit" class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700">খুলুন</button>
                     <button type="button" @click="openSessionModal = false" class="px-4 py-2 border border-gray-300 rounded-xl text-sm text-gray-600">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {{-- Close Session Modal --}}
+    <div x-show="openCloseSessionModal" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+            <h3 class="text-lg font-bold text-gray-900 mb-1">সেশন বন্ধ করুন</h3>
+            <p class="text-sm text-gray-500 mb-4">সেশন #<span x-text="openSession ? openSession.id : ''"></span> — ঘোষিত ক্লোজিং ক্যাশ দিন।</p>
+            <form method="POST" :action="'{{ route('pos.sessions.close', ['session' => '__ID__']) }}'.replace('__ID__', openSession ? openSession.id : '')" class="space-y-4">
+                @csrf
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">ক্লোজিং ক্যাশ (closing cash)</label>
+                    <input type="number" name="closing_cash" min="0" step="0.01" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm">
+                </div>
+                <div class="flex gap-2">
+                    <button type="submit" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700">সেশন বন্ধ করুন</button>
+                    <button type="button" @click="openCloseSessionModal = false" class="px-4 py-2 border border-gray-300 rounded-xl text-sm text-gray-600">Cancel</button>
                 </div>
             </form>
         </div>
@@ -388,8 +440,19 @@ function posApp() {
         discountValue: 0,
         payments: [],
         allowCredit: false,
-        openSession: {!! $openSession ? json_encode($openSession->only(['id', 'opened_at'])) : 'null' !!},
+        openSession: {!! $openSession ? json_encode([
+            'id' => $openSession->id,
+            'opened_at' => $openSession->opened_at,
+            'warehouse_id' => $openSession->warehouse_id,
+            'warehouse_name' => $openSession->warehouse?->name,
+        ]) : 'null' !!},
         openSessionModal: false,
+        openCloseSessionModal: false,
+        canCloseSession: {{ auth()->user()?->hasPermission('pos_sessions', 'close') ? 'true' : 'false' }},
+        warehouseOptions: {!! json_encode($warehouses->map(fn ($wh) => ['id' => $wh->id, 'name' => $wh->name])->values()) !!},
+        activeWarehouseId: {!! $openSession
+            ? json_encode($openSession->warehouse_id)
+            : json_encode($defaultWarehouse ? $defaultWarehouse->id : '') !!},
         holds: {!! $holds->map(fn($h) => ['id' => $h->id, 'order_number' => $h->order_number, 'items_count' => $h->items->count(), 'customer_phone' => $h->customer_phone])->toJson() !!},
         enabledMethods: {!! json_encode($paymentAccounts->map(fn ($a) => ['code' => $a->code, 'name' => $a->name])->values()) !!},
         cashCode: '1010',
@@ -507,6 +570,7 @@ function posApp() {
             const params = new URLSearchParams({ page: this.nextPage });
             if (this.search) params.set('search', this.search);
             if (this.categoryId) params.set('category_id', this.categoryId);
+            if (this.activeWarehouseId) params.set('warehouse_id', this.activeWarehouseId);
             try {
                 const res = await fetch('{{ route('pos.products') }}?' + params.toString(), { headers: { 'Accept': 'application/json' } });
                 const json = await res.json();
@@ -702,6 +766,7 @@ function posApp() {
             })));
             document.getElementById('pos-tendered').value = this.cashTotal;
             document.getElementById('pos-change').value = this.changeDue;
+            document.getElementById('pos-warehouse').value = this.activeWarehouseId || '';
             document.getElementById('pos-resume-order').value = this.resumeOrderId || '';
             document.getElementById('pos-checkout-form').submit();
         },

@@ -27,7 +27,7 @@
                             <div class="flex items-center justify-between">
                                 <div>
                                     <p class="font-bold text-green-800">Session #{{ $session->id }}</p>
-                                    <p class="text-sm text-green-700">{{ $session->user->name ?? '-' }} · খোলা {{ $session->opened_at->diffForHumans() }}</p>
+                                    <p class="text-sm text-green-700">{{ $session->user->name ?? '-' }} · <span class="font-medium">গুদাম: {{ $session->warehouse?->name ?? 'ডিফল্ট' }}</span> · খোলা {{ $session->opened_at->diffForHumans() }}</p>
                                 </div>
                                 <a href="{{ route('pos.sessions.show', $session) }}" class="text-sm px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700">View</a>
                             </div>
@@ -48,6 +48,7 @@
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ক্যাশিয়ার</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">গুদাম</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">খোলা</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">বন্ধ</th>
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">মোট বিক্রয়</th>
@@ -63,6 +64,7 @@
                             <tr class="hover:bg-gray-50 cursor-pointer" onclick="window.location='{{ route('pos.sessions.show', $session) }}'">
                                 <td class="px-6 py-4 text-sm font-semibold text-gray-900">#{{ $session->id }}</td>
                                 <td class="px-6 py-4 text-sm text-gray-700">{{ $session->user->name ?? '-' }}</td>
+                                <td class="px-6 py-4 text-sm text-gray-700">{{ $session->warehouse?->name ?? '-' }}</td>
                                 <td class="px-6 py-4 text-sm text-gray-500">{{ $session->opened_at?->format('d M H:i') }}</td>
                                 <td class="px-6 py-4 text-sm text-gray-500">{{ $session->closed_at?->format('d M H:i') ?? '-' }}</td>
                                 <td class="px-6 py-4 text-sm font-semibold text-gray-900 text-right">৳{{ number_format($session->total_sales, 2) }}</td>
@@ -76,7 +78,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="10" class="px-6 py-10 text-center text-gray-500">কোনো সেশন নেই</td>
+                                <td colspan="11" class="px-6 py-10 text-center text-gray-500">কোনো সেশন নেই</td>
                             </tr>
                         @endforelse
                     </tbody>

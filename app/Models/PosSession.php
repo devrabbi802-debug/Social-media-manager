@@ -10,6 +10,7 @@ class PosSession extends Model
 {
     protected $fillable = [
         'user_id',
+        'warehouse_id',
         'opened_at',
         'closed_at',
         'opening_cash',
@@ -53,6 +54,11 @@ class PosSession extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
     }
 
     public function orders(): HasMany

@@ -5,17 +5,19 @@ namespace App\Http\Controllers\Dashboard;
 use App\Http\Controllers\Controller;
 use App\Models\PosCashEvent;
 use App\Models\PosSession;
+use App\Models\PosSetting;
+use App\Models\Warehouse;
 use Illuminate\Http\Request;
 
 class PosSessionController extends Controller
 {
     public function index()
     {
-        $sessions = PosSession::with('user')
+        $sessions = PosSession::with(['user', 'warehouse'])
             ->latest('opened_at')
             ->paginate(20);
 
-        $openSessions = PosSession::open()->with('user')->latest('opened_at')->get();
+        $openSessions = PosSession::open()->with(['user', 'warehouse'])->latest('opened_at')->get();
 
         return view('tenant.pos.sessions.index', compact('sessions', 'openSessions'));
     }
@@ -24,6 +26,7 @@ class PosSessionController extends Controller
     {
         $validated = $request->validate([
             'opening_cash' => 'required|numeric|min:0',
+            'warehouse_id' => 'nullable|exists:warehouses,id',
             'notes' => 'nullable|string|max:500',
         ]);
 
@@ -32,8 +35,17 @@ class PosSessionController extends Controller
             return back()->with('error', 'আপনার একটি রেজিস্টার সেশন ইতিমধ্যে খোলা আছে।');
         }
 
+        $warehouse = $validated['warehouse_id']
+            ? Warehouse::find($validated['warehouse_id'])
+            : (PosSetting::current()->default_warehouse_id
+                ? Warehouse::find(PosSetting::current()->default_warehouse_id)
+                : null);
+
+        $warehouse ??= Warehouse::where('is_active', true)->first();
+
         PosSession::create([
             'user_id' => auth()->id(),
+            'warehouse_id' => $warehouse?->id,
             'opened_at' => now(),
             'opening_cash' => $validated['opening_cash'],
             'notes' => $validated['notes'] ?? null,
@@ -45,7 +57,7 @@ class PosSessionController extends Controller
 
     public function show(PosSession $session)
     {
-        $session->load(['user', 'orders' => fn ($q) => $q->latest(), 'cashEvents']);
+        $session->load(['user', 'warehouse', 'orders' => fn ($q) => $q->latest(), 'cashEvents']);
 
         $cashIn = $session->cashEvents->where('type', 'in')->sum('amount');
         $cashOut = $session->cashEvents->where('type', 'out')->sum('amount');

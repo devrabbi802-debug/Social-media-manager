@@ -49,6 +49,7 @@ class PosController extends Controller
     {
         $search = $request->query('search');
         $categoryId = $request->query('category_id');
+        $warehouseId = $request->filled('warehouse_id') ? (int) $request->warehouse_id : null;
 
         $query = Product::with(['category', 'variants' => function ($q) {
             $q->active();
@@ -68,10 +69,19 @@ class PosController extends Controller
 
         $products = $query->orderBy('name')->paginate(50);
 
+        [$net, $moved] = $this->warehouseStockMap($products->getCollection(), $warehouseId);
+
         $baseUrl = request()->getSchemeAndHttpHost();
 
-        $data = $products->map(function (Product $product) use ($baseUrl) {
+        $data = $products->map(function (Product $product) use ($baseUrl, $net, $moved, $warehouseId) {
             $image = $product->primaryImage;
+
+            $stock = (int) $product->stock_quantity;
+            if ($warehouseId) {
+                $stock = isset($net['p:'.$product->id])
+                    ? max($net['p:'.$product->id], 0)
+                    : (isset($moved['p:'.$product->id]) ? 0 : $stock);
+            }
 
             return [
                 'id' => $product->id,
@@ -80,10 +90,17 @@ class PosController extends Controller
                 'barcode' => $product->barcode,
                 'price' => (float) $product->price,
                 'cost' => (float) ($product->cost_price ?? 0),
-                'stock' => $product->total_stock,
+                'stock' => $stock,
                 'image' => $image ? $baseUrl.'/storage/'.$image->image_path : null,
                 'has_variants' => $product->has_variants,
-                'variants' => $product->variants->map(function (ProductVariant $v) {
+                'variants' => $product->variants->map(function (ProductVariant $v) use ($net, $moved, $warehouseId) {
+                    $vStock = (int) $v->stock_quantity;
+                    if ($warehouseId) {
+                        $vStock = isset($net['v:'.$v->id])
+                            ? max($net['v:'.$v->id], 0)
+                            : (isset($moved['v:'.$v->id]) ? 0 : $vStock);
+                    }
+
                     return [
                         'id' => $v->id,
                         'name' => $v->display,
@@ -91,7 +108,7 @@ class PosController extends Controller
                         'barcode' => $v->barcode,
                         'price' => (float) ($v->price ?? $v->product->price),
                         'cost' => (float) ($v->cost_price ?? 0),
-                        'stock' => (int) $v->stock_quantity,
+                        'stock' => $vStock,
                     ];
                 })->values(),
             ];
@@ -101,6 +118,51 @@ class PosController extends Controller
             'data' => $data,
             'next_page' => $products->currentPage() < $products->lastPage() ? $products->currentPage() + 1 : null,
         ]);
+    }
+
+    /**
+     * Compute warehouse-specific stock for a set of products/variants from the
+     * stock movement ledger. Respects the active warehouse; when a product/variant
+     * was never moved anywhere, the current global stock is returned as fallback.
+     */
+    protected function warehouseStockMap(iterable $products, ?int $warehouseId): array
+    {
+        if (! $warehouseId || (is_iterable($products) && count($products) === 0)) {
+            return [[], []];
+        }
+
+        $productIds = collect($products)->pluck('id')->all();
+        $variantIds = collect($products)->flatMap(fn ($p) => $p->variants->pluck('id'))->all();
+
+        if (empty($productIds) && empty($variantIds)) {
+            return [[], []];
+        }
+
+        $movements = StockMovement::where(function ($q) use ($productIds, $variantIds) {
+            $q->whereIn('product_id', $productIds);
+            if (! empty($variantIds)) {
+                $q->orWhereIn('variant_id', $variantIds);
+            }
+        })->get();
+
+        $net = [];
+        $moved = [];
+
+        foreach ($movements as $movement) {
+            $key = $movement->variant_id ? 'v:'.$movement->variant_id : 'p:'.$movement->product_id;
+            $moved[$key] = true;
+
+            if ($movement->warehouse_id === $warehouseId) {
+                $delta = match ($movement->type) {
+                    'in' => $movement->quantity,
+                    'out' => -$movement->quantity,
+                    default => 0,
+                };
+                $net[$key] = ($net[$key] ?? 0) + $delta;
+            }
+        }
+
+        return [$net, $moved];
     }
 
     public function checkout(Request $request)
@@ -155,14 +217,17 @@ class PosController extends Controller
         }
 
         $settings = PosSetting::current();
-        $warehouse = Warehouse::find($validated['warehouse_id'] ?? $settings->default_warehouse_id)
-            ?? Warehouse::where('is_active', true)->first();
+        $session = PosSession::open()->where('user_id', auth()->id())->first();
+
+        $warehouse = $session && $session->warehouse_id
+            ? Warehouse::find($session->warehouse_id)
+            : Warehouse::find($validated['warehouse_id'] ?? $settings->default_warehouse_id);
+
+        $warehouse ??= Warehouse::where('is_active', true)->first();
 
         if (! $warehouse) {
             return back()->with('error', 'কোনো ওয়ারহাউস পাওয়া যায়নি। আগে একটি ওয়ারহাউস তৈরি করুন।');
         }
-
-        $session = PosSession::open()->where('user_id', auth()->id())->first();
 
         try {
             $order = DB::transaction(function () use ($items, $payments, $validated, $settings, $warehouse, $session) {

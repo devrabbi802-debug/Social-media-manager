@@ -34,6 +34,7 @@
                         <span class="px-2 py-0.5 text-xs rounded-full font-medium {{ $session->status === 'open' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700' }}">{{ $session->status }}</span>
                     </div>
                     <div class="flex justify-between text-gray-600"><span>Opening cash</span><span>৳{{ number_format($session->opening_cash, 2) }}</span></div>
+                    <div class="flex justify-between text-gray-600"><span>গুদাম</span><span class="font-semibold text-gray-900">{{ $session->warehouse?->name ?? 'ডিফল্ট' }}</span></div>
                     <div class="flex justify-between text-gray-600"><span>Total sales</span><span class="font-semibold text-gray-900">৳{{ number_format($session->total_sales, 2) }}</span></div>
                     <div class="flex justify-between text-gray-600"><span>Total tax</span><span>৳{{ number_format($session->total_tax, 2) }}</span></div>
                     <div class="flex justify-between text-gray-600"><span>Total discount</span><span class="text-red-500">- ৳{{ number_format($session->total_discount, 2) }}</span></div>
