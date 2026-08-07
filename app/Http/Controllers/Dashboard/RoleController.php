@@ -130,6 +130,10 @@ class RoleController extends Controller
                 'chart_of_accounts.list', 'chart_of_accounts.create', 'chart_of_accounts.edit',
                 'journal_entries.list', 'journal_entries.create',
                 'accounting_reports.list',
+                'pos_reports.list',
+                'purchase_reports.list',
+                'sales_reports.list',
+                'inventory_reports.list',
                 'conversations.list', 'conversations.reply',
             ],
         ]);

@@ -50,4 +50,7 @@ return [
     'user_management' => 'User Management',
     'roles' => 'Roles',
     'staff' => 'Staff',
+    'reports' => 'Reports',
+    'sales_reports' => 'Sales Reports',
+    'inventory_reports' => 'Inventory Reports',
 ];

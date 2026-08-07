@@ -30,7 +30,10 @@ use App\Http\Controllers\Dashboard\PurchaseReceiptController;
 use App\Http\Controllers\Dashboard\PurchaseReportController;
 use App\Http\Controllers\Dashboard\PurchaseReturnController;
 use App\Http\Controllers\Dashboard\PurchaseSettingController;
+use App\Http\Controllers\Dashboard\ReportsController;
 use App\Http\Controllers\Dashboard\RoleController;
+use App\Http\Controllers\Dashboard\SalesReportController;
+use App\Http\Controllers\Dashboard\InventoryReportController;
 use App\Http\Controllers\Dashboard\StockTransferController;
 use App\Http\Controllers\Dashboard\SupplierController;
 use App\Http\Controllers\Dashboard\SupplierPaymentController;
@@ -155,7 +158,9 @@ Route::middleware([
                 Route::put('/settings/escalation', [DashboardController::class, 'updateEscalation'])->name('settings.escalation.update');
             });
             Route::get('/leads', [DashboardController::class, 'leads'])->name('leads');
-            Route::get('/reports', [DashboardController::class, 'reports'])->name('reports');
+            Route::middleware('permission:reports,list')->get('/reports', [ReportsController::class, 'index'])->name('reports');
+            Route::middleware('permission:sales_reports,list')->get('/reports/sales', [SalesReportController::class, 'index'])->name('reports.sales');
+            Route::middleware('permission:inventory_reports,list')->get('/reports/inventory', [InventoryReportController::class, 'index'])->name('reports.inventory');
             Route::get('/whatsapp/send', [DashboardController::class, 'whatsapp'])->name('whatsapp.send');
             // Inventory Routes
             Route::prefix('inventory')->name('inventory.')->group(function () {

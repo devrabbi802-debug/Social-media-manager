@@ -50,4 +50,7 @@ return [
     'user_management' => 'ইউজার ম্যানেজমেন্ট',
     'roles' => 'রোলসমূহ',
     'staff' => 'স্টাফ',
+    'reports' => 'রিপোর্ট',
+    'sales_reports' => 'সেলস রিপোর্ট',
+    'inventory_reports' => 'ইনভেন্টরি রিপোর্ট',
 ];

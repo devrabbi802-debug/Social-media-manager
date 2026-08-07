@@ -42,21 +42,26 @@ class StockMovement extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
-    public function getTypeLabelAttribute(): string
+    public static function typeLabel(?string $type): string
     {
-        return match ($this->type) {
+        return match ($type) {
             'in' => 'Stock In',
             'out' => 'Stock Out',
             'adjustment' => 'Adjustment',
-            default => $this->type,
+            default => $type ?? '',
         };
+    }
+
+    public function getTypeLabelAttribute(): string
+    {
+        return static::typeLabel($this->type);
     }
 
     public function getQuantityDisplayAttribute(): string
     {
         return match ($this->type) {
-            'in' => '+' . $this->quantity,
-            'out' => '-' . $this->quantity,
+            'in' => '+'.$this->quantity,
+            'out' => '-'.$this->quantity,
             default => (string) $this->quantity,
         };
     }
