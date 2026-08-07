@@ -166,6 +166,7 @@ return [
                 ['slug' => 'reports',           'label' => 'Reports Hub',       'permissions' => ['list']],
                 ['slug' => 'sales_reports',     'label' => 'Sales Reports',     'permissions' => ['list']],
                 ['slug' => 'inventory_reports', 'label' => 'Inventory Reports', 'permissions' => ['list']],
+                ['slug' => 'accounting_reports', 'label' => 'Accounting Reports', 'permissions' => ['list']],
                 ['slug' => 'pos_reports',       'label' => 'POS Reports',       'permissions' => ['list']],
                 ['slug' => 'purchase_reports',  'label' => 'Purchase Reports',  'permissions' => ['list']],
             ],

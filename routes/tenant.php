@@ -161,6 +161,7 @@ Route::middleware([
             Route::middleware('permission:reports,list')->get('/reports', [ReportsController::class, 'index'])->name('reports');
             Route::middleware('permission:sales_reports,list')->get('/reports/sales', [SalesReportController::class, 'index'])->name('reports.sales');
             Route::middleware('permission:inventory_reports,list')->get('/reports/inventory', [InventoryReportController::class, 'index'])->name('reports.inventory');
+            Route::middleware('permission:accounting_reports,list')->get('/reports/accounting', [AccountingReportController::class, 'hub'])->name('reports.accounting');
             Route::get('/whatsapp/send', [DashboardController::class, 'whatsapp'])->name('whatsapp.send');
             // Inventory Routes
             Route::prefix('inventory')->name('inventory.')->group(function () {

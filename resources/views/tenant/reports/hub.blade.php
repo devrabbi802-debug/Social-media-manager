@@ -67,6 +67,34 @@
                 <p class="text-sm text-purple-600 font-medium mt-4">বিস্তারিত দেখুন →</p>
             </a>
 
+            {{-- Accounting Report --}}
+            <a href="{{ route('reports.accounting') }}" class="bg-white rounded-2xl shadow-sm hover:shadow-md transition p-6 border border-transparent hover:border-purple-200">
+                <div class="flex items-start justify-between mb-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-900">@lang('sidebar.accounting_reports')</h2>
+                        <p class="text-sm text-gray-500">প্রতিটি হিসাবের টাকার আগমন ও প্রস্থান — debit/credit বুঝতে সহজ</p>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h2m0 0H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v6a2 2 0 01-2 2h-3m-6 0h6"/></svg>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <p class="text-xs text-gray-500">এই মাসের আয়</p>
+                        <p class="text-xl font-bold text-green-600">৳{{ number_format($summary['accounting']['income'], 2) }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500">খরচ</p>
+                        <p class="text-xl font-bold text-red-600">-৳{{ number_format($summary['accounting']['expense'], 2) }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500">নেট প্রফিট</p>
+                        <p class="text-xl font-bold {{ $summary['accounting']['net_profit'] >= 0 ? 'text-purple-600' : 'text-red-600' }}">৳{{ number_format($summary['accounting']['net_profit'], 2) }}</p>
+                    </div>
+                </div>
+                <p class="text-sm text-purple-600 font-medium mt-4">বিস্তারিত দেখুন →</p>
+            </a>
+
             {{-- POS Report --}}
             <a href="{{ route('pos.reports') }}" class="bg-white rounded-2xl shadow-sm hover:shadow-md transition p-6 border border-transparent hover:border-purple-200">
                 <div class="flex items-start justify-between mb-4">

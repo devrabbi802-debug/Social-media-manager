@@ -4,6 +4,7 @@
         ['key' => 'hub', 'label' => __('sidebar.reports'), 'route' => 'reports'],
         ['key' => 'sales', 'label' => __('sidebar.sales_reports'), 'route' => 'reports.sales'],
         ['key' => 'inventory', 'label' => __('sidebar.inventory_reports'), 'route' => 'reports.inventory'],
+        ['key' => 'accounting', 'label' => __('sidebar.accounting_reports'), 'route' => 'reports.accounting'],
         ['key' => 'pos', 'label' => __('sidebar.pos_reports'), 'route' => 'pos.reports'],
         ['key' => 'purchase', 'label' => __('sidebar.purchase_reports'), 'route' => 'purchase.reports'],
     ];

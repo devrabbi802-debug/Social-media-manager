@@ -8,10 +8,11 @@ use App\Models\PosOrder;
 use App\Models\Product;
 use App\Models\PurchaseInvoice;
 use App\Models\StockMovement;
+use App\Services\AccountingService;
 
 class ReportsController extends Controller
 {
-    public function index()
+    public function index(AccountingService $accounting)
     {
         $monthStart = now()->startOfMonth();
 
@@ -84,8 +85,25 @@ class ReportsController extends Controller
                 'due' => round($purchaseInvoices->sum(fn ($i) => $i->due()), 2),
                 'invoice_count' => $purchaseInvoices->count(),
             ],
+            'accounting' => $this->accountingSummary($accounting),
         ];
 
         return view('tenant.reports.hub', compact('summary'));
+    }
+
+    private function accountingSummary(AccountingService $accounting): array
+    {
+        try {
+            $accounting->ensureChartOfAccounts();
+            $income = $accounting->incomeStatement(now()->startOfMonth(), now()->endOfDay());
+
+            return [
+                'income' => $income['total_income'],
+                'expense' => $income['total_expense'],
+                'net_profit' => $income['net_profit'],
+            ];
+        } catch (\Throwable) {
+            return ['income' => 0, 'expense' => 0, 'net_profit' => 0];
+        }
     }
 }
