@@ -1,6 +1,8 @@
 <?php
+
 return [
     'dashboard' => 'Dashboard',
+    'company_settings' => 'Company Settings',
     'integration' => 'Integration',
     'ai_setup' => 'AI Setup',
     'conversations' => 'Conversations',
@@ -23,6 +25,8 @@ return [
     'banner_management' => 'Banner Management',
     'order_management' => 'Order Management',
     'orders' => 'Orders',
+    'order_create' => 'Create Order',
+    'return_history' => 'Return History',
     'pos' => 'POS',
     'pos_terminal' => 'POS Terminal',
     'pos_sales' => 'POS Sales',

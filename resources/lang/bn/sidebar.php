@@ -1,6 +1,8 @@
 <?php
+
 return [
     'dashboard' => 'ড্যাশবোর্ড',
+    'company_settings' => 'কোম্পানি সেটিংস',
     'integration' => 'ইন্টিগ্রেশন',
     'ai_setup' => 'AI সেটআপ',
     'conversations' => 'কথোপকথন',
@@ -23,6 +25,8 @@ return [
     'banner_management' => 'ব্যানার ম্যানেজমেন্ট',
     'order_management' => 'অর্ডার ম্যানেজমেন্ট',
     'orders' => 'অর্ডার সমূহ',
+    'order_create' => 'অর্ডার তৈরি করুন',
+    'return_history' => 'রিটার্ন হিস্ট্রি',
     'pos' => 'POS',
     'pos_terminal' => 'POS টার্মিনাল',
     'pos_sales' => 'POS বিক্রয়',

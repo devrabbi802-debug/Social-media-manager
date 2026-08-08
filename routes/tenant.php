@@ -11,8 +11,10 @@ use App\Http\Controllers\Dashboard\AttributeController;
 use App\Http\Controllers\Dashboard\BrandController;
 use App\Http\Controllers\Dashboard\CategoryController;
 use App\Http\Controllers\Dashboard\ChartOfAccountController;
+use App\Http\Controllers\Dashboard\CompanySettingController;
 use App\Http\Controllers\Dashboard\ImageMatchController;
 use App\Http\Controllers\Dashboard\InventoryController;
+use App\Http\Controllers\Dashboard\InventoryReportController;
 use App\Http\Controllers\Dashboard\JournalEntryController;
 use App\Http\Controllers\Dashboard\MoneyController;
 use App\Http\Controllers\Dashboard\OrderController;
@@ -33,7 +35,6 @@ use App\Http\Controllers\Dashboard\PurchaseSettingController;
 use App\Http\Controllers\Dashboard\ReportsController;
 use App\Http\Controllers\Dashboard\RoleController;
 use App\Http\Controllers\Dashboard\SalesReportController;
-use App\Http\Controllers\Dashboard\InventoryReportController;
 use App\Http\Controllers\Dashboard\StockTransferController;
 use App\Http\Controllers\Dashboard\SupplierController;
 use App\Http\Controllers\Dashboard\SupplierPaymentController;
@@ -157,6 +158,11 @@ Route::middleware([
                 Route::put('/settings/faq', [DashboardController::class, 'updateFaq'])->name('settings.faq.update');
                 Route::put('/settings/escalation', [DashboardController::class, 'updateEscalation'])->name('settings.escalation.update');
             });
+
+            // Company Settings
+            Route::middleware('permission:settings,list')->get('/company/settings', [CompanySettingController::class, 'index'])->name('company.settings');
+            Route::middleware('permission:settings,edit')->put('/company/settings', [CompanySettingController::class, 'update'])->name('company.settings.update');
+
             Route::get('/leads', [DashboardController::class, 'leads'])->name('leads');
             Route::middleware('permission:reports,list')->get('/reports', [ReportsController::class, 'index'])->name('reports');
             Route::middleware('permission:sales_reports,list')->get('/reports/sales', [SalesReportController::class, 'index'])->name('reports.sales');
@@ -335,9 +341,15 @@ Route::middleware([
             // Order Management
             Route::middleware('permission:orders,list')->prefix('orders')->name('orders.')->group(function () {
                 Route::get('/', [OrderController::class, 'index'])->name('index');
+                Route::get('/returns', [OrderController::class, 'returns'])->name('returns');
+                Route::middleware('permission:orders,create')->group(function () {
+                    Route::get('/create', [OrderController::class, 'create'])->name('create');
+                    Route::post('/', [OrderController::class, 'store'])->name('store');
+                });
                 Route::middleware('permission:orders,export')->group(function () {
                     Route::get('/export', [OrderController::class, 'export'])->name('export');
                 });
+                Route::get('/products', [OrderController::class, 'products'])->name('products');
                 Route::middleware('permission:orders,view')->group(function () {
                     Route::get('/{order}', [OrderController::class, 'show'])->name('show');
                     Route::get('/{order}/print', [OrderController::class, 'print'])->name('print');
@@ -345,6 +357,8 @@ Route::middleware([
                 Route::middleware('permission:orders,edit')->group(function () {
                     Route::post('/bulk-update', [OrderController::class, 'bulkUpdate'])->name('bulk-update');
                     Route::post('/{order}/receive-payment', [OrderController::class, 'receivePayment'])->name('receive-payment');
+                    Route::post('/{order}/return', [OrderController::class, 'processReturn'])->name('return');
+                    Route::post('/{order}/exchange', [OrderController::class, 'exchange'])->name('exchange');
                     Route::get('/{order}/edit', [OrderController::class, 'edit'])->name('edit');
                     Route::put('/{order}', [OrderController::class, 'update'])->name('update');
                 });

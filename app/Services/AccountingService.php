@@ -7,6 +7,7 @@ use App\Models\ChartOfAccount;
 use App\Models\JournalEntry;
 use App\Models\JournalEntryLine;
 use App\Models\Order;
+use App\Models\OrderReturn;
 use App\Models\PosOrder;
 use App\Models\PosRefund;
 use App\Models\PurchaseInvoice;
@@ -328,6 +329,110 @@ class AccountingService
         foreach ($entries as $entry) {
             $this->reverse($entry, "Order #{$order->order_number} reversed");
         }
+    }
+
+    /**
+     * Post a storefront-order return/refund.
+     *
+     * Full refunds reverse every original entry (sale + payments); partial
+     * refunds post a sales-return entry that debits Sales Revenue and credits
+     * the refund payment account, plus an inventory/COGS reversal for the
+     * restocked goods.
+     */
+    public function postOrderReturn(Order $order, OrderReturn $return, float $returnedCost): ?JournalEntry
+    {
+        $settings = AccountingSetting::current();
+        $amount = (float) $return->amount;
+        $fullRefund = abs($amount - (float) $order->total) < 0.01;
+
+        // Item restock always represented: inventory back in, COGS reversed
+        $inventoryLines = [];
+        if ($returnedCost > 0) {
+            $inventoryLines = [
+                ['account_id' => $settings->default_inventory_account_id, 'debit' => $returnedCost, 'credit' => 0],
+                ['account_id' => $settings->default_cogs_account_id, 'debit' => 0, 'credit' => $returnedCost],
+            ];
+        }
+
+        if ($fullRefund) {
+            $this->reverseOrderEntries($order);
+
+            if (! empty($inventoryLines)) {
+                return $this->post($inventoryLines, "Order Return #{$return->return_number} (full)", 'order_return', $return->id);
+            }
+
+            return null;
+        }
+
+        $paymentAccount = $this->paymentAccount($return->method);
+
+        $lines = [
+            ['account_id' => $settings->default_sales_account_id, 'debit' => $amount, 'credit' => 0],
+            ['account_id' => $paymentAccount->id, 'debit' => 0, 'credit' => $amount],
+        ];
+
+        $lines = array_merge($lines, $inventoryLines);
+
+        return $this->post($lines, "Order Return #{$return->return_number}", 'order_return', $return->id);
+    }
+
+    /**
+     * Post an order exchange (return + replacement in the same order).
+     *
+     * Books the real-world money movement only:
+     *  - restocked returned goods back into inventory,
+     *  - the replacement goods' cost out of inventory (via COGS),
+     *  - and the price difference as revenue (difference > 0 → customer pays
+     *    extra) or as a refund (difference < 0 → money back to customer).
+     */
+    public function postExchange(Order $order, OrderReturn $return, float $newCost, float $difference): JournalEntry
+    {
+        $settings = AccountingSetting::current();
+        $paymentAccount = $this->paymentAccount($return->method);
+
+        $lines = [];
+
+        // Inventory: returned goods go back in
+        $returnedCost = (float) $this->exchangeReturnedCost($return);
+        if ($returnedCost > 0) {
+            $lines[] = ['account_id' => $settings->default_inventory_account_id, 'debit' => $returnedCost, 'credit' => 0];
+            $lines[] = ['account_id' => $settings->default_cogs_account_id, 'debit' => 0, 'credit' => $returnedCost];
+        }
+
+        // New goods going out of inventory
+        if ($newCost > 0) {
+            $lines[] = ['account_id' => $settings->default_cogs_account_id, 'debit' => $newCost, 'credit' => 0];
+            $lines[] = ['account_id' => $settings->default_inventory_account_id, 'debit' => 0, 'credit' => $newCost];
+        }
+
+        // Money difference against sales revenue
+        if (abs($difference) >= 0.01) {
+            if ($difference > 0) {
+                $lines[] = ['account_id' => $paymentAccount->id, 'debit' => $difference, 'credit' => 0, 'memo' => 'Exchange extra payment'];
+                $lines[] = ['account_id' => $settings->default_sales_account_id, 'debit' => 0, 'credit' => $difference];
+            } else {
+                $lines[] = ['account_id' => $settings->default_sales_account_id, 'debit' => abs($difference), 'credit' => 0];
+                $lines[] = ['account_id' => $paymentAccount->id, 'debit' => 0, 'credit' => abs($difference)];
+            }
+        }
+
+        return $this->post($lines, "Order Exchange #{$return->return_number}", 'order_exchange', $return->id);
+    }
+
+    protected function exchangeReturnedCost(OrderReturn $return): float
+    {
+        $cost = 0;
+
+        foreach ($return->items as $item) {
+            $product = $item->product;
+            if (! $product) {
+                continue;
+            }
+            $unitCost = $item->variant?->cost_price ?? $product->cost_price ?? 0;
+            $cost += (float) $unitCost * $item->quantity;
+        }
+
+        return round($cost, 2);
     }
 
     /**

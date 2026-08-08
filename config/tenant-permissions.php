@@ -56,7 +56,7 @@ return [
             'id' => 'orders',
             'title' => 'Orders',
             'items' => [
-                ['slug' => 'orders', 'label' => 'Orders', 'permissions' => ['list', 'view', 'edit', 'export', 'delete']],
+                ['slug' => 'orders', 'label' => 'Orders', 'permissions' => ['list', 'view', 'create', 'edit', 'export', 'delete']],
             ],
         ],
 

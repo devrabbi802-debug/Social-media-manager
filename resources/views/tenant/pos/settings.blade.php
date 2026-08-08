@@ -40,12 +40,10 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-600 mb-1">Default Warehouse</label>
-                        <select name="default_warehouse_id" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm">
-                            <option value="">— Select —</option>
-                            @foreach($warehouses as $warehouse)
-                                <option value="{{ $warehouse->id }}" {{ $settings->default_warehouse_id == $warehouse->id ? 'selected' : '' }}>{{ $warehouse->name }}</option>
-                            @endforeach
-                        </select>
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-gray-500">Managed in</span>
+                            <a href="{{ route('company.settings') }}?tab=warehouse" class="text-sm text-purple-600 hover:text-purple-700 font-medium">Company Settings</a>
+                        </div>
                     </div>
                 </div>
                 <div class="mt-4">
