@@ -29,7 +29,7 @@ php artisan tenants:seed      # seed tenant DBs
 ## Routes (Load Order)
 
 1. `routes/web.php` — landing pages, onboarding, webhooks (CSRF-exempt via `bootstrap/app.php:30-33`)
-2. `routes/api.php` — storefront SPA API (tenant-scoped). Groups: `/api/storefront/*` (public), `/api/auth/*` (public + `auth:sanctum` protected), `/api/checkout/*` (public), `/api/customer/*` (`auth:sanctum`), `/api/editor/*` (theme PUT), `/api/themes/*`
+2. `routes/api.php` — storefront SPA API (tenant-scoped). Groups: `/api/storefront/*` (public), `/api/auth/*` (public + `auth:sanctum` protected), `/api/checkout/*` (public), `/api/customer/*` (`auth:sanctum`), `/api/editor/*` (public CRUD + upload), `/api/themes/*`
 3. `routes/console.php` — Artisan commands
 4. `routes/admin.php` — central admin `/rootadmin/*` (guard `admin`, landlord DB). Loaded via `bootstrap/app.php` `then:` callback.
 5. `routes/tenant.php` — per-tenant dashboard, inventory, Facebook OAuth, **storefront catch-all LAST**. Loaded by `TenancyServiceProvider::mapRoutes()` on `booted`.
@@ -122,6 +122,14 @@ Separate `pos_*` tables (NOT the e-commerce `orders` table). Tenant-scoped under
 - Register session optional: checkout works without one but terminal shows an "open register" banner.
 - `cost_price` added to `products` + `product_variants` (nullable) for profit reporting.
 
+## Purchase System (`app/Http/Controllers/Dashboard/Purchase*Controller.php`, `resources/views/tenant/purchase/`, `Dashboard/PurchaseController.php`)
+
+Supplier + procurement subsystem (tenant-scoped) at `{adminPrefix}/purchase/*`, group-gated by `purchase_dashboard,list`. Flow: `suppliers` → purchase `orders` (PO) → `receipts` (GRN, stock in via `StockMovement`) → `invoices` (bills, `pay` action) → `payments` (supplier payments incl. advances on PO) → `returns` (stock restore + `postPurchaseReturn`). `direct` creates PO+GRN+(optional invoice) in one transaction.
+
+- **Tables**: `suppliers`, `supplier_payments`, `purchase_orders`, `purchase_order_items`, `purchase_receipts`, `purchase_receipt_items`, `purchase_invoices`, `purchase_invoice_items`, `purchase_returns`, `purchase_return_items`, `purchase_settings`. Payment methods on `SupplierPayment`.
+- **Accounting-integrated** (gated by `PurchaseSetting::current()->auto_post_purchases`, NOT `accounting_settings`): `postPurchaseInvoice()`, `postSupplierPayment()`, `postSupplierAdvance()`, `postPurchaseReturn()` on `AccountingService`. Invoice cancel/delete → `reverse()` the `purchase_invoice` reference entry (find via `JournalEntry::ofReference('purchase_invoice', $id)`).
+- Permissions (`config/tenant-permissions.php` `purchase` group): `purchase_dashboard`, `suppliers`, `purchase_orders`, `purchase_receipts`, `purchase_invoices` (+`pay`), `supplier_payments`, `purchase_returns`, `purchase_reports`, `purchase_settings`.
+
 ## Inventory (`app/Http/Controllers/Dashboard/`)
 
 Products, variants, categories, brands, attribute templates, warehouses, stock movements, transfers. **No FormRequest classes** — validation inline in controllers.
@@ -153,7 +161,7 @@ Double-entry ledger (tenant-scoped) with a non-accountant-friendly UI. Routes un
 
 - **Tables**: `chart_of_accounts`, `journal_entries` (voucher header, `status` = `posted`/`reversed`), `journal_entry_lines`, `accounting_settings` (singleton id=1, auto-post toggles + payment→account map).
 - **Engine**: `app/Services/AccountingService.php` — `post()` validates debit=credit, `reverse()` creates a **reversing entry** (original stays `posted`; they offset in the ledger — do NOT mark the original reversed in code). `ensureChartOfAccounts()` seeds default COA (codes 1010+ assets, 20xx liabilities, 30xx equity, 4010 sales, 50xx expenses) on first visit. Reports: `trialBalance()`, `incomeStatement()`, `balanceSheet()`, `ledger()`, `netProfit()` (fiscal year = July start by default, configurable).
-- **Auto-posting hooks** (respect `accounting_settings.post_pos_*` / `post_storefront_orders`): `PosController::checkout` → `postPosSale()`, `PosSaleController::refund` → `postPosRefund()` (full = reversing entry, partial = sales-return), `CheckoutController::placeOrder` → `postOrder()` (receivable until paid), `OrderController::receivePayment` (AR→cash) + `reverseOrderEntries()` on cancel/refund.
+- **Auto-posting hooks** (respect `accounting_settings.post_pos_*` / `post_storefront_orders`): `PosController::checkout` → `postPosSale()`, `PosSaleController::refund` → `postPosRefund()` (full = reversing entry, partial = sales-return), `CheckoutController::placeOrder` → `postOrder()` (receivable until paid), `OrderController::receivePayment` (AR→cash) + `reverseOrderEntries()` on cancel/refund. **Purchase hooks** gated by `PurchaseSetting::auto_post_purchases` instead (see Purchase System).
 - **Opening balances**: entered on the Accounting Settings page → `syncOpeningBalances()` deletes prior `opening` reference entries then posts a balanced entry, net parked in `3100 Opening Balance Equity`.
 - **Payments**: `paymentAccount($method)` maps cash/bkash/nagad/rocket/upay/card to COA via settings `payment_account_map` (defaults: 1010 cash, 1020 bank, 1030 mobile wallet).
 - **Permissions**: `accounting` group in `config/tenant-permissions.php` (dashboard, money, chart_of_accounts, journal_entries incl. `reverse`, reports, settings). Manager default role has view-level access.
